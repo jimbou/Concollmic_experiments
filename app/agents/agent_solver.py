@@ -151,7 +151,7 @@ def solve(
             msg_thread.to_msg(),
             temperature=CONSTRAINT_SOLVING_TEMPERATURE,
             tools=available_tools,
-            tool_choice="any" if available_tools else "auto",
+            tool_choice="auto" if available_tools else "auto",
             parallel_tool_calls=True,
         )
 
@@ -278,7 +278,7 @@ def review_solve(
             msg_thread.to_msg(),
             temperature=CONSTRAINT_SOLVING_TEMPERATURE,
             tools=available_tools,
-            tool_choice="any" if available_tools else "auto",
+            tool_choice="auto" if available_tools else "auto",
             parallel_tool_calls=True,
         )
         update_usage_details(usage_details, last_call, get_usage_input_part(usage))

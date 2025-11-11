@@ -592,25 +592,59 @@ def generate_detailed_instrumentation_info(
 
 
 def _instrument_file(file_path, rel_path, chunk_size):
-    """Instrument a single file
+    """Instrument a single file."""
+    from app.model.common import set_model
+    import traceback
 
-    Args:
-        file_path (str): Path to the output file
-        rel_path (str): Relative path for marking
+    set_model("gpt-4o")
+    logger.info(f"[DEBUG] Worker started for {file_path}")
+    logger.info(f"[DEBUG] PID={os.getpid()} THREAD={threading.get_ident()}")
 
-    Returns:
-        bool: True if instrumentation was successful, False otherwise
-    """
-    instr_agent = InstrumentationAgent()
-    logger.info(f'Instrumenting "{file_path}"')
-    instrumented_content, success = instr_agent.instrument(
-        source_code_file=file_path, mark=rel_path, chunk_size=chunk_size
-    )
-    with open(file_path, "w", encoding="utf-8") as f:
-        f.write(
-            instrumented_content
-        )  # If not successful, the file is INCOMPLETE (for debugging)
-    return success
+    try:
+        import app.model.common as model_common
+        logger.info(f"[DEBUG] Current model in worker: {getattr(model_common, 'SELECTED_MODEL', None)}")
+    except Exception as e:
+        logger.error(f"[DEBUG] Could not read model name: {e}")
+
+    try:
+        logger.info("[DEBUG] Creating InstrumentationAgent()...")
+        instr_agent = InstrumentationAgent()
+        logger.info("[DEBUG] InstrumentationAgent successfully created.")
+
+        logger.info(f"[DEBUG] Calling .instrument() for {file_path}")
+        instrumented_content, success = instr_agent.instrument(
+            source_code_file=file_path, mark=rel_path, chunk_size=chunk_size
+        )
+        logger.info(
+            f"[DEBUG] .instrument() returned success={success}, len(content)={len(instrumented_content) if instrumented_content else 0}"
+        )
+
+        # --- Always save debug output if any content was produced ---
+        if instrumented_content:
+            # Normal save on success
+            if success:
+                with open(file_path, "w", encoding="utf-8") as f:
+                    f.write(instrumented_content)
+                logger.info(f"[DEBUG] Wrote instrumented content to {file_path}")
+            else:
+                # Save to a debug file so we can inspect failed attempts
+                debug_path = file_path + ".failed.c"
+                with open(debug_path, "w", encoding="utf-8") as f:
+                    f.write(instrumented_content)
+                logger.warning(
+                    f"[DEBUG] Instrumentation failed for {file_path}, "
+                    f"but partial result saved to {debug_path}"
+                )
+        else:
+            logger.warning(f"[DEBUG] Empty content returned for {file_path}")
+
+        return success
+
+    except Exception as e:
+        logger.error(f"[DEBUG] Exception during instrumentation of {file_path}: {e}")
+        logger.error(traceback.format_exc())
+        return False
+
 
 
 def instrument_code(

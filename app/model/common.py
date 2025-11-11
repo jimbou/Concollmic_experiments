@@ -475,7 +475,7 @@ SELECTED_MODEL: Model
 def set_model(model_name: str):
     global SELECTED_MODEL
     if model_name not in MODEL_HUB and not model_name.startswith("litellm-generic-"):
-        print(f"Invalid model name: {model_name}")
+        print(f"Invalid model nameAAA: {model_name}")
         sys.exit(1)
     if model_name.startswith("litellm-generic-"):
         real_model_name = model_name.removeprefix("litellm-generic-")

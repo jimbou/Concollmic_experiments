@@ -31,8 +31,10 @@ from app.agents.tools import (
     process_report_func_finish,
     process_report_functions,
 )
+# from app.model.common import SELECTED_MODEL
 from app.data_structures import MessageThread
 from app.model import claude
+from app.model import ai302
 from app.model.common import Usage
 from app.utils.utils import (
     detect_language,
@@ -390,9 +392,21 @@ class InstrumentationAgent:
     # retry times for instrumentation to pass the `check_instrumentation`
     INSTRUMENTATION_RETRY_TIMES = 3
 
-    def __init__(self, model=claude.Claude3_7Sonnet_128k()):
+    
+
+    def __init__(self, model=None):
+        # lazy import to avoid circular dependency at module import time
+        if model is None:
+            from app.model import common
+            model = getattr(common, "SELECTED_MODEL", None)
+
         self.model = model
-        self.model.setup()
+        if self.model is not None:
+            self.model.setup()
+        else:
+            from loguru import logger
+            logger.error("[InstrumentationAgent] No model available (SELECTED_MODEL is None)")
+
 
     def cleanup(self):
         pass
@@ -446,7 +460,7 @@ class InstrumentationAgent:
                 msg_thread.to_msg(),
                 temperature=INSTRUMENTATION_TEMPERATURE,
                 tools=available_tools,
-                tool_choice="any" if available_tools else "auto",
+                tool_choice="auto" if available_tools else "auto",
             )
 
             usage += call_usage

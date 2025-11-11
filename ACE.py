@@ -17,6 +17,12 @@ import os
 import signal
 import sys
 import time
+import os
+# os.environ["LITELLM_MAX_CONCURRENT_REQUESTS"] = "1"
+# os.environ["LITELLM_RATE_LIMIT_PER_MINUTE"] = "60"
+import litellm
+
+
 
 from loguru import logger
 
@@ -145,10 +151,30 @@ def signal_handler(signum, frame, log_file_path: str):
     sys.exit(0)
 
 
+# def setup_model():
+#     """Setup and initialize model"""
+#     register_all_models()
+#     set_model("gpt-4.1-mini")
 def setup_model():
-    """Setup and initialize model"""
+    import app.model.common as model_common
+
+    api_key = os.getenv("API_KEY_302")
+    if not api_key:
+        raise ValueError("Missing API_KEY_302")
+
+    # 302.ai setup
+    litellm.api_base = "https://api.302.ai/v1"
+    litellm.api_key = api_key
+    litellm.custom_headers = {"Authorization": f"302AI {api_key}"}
+
     register_all_models()
-    set_model("claude-3-7-sonnet-20250219")
+    set_model("gpt-4o")
+    # set_model("gpt-4o-mini")
+
+    # ✅ make it globally visible to threads
+    # model_common.GLOBAL_MODEL_NAME = "gpt-4o-mini"
+    model_common.GLOBAL_MODEL_NAME = "gpt-4o"
+    print("✅ Global model set to:", model_common.GLOBAL_MODEL_NAME)
 
 
 def initialize_settings(log_dir: str = LOG_DIR):
@@ -251,6 +277,7 @@ def main():
             resume_in=(os.path.normpath(args.resume_in) if args.resume_in else None),
             plateau_slot=args.plateau_slot,
             parallel_num=args.parallel_num,
+            # time_budget_sec=args.time_budget_sec,
         )
 
     elif args.command == "instrument_data":

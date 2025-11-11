@@ -8,7 +8,7 @@ import struct
 import sys
 import time
 from typing import Any
-
+import litellm, os
 from anthropic import Anthropic
 from loguru import logger
 
@@ -1140,15 +1140,25 @@ def detected_crash(stderr: str, returncode: int) -> tuple[bool, str]:
     return False, None
 
 
-def estimate_text_token(
-    text: str | None, model: str = "claude-3-7-sonnet-20250219"
-) -> int:
-    """
-    Estimate the number of tokens in a text.
-    """
-    client = Anthropic()
 
-    count = client.beta.messages.count_tokens(
-        model=model, messages=[{"role": "user", "content": text}]
+def estimate_text_token(text: str | None, model: str = "gpt-4o-mini") -> int:
+    """
+    Estimate tokens using 302.ai via LiteLLM (requires API_KEY_302).
+    """
+    if not text:
+        return 0
+
+    api_key = os.getenv("API_KEY_302")
+    if not api_key:
+        raise ValueError("❌ Missing API_KEY_302 for token counting")
+
+    response = litellm.completion(
+        model=f"openai/{model}",
+        api_base="https://api.302.ai/v1",
+        api_key=api_key,
+        custom_headers={"Authorization": f"302AI {api_key}"},
+        messages=[{"role": "user", "content": text}],
+        max_tokens=1,  # we only care about usage
     )
-    return count.input_tokens
+
+    return response.usage["prompt_tokens"]

@@ -182,26 +182,41 @@ class MessageThread:
     def add_model(
         self, message: str | None, tools: list[ChatCompletionMessageToolCall] = []
     ):
-        if tools is None or len(tools) == 0:
+        if not tools:
             self.add_message("assistant", message)
             return
 
-        # let's serialize tools into json first
         json_tools = []
+
         for tool in tools:
             this_tool_dict = {}
-            this_tool_dict["id"] = tool.id
-            this_tool_dict["type"] = tool.type
-            # now serialize function as well
-            func_obj: OpenaiFunction = tool.function
-            func_args: str = func_obj.arguments
-            func_name: str = func_obj.name
+
+            # --- SAFE extraction for both object and dict cases ---
+            if isinstance(tool, dict):
+                tool_id = tool.get("id")
+                tool_type = tool.get("type")
+                func = tool.get("function", {})
+            else:
+                tool_id = getattr(tool, "id", None)
+                tool_type = getattr(tool, "type", None)
+                func = getattr(tool, "function", {})
+
+            # normalize function details
+            if isinstance(func, dict):
+                func_name = func.get("name")
+                func_args = func.get("arguments")
+            else:
+                # it's an OpenaiFunction object
+                func_name = getattr(func, "name", None)
+                func_args = getattr(func, "arguments", None)
+
+            this_tool_dict["id"] = tool_id
+            this_tool_dict["type"] = tool_type
             this_tool_dict["function"] = {"name": func_name, "arguments": func_args}
             json_tools.append(this_tool_dict)
+            # ------------------------------------------------------
 
-        if json_tools == []:
-            # there is no tool calls from the model last time,
-            # the best we could do is to return the generated text
+        if not json_tools:
             self.add_message("assistant", message)
         else:
             self.add_message("assistant", message, params={"tool_calls": json_tools})
