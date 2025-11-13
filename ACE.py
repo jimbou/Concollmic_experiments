@@ -168,12 +168,26 @@ def setup_model():
     litellm.custom_headers = {"Authorization": f"302AI {api_key}"}
 
     register_all_models()
-    set_model("gpt-4o")
+    # set_model("gpt-4o")
+    # set_model("claude-3-7-sonnet-latest")
+    # set_model("claude-sonnet-4-0")
+    # set_model("gemini-2.5-pro")
+    # set_model("gemini-2.5-flash")
     # set_model("gpt-4o-mini")
+    # set_model("gpt-5")
+    set_model("deepseek-chat")
+    # set_model("deepseek-reasoner")
 
     # ✅ make it globally visible to threads
     # model_common.GLOBAL_MODEL_NAME = "gpt-4o-mini"
-    model_common.GLOBAL_MODEL_NAME = "gpt-4o"
+    # model_common.GLOBAL_MODEL_NAME = "gpt-4o"
+    # model_common.GLOBAL_MODEL_NAME = "claude-3-7-sonnet-latest"
+    # model_common.GLOBAL_MODEL_NAME = "claude-sonnet-4-0"
+    # model_common.GLOBAL_MODEL_NAME = "gemini-2.5-pro"
+    # model_common.GLOBAL_MODEL_NAME = "gemini-2.5-flash"
+    # model_common.GLOBAL_MODEL_NAME = "gpt-5"
+    model_common.GLOBAL_MODEL_NAME = "deepseek-chat"
+    # model_common.GLOBAL_MODEL_NAME = "deepseek-reasoner"
     print("✅ Global model set to:", model_common.GLOBAL_MODEL_NAME)
 
 

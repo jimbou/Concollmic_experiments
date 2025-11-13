@@ -1,28 +1,54 @@
 import os
-from openai import OpenAI
+import traceback
 
-# Make sure you've exported:
-#   export CLOSE_API_KEY="your_key_here"
-#   export OPENAI_BASE_URL="https://api.openai-proxy.org/v1"
-# or set them manually here:
-api_key = os.getenv("CLOSE_API_KEY")
-base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai-proxy.org/v1")
-
-if not api_key:
-    raise EnvironmentError("❌ CLOSE_API_KEY is not set in your environment!")
-
-# Instantiate client
-client = OpenAI(api_key=api_key, base_url=base_url)
-
-# === Simple text completion test ===
-print("➡️ Sending test message to CloseAI...")
-response = client.chat.completions.create(
-    model="gpt-4o-mini",  # or whichever CloseAI model you have access to
-    messages=[
-        {"role": "system", "content": "You are a concise assistant."},
-        {"role": "user", "content": "Say hello and tell me the current year."},
-    ],
+from app.model.closeai import (
+    GPT4o,
+    GPT4oMini,
+    GPT5,
+    Claude37SonnetLatest,
+    ClaudeSonnet40,
+    Gemini25Pro,
+    Gemini25Flash,
+    DeepSeekChat,
+    DeepSeekReasoner
 )
 
-print("\n✅ Response:")
-print(response.choices[0].message.content)
+# Ensure env vars
+# os.environ.setdefault("CLOSE_API_KEY", "")
+os.environ.setdefault("OPENAI_BASE_URL", "https://api.openai-proxy.org/v1")
+
+MODELS = [
+    # GPT4o(),
+    # GPT4oMini(),
+    # GPT5(),
+    # Claude37SonnetLatest(),
+    # ClaudeSonnet40(),
+    # Gemini25Pro(),
+    # Gemini25Flash(),
+    DeepSeekChat(),
+    DeepSeekReasoner(),
+]
+
+# Simple messages exactly like your instrumenter uses
+MESSAGES = [
+    {"role": "system", "content": "You are a test model."},
+    {"role": "user", "content": "Reply with the word OK."},
+]
+
+def test_model(model):
+    print("=" * 60)
+    print(f"TESTING MODEL: {model.name}")
+    try:
+        content, tools, usage = model.call(MESSAGES)
+        print(f"SUCCESS for {model.name}: {content}")
+    except Exception as e:
+        print(f"ERROR for {model.name}: {type(e).__name__}: {e}")
+        traceback.print_exc()
+    print("=" * 60)
+    print()
+
+if __name__ == "__main__":
+    print("\n### CloseAI Model Test Runner ###\n")
+    for m in MODELS:
+        test_model(m)
+

@@ -2,8 +2,40 @@ import os
 import sys
 from abc import ABC, abstractmethod
 from typing import Any, Literal
-
+from app.model import common as model_registry
 import litellm
+
+BASE_DEEPSEEK_COST = {
+    "input_cost_per_token": 0.000000825,
+    "output_cost_per_token": 0.00000255,
+    "max_tokens": 8192,
+}
+
+REASONER_COST = {
+    "input_cost_per_token": 0.0000010,
+    "output_cost_per_token": 0.0000030,
+    "max_tokens": 8192,
+}
+disable_cache=True
+
+
+# Override must be a full dict – LiteLLM does not support wildcards,
+# but we can include all known aliases.
+litellm.override_model_costs = {
+    # Official names
+    "deepseek-chat": BASE_DEEPSEEK_COST,
+    "deepseek-reasoner": REASONER_COST,
+
+    # CloseAI internal aliases
+    "deepseek-v3-1-terminus": BASE_DEEPSEEK_COST,
+    "deepseek-v3": BASE_DEEPSEEK_COST,
+    "deepseek-v3-chat": BASE_DEEPSEEK_COST,
+    "deepseek-v3-reasoner": REASONER_COST,
+
+    # CloseAI sometimes returns this:
+    "deepseek-r1": REASONER_COST,
+}
+
 from litellm import cost_per_token
 from litellm.exceptions import APIConnectionError as LiteLLMAPICError
 from litellm.exceptions import RateLimitError as LiteLLMRateLimitError
@@ -181,15 +213,18 @@ class Usage(BaseModel):
         )
 
 
+
 def get_usage_input_part(usage: Usage) -> Usage:
-    input_cost, _ = cost_per_token(
-        model=usage.model,
-        prompt_tokens=usage.input_tokens,
-        completion_tokens=usage.output_tokens,
-        cache_read_input_tokens=usage.cache_read_tokens,
-        cache_creation_input_tokens=usage.cache_write_tokens,
-    )
+    """
+    Compute *input-side* cost using our internal model metadata.
+    Avoid calling litellm.cost_per_token, because it fails for custom providers.
+    """
     assert usage.call_cnt == 1
+
+    model_instance = model_registry.SELECTED_MODEL
+
+    input_cost = usage.input_tokens * model_instance.cost_per_input
+
     return Usage(
         model=usage.model,
         input_tokens=0,
@@ -203,14 +238,15 @@ def get_usage_input_part(usage: Usage) -> Usage:
 
 
 def get_usage_output_part(usage: Usage) -> Usage:
-    _, output_cost = cost_per_token(
-        model=usage.model,
-        prompt_tokens=usage.input_tokens,
-        completion_tokens=usage.output_tokens,
-        cache_read_input_tokens=usage.cache_read_tokens,
-        cache_creation_input_tokens=usage.cache_write_tokens,
-    )
+    """
+    Compute *output-side* cost using our internal model metadata.
+    """
     assert usage.call_cnt == 1
+
+    model_instance = model_registry.SELECTED_MODEL
+
+    output_cost = usage.output_tokens * model_instance.cost_per_output
+
     return Usage(
         model=usage.model,
         input_tokens=usage.input_tokens,
@@ -320,19 +356,29 @@ class Model(ABC):
         before_sleep=_log_retry_attempt,
         reraise=True,  # Reraise the exception if all retries fail
     )
-    def call(self, messages: list[dict], **kwargs) -> Any:
+    def call(self, messages: list[dict], disable_cache=False, **kwargs) -> Any:
         """
         Public method to call the LLM. Includes retry logic.
         Delegates the actual API call to _perform_call.
         """
-        # Assuming setup is called elsewhere appropriately before the first call
+
+        # 🚨 NEW: bypass ACE caching + message transformation
+        if disable_cache:
+            try:
+                return self._perform_call(messages=messages, **kwargs)
+            except Exception as e:
+                log_and_print(f"[disable_cache] Model call failed: {type(e).__name__}: {str(e)}")
+                log_and_print(f"Message thread: {messages}")
+                raise
+
+        # Normal ACE logic:
         try:
             return self._perform_call(messages=messages, **kwargs)
         except Exception as e:
-            # Log message thread before reraising the exception
             log_and_print(f"Exception in model call: {type(e).__name__}: {str(e)}")
             log_and_print(f"Message thread: {messages}")
             raise
+
 
     def calc_cost(self, input_tokens: int, output_tokens: int) -> float:
         """
@@ -462,6 +508,7 @@ MODEL_HUB = {}
 def register_model(model: Model):
     global MODEL_HUB
     MODEL_HUB[model.name] = model
+    print(f"✅ Registered model: {model.name}")
 
 
 def get_all_model_names():
@@ -474,6 +521,8 @@ SELECTED_MODEL: Model
 
 def set_model(model_name: str):
     global SELECTED_MODEL
+    #print all available models in MODEL_HUB
+    print("Available models:", list(MODEL_HUB.keys()))
     if model_name not in MODEL_HUB and not model_name.startswith("litellm-generic-"):
         print(f"Invalid model nameAAA: {model_name}")
         sys.exit(1)

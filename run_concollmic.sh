@@ -10,6 +10,9 @@ HARNESS="/home/jim/ConcoLLMic/logic_bombs/copies/harness/count.py"
 LOG_DIR="logs_run"
 SUMMARY_JSON="run_summary.json"
 TIMEOUT_DURATION="15m"   # timeout per run
+MODEL_NAME="deepseek-chat"   # <-- SET THIS EACH TIME
+RESULTS_DIR="/home/jim/ConcoLLMic/results/$MODEL_NAME"
+mkdir -p "$RESULTS_DIR"
 
 mkdir -p "$LOG_DIR"
 echo "[]" > "$SUMMARY_JSON"
@@ -34,10 +37,11 @@ run_ace() {
   local instr_dir="$1"
   local name
   name="$(basename "$(dirname "$instr_dir")")_$(basename "$instr_dir")"
-  local out_dir="$instr_dir/out"
+  local out_dir="$RESULTS_DIR/$bench_name/out"
+  mkdir -p "$out_dir"
   local log_file="$LOG_DIR/${name}_run.log"
 
-  mkdir -p "$out_dir"
+  # mkdir -p "$out_dir"
   mkdir -p "$(dirname "$log_file")"
   : > "$log_file"
 

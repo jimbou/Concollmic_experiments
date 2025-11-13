@@ -6,6 +6,7 @@
 // {"s":{"length": 4}}
 int logic_bomb(char* s) {
     int symvar = s[0] - 48;
+    fprintf(stderr, "symvar: %d\n", symvar);
     float a = symvar/70.0;
     float b = 0.1;
     if(a != 0.1){

@@ -81,7 +81,7 @@ def setup_run_data_parser(subparsers):
         "run_data", help="collect and analyze cost statistics"
     )
     statistics_parser.add_argument(
-        "out_dir",
+        "--out_dir",
         help="output directory to search for cost statistics",
     )
     statistics_parser.add_argument(

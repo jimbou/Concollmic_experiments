@@ -1,10 +1,3 @@
-"""
-CloseAI model interface (OpenAI-compatible proxy via LiteLLM).
-
-Usage:
-    export CLOSE_API_KEY="your_key_here"
-    export OPENAI_BASE_URL="https://api.openai-proxy.org/v1"
-"""
 
 import os
 import sys
@@ -13,33 +6,41 @@ from typing import Literal
 
 import litellm
 from litellm import completion_cost
-from litellm.exceptions import BadRequestError as LiteLLMBadRequestError
 from litellm.exceptions import (
+    BadRequestError as LiteLLMBadRequestError,
     ContentPolicyViolationError as LiteLLMContentPolicyViolationError,
 )
 from litellm.utils import Choices, Message, ModelResponse
 
 from app.log import log_and_cprint, log_and_print
-from app.model import common
 from app.model.common import (
     Model,
     ModelNoResponseError,
     Usage,
 )
+import app.model.common as common
+# ============================================================
+# DeepSeek manual cost override (LiteLLM does NOT know these)
+# ============================================================
 
 
+# ============================================================
+# Unified CloseAI Model
+# ============================================================
 class CloseAIModel(Model):
     """
-    Base class for creating Singleton instances of CloseAI models.
-    Uses the OpenAI-compatible proxy endpoint at https://api.openai-proxy.org/v1
+    Automatic CloseAI wrapper:
+    - Claude models → Anthropic native endpoint (/anthropic/v1/messages)
+    - Other models → OpenAI-compatible endpoint (/v1/chat/completions)
     """
 
     _instances = {}
 
     def __new__(cls):
         if cls not in cls._instances:
-            cls._instances[cls] = super().__new__(cls)
-            cls._instances[cls]._initialized = False
+            inst = super().__new__(cls)
+            inst._initialized = False
+            cls._instances[cls] = inst
         return cls._instances[cls]
 
     def __init__(
@@ -47,30 +48,51 @@ class CloseAIModel(Model):
         name: str,
         cost_per_input: float,
         cost_per_output: float,
-        max_output_token: int = 8192,
-        parallel_tool_call: bool = True,
+        max_output_token: int = 4096,
+        parallel_tool_call: bool = False,
     ):
         if self._initialized:
             return
+
         super().__init__(name, cost_per_input, cost_per_output, parallel_tool_call)
         self.max_output_token = max_output_token
         self._initialized = True
 
-    def setup(self) -> None:
-        self.check_api_key()
-
-    def check_api_key(self) -> str:
-        key_name = "CLOSE_API_KEY"
-        key = os.getenv(key_name)
+    # -------------------------------------
+    # Required by Model base class
+    # -------------------------------------
+    def setup(self):
+        key = os.getenv("CLOSE_API_KEY")
         if not key:
-            print(f"Please set the {key_name} env var")
+            print("Please set CLOSE_API_KEY")
+            sys.exit(1)
+        return key
+    
+    def check_api_key(self):
+        key = os.getenv("CLOSE_API_KEY")
+        if not key:
+            print("Please set CLOSE_API_KEY")
             sys.exit(1)
         return key
 
-    def extract_resp_content(self, chat_message: Message) -> str:
-        content = chat_message.content
-        return content or ""
+    # ============================================================
+    # Auto-detect correct endpoint based on model name
+    # ============================================================
+    def _select_endpoint(self):
+        if self.name.startswith("claude-"):
+            return ("https://api.openai-proxy.org/anthropic", "anthropic")
 
+        if self.name.startswith("deepseek"):
+            # DeepSeek uses OpenAI-compatible endpoint but needs its own provider
+            return ("https://api.openai-proxy.org/v1", "deepseek")
+
+        # Default OpenAI-compatible models
+        base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai-proxy.org/v1")
+        return (base_url, "openai")
+
+    # -------------------------------------
+    # Main call
+    # -------------------------------------
     def _perform_call(
         self,
         messages: list[dict],
@@ -83,63 +105,71 @@ class CloseAIModel(Model):
         if temperature is None:
             temperature = common.MODEL_TEMP
 
-        api_key = self.check_api_key()
-        base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai-proxy.org/v1")
+        # GPT-5 special rules
+        if self.name.startswith("gpt-5"):
+            temperature = 1
+            top_p = None
+
+            # 🔥 Replace max_tokens → max_completion_tokens
+            kwargs["max_completion_tokens"] = self.max_output_token
+            kwargs.pop("max_tokens", None)
+        else:
+            # All other models use normal max_tokens
+            kwargs["max_tokens"] = self.max_output_token
+
+
+        api_key = self.setup()
+        base_url, provider = self._select_endpoint()
+
+        # JSON output enforcement
+        if response_format == "json_object":
+            messages[-1]["content"] += (
+                "\nYour response must be a valid JSON object starting with '{' and ending with '}'."
+            )
 
         try:
-            if response_format == "json_object":
-                last_content = messages[-1]["content"]
-                messages[-1]["content"] = (
-                    last_content
-                    + "\nYour response should start with { and end with }. "
-                      "DO NOT write anything else other than the JSON."
-                )
+            start = time.time()
 
-            start_time = time.time()
-
+            # ----------- Execute API call -----------------
             response = litellm.completion(
                 model=self.name,
                 messages=messages,
                 temperature=temperature,
-                max_tokens=self.max_output_token,
                 top_p=top_p,
-                stream=False,
-                tools=tools,
-                # tool_choice="auto",  # ✅ FIX: replaces 'any' which is now invalid
                 api_key=api_key,
                 base_url=base_url,
+                stream=False,
+                tools=tools,
+                custom_llm_provider=provider,
                 **kwargs,
             )
+            # ------------------------------------------------
 
-
-            latency = time.time() - start_time
+            latency = time.time() - start
             cost = completion_cost(model=self.name, completion_response=response)
 
-            assert isinstance(response, ModelResponse)
-            if not response.choices or len(response.choices) == 0:
-                raise ModelNoResponseError(
-                    f"Model {self.name} returned no choices. Response: {response}"
-                )
+            if not isinstance(response, ModelResponse):
+                raise ModelNoResponseError(f"Bad response: {response}")
 
-            resp_usage = response.usage
-            assert resp_usage is not None
+            if not response.choices:
+                raise ModelNoResponseError(f"No choices from {self.name}")
 
-            input_tokens = int(resp_usage.prompt_tokens)
-            output_tokens = int(resp_usage.completion_tokens)
-            cache_creation_tokens = int(resp_usage.get("cache_creation_input_tokens", 0))
-            cache_read_tokens = int(resp_usage.get("cache_read_input_tokens", 0))
+            usage = response.usage
+            prompt_tok = int(usage.prompt_tokens)
+            completion_tok = int(usage.completion_tokens)
+            cache_write = int(usage.get("cache_creation_input_tokens", 0))
+            cache_read = int(usage.get("cache_read_input_tokens", 0))
 
-            first_choice = response.choices[0]
-            assert isinstance(first_choice, Choices)
-            resp_msg: Message = first_choice.message
+            msg: Message = response.choices[0].message
+            content = msg.content or ""
+            tool_calls = getattr(msg, "tool_calls", None)
 
-            content = self.extract_resp_content(resp_msg)
-            tool_calls = getattr(resp_msg, "tool_calls", None)
-
+            # Log
             log_and_cprint(
-                f"Model ({self.name}) API usage: "
-                f"{{input={input_tokens}, output={output_tokens}, cache_read={cache_read_tokens}, "
-                f"cache_write={cache_creation_tokens}}}, cost={cost:.6f} USD, latency={latency:.3f}s",
+                f"Model ({self.name}) [{provider}] usage: "
+                f"in={prompt_tok}, out={completion_tok}, "
+                f"cache_r={cache_read}, cache_w={cache_write}, "
+                f"cost={cost:.6f}$, latency={latency:.3f}s",
                 style="yellow",
             )
 
@@ -148,10 +178,10 @@ class CloseAIModel(Model):
                 tool_calls,
                 Usage(
                     model=self.name,
-                    input_tokens=input_tokens,
-                    output_tokens=output_tokens,
-                    cache_read_tokens=cache_read_tokens,
-                    cache_write_tokens=cache_creation_tokens,
+                    input_tokens=prompt_tok,
+                    output_tokens=completion_tok,
+                    cache_read_tokens=cache_read,
+                    cache_write_tokens=cache_write,
                     cost=cost,
                     latency=latency,
                     call_cnt=1,
@@ -159,34 +189,103 @@ class CloseAIModel(Model):
             )
 
         except LiteLLMContentPolicyViolationError:
-            log_and_print("CloseAI content policy violation.")
+            log_and_print("CloseAI policy violation.")
             raise
 
         except LiteLLMBadRequestError as e:
             if e.code == "context_length_exceeded":
-                log_and_print("Context length exceeded")
-            raise e
+                log_and_print("Context exceeded.")
+            raise
 
-
-# === Concrete model classes ===
+# ============================================================
+# CloseAI Model Definitions (clean, readable subclass layout)
+# ============================================================
 
 class GPT4o(CloseAIModel):
     def __init__(self):
         super().__init__(
-            "gpt-4o",  # model ID exposed by CloseAI/OpenAI proxy
-            0.00001,
-            0.00003,
+            name="gpt-4o",
+            cost_per_input=0.000005,
+            cost_per_output=0.000015,
             max_output_token=8192,
         )
-        self.note = "CloseAI GPT-4o model (OpenAI proxy)"
 
 
 class GPT4oMini(CloseAIModel):
     def __init__(self):
         super().__init__(
-            "gpt-4o-mini",
-            0.000005,
-            0.000015,
+            name="gpt-4o-mini",
+            cost_per_input=0.0000005,
+            cost_per_output=0.0000015,
             max_output_token=8192,
         )
-        self.note = "CloseAI GPT-4o-mini model (fast + cost-efficient)"
+
+
+class GPT5(CloseAIModel):
+    def __init__(self):
+        super().__init__(
+            name="gpt-5",
+            cost_per_input=0.000020,
+            cost_per_output=0.000060,
+            max_output_token=8192,
+        )
+
+
+class Claude37SonnetLatest(CloseAIModel):
+    def __init__(self):
+        super().__init__(
+            name="claude-3-7-sonnet-latest",
+            cost_per_input=0.000015,
+            cost_per_output=0.000030,
+            max_output_token=8192,
+        )
+
+
+class ClaudeSonnet40(CloseAIModel):
+    def __init__(self):
+        super().__init__(
+            name="claude-sonnet-4-0",
+            cost_per_input=0.000018,
+            cost_per_output=0.000036,
+            max_output_token=8192,
+        )
+
+
+class Gemini25Pro(CloseAIModel):
+    def __init__(self):
+        super().__init__(
+            name="gemini-2.5-pro",
+            cost_per_input=0.000003,
+            cost_per_output=0.000009,
+            max_output_token=8192,
+        )
+
+class Gemini25Flash(CloseAIModel):
+    def __init__(self):
+        super().__init__(
+            name="gemini-2.5-flash",
+            cost_per_input=0.000002,
+            cost_per_output=0.000006,
+            max_output_token=8192,
+        )
+# ============================================================
+# DeepSeek models (OpenAI-compatible endpoint)
+# ============================================================
+
+class DeepSeekChat(CloseAIModel):
+    def __init__(self):
+        super().__init__(
+            name="deepseek-chat",
+            cost_per_input=0.000000825,
+            cost_per_output=0.00000255,
+            max_output_token=8192,
+        )
+
+class DeepSeekReasoner(CloseAIModel):
+    def __init__(self):
+        super().__init__(
+            name="deepseek-reasoner",
+            cost_per_input=0.0000010,
+            cost_per_output=0.0000030,
+            max_output_token=8192,
+        )

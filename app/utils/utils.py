@@ -11,6 +11,7 @@ from typing import Any
 import litellm, os
 from anthropic import Anthropic
 from loguru import logger
+import app.model.common as common
 
 PROJECT_DIR = ""
 CONCOLIC_EXECUTION_START_TIME: None | float = None
@@ -1141,24 +1142,52 @@ def detected_crash(stderr: str, returncode: int) -> tuple[bool, str]:
 
 
 
-def estimate_text_token(text: str | None, model: str = "gpt-4o-mini") -> int:
+# def estimate_text_token(text: str | None, model: str = "claude-3-7-sonnet-latest") -> int:
+#     """
+#     Estimate tokens using 302.ai via LiteLLM (requires API_KEY_302).
+#     """
+#     if not text:
+#         return 0
+
+#     api_key = os.getenv("API_KEY_302")
+#     if not api_key:
+#         raise ValueError("❌ Missing API_KEY_302 for token counting")
+
+#     response = litellm.completion(
+#         model=f"openai/{model}",
+#         api_base="https://api.302.ai/v1",
+#         api_key=api_key,
+#         custom_headers={"Authorization": f"302AI {api_key}"},
+#         messages=[{"role": "user", "content": text}],
+#         max_tokens=1,  # we only care about usage
+#     )
+
+#     return response.usage["prompt_tokens"]
+
+def estimate_text_token(text: str | None) -> int:
     """
-    Estimate tokens using 302.ai via LiteLLM (requires API_KEY_302).
+    Estimate token count by routing through SELECTED_MODEL.call(),
+    so the correct provider + endpoint selection is used.
+
+    This avoids hardcoding base_url and prevents Claude from being
+    mistakenly sent to /v1/ endpoints.
     """
     if not text:
         return 0
 
-    api_key = os.getenv("API_KEY_302")
-    if not api_key:
-        raise ValueError("❌ Missing API_KEY_302 for token counting")
+    # Use the model the user actually selected
+    model = common.SELECTED_MODEL
 
-    response = litellm.completion(
-        model=f"openai/{model}",
-        api_base="https://api.302.ai/v1",
-        api_key=api_key,
-        custom_headers={"Authorization": f"302AI {api_key}"},
+    # Ask for a 1-token response; only prompt token count matters
+    response_content, _, usage = model.call(
         messages=[{"role": "user", "content": text}],
-        max_tokens=1,  # we only care about usage
+        max_tokens=1,
+        temperature=0,
+        disable_cache=True,     # 🟩 THIS IS THE FIX
     )
 
-    return response.usage["prompt_tokens"]
+
+    if usage is None:
+        raise RuntimeError("❌ Token usage missing from model.call() result")
+
+    return int(usage.input_tokens)
