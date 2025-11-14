@@ -1,68 +1,53 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Usage: ./prepare_and_emit_instrument_script.sh /path/to/dir
-TARGET_DIR="${1:-$(pwd)}"
-TARGET_DIR="$(cd "$TARGET_DIR" && pwd)"
+# =====================================================
+# Batch ACE run execution script — PRINT COMMANDS ONLY
+# =====================================================
 
-OUT_SCRIPT="./run_instrument.sh"
+BASE_DIR="/home/jim/ConcoLLMic/logic_bombs/copies"
+HARNESS="/home/jim/ConcoLLMic/logic_bombs/copies/harness/count.py"
+MODEL_NAME="deepseek-chat"   # <-- SET THIS EACH TIME
+RESULTS_DIR="/home/jim/ConcoLLMic/results/$MODEL_NAME"
+COMMAND_FILE="all_commands.sh"
 
-echo "Preparing per-file dirs under: $TARGET_DIR"
-echo "Writing instrument commands to: $OUT_SCRIPT"
+mkdir -p "$RESULTS_DIR"
+echo "#!/usr/bin/env bash" > "$COMMAND_FILE"
+echo "# Auto-generated ACE run commands" >> "$COMMAND_FILE"
+echo >> "$COMMAND_FILE"
+
+# -----------------------------------------------------
+# Generate the ACE command for this instrumented folder
+# -----------------------------------------------------
+gen_cmd() {
+  local instr_dir="$1"
+  local name
+  name="$(basename "$(dirname "$instr_dir")")_$(basename "$instr_dir")"
+
+  local out_dir="$RESULTS_DIR/$name/out"
+  mkdir -p "$out_dir"
+
+  local cmd="python3 ACE.py run --project_dir \"$instr_dir\" --execution \"$HARNESS\" --out \"$out_dir\" --rounds 1 --parallel_num 1"
+
+  # ------- CHANGED HERE (print instead of run) -------
+  echo "timeout 15m $cmd" >> "$COMMAND_FILE"
+  # ---------------------------------------------------
+}
+
+echo "🔍 Searching recursively under $BASE_DIR for instrumented folders..."
+mapfile -t instr_dirs < <(find "$BASE_DIR" -type d -name "instr" | sort)
+
+if [[ ${#instr_dirs[@]} -eq 0 ]]; then
+  echo "⚠️  No instrumented folders found under $BASE_DIR."
+  exit 1
+fi
+
+for instr_dir in "${instr_dirs[@]}"; do
+  gen_cmd "$instr_dir"
+done
+
+chmod +x "$COMMAND_FILE"
+
 echo
-
-# header for the generated script
-cat > "$OUT_SCRIPT" <<'HEADER'
-#!/usr/bin/env bash
-set -euo pipefail
-
-# Auto-generated instrument commands.
-# Run this script to invoke ACE instrumentation for each file.
-HEADER
-
-# counter
-count=0
-
-# process only files at top-level (not recursive). Use -print0 to be safe with names.
-find "$TARGET_DIR" -maxdepth 1 -type f -print0 | while IFS= read -r -d '' file; do
-  filename="$(basename "$file")"
-  # folder name: basename without extension; change if you want to keep extension
-  foldername="${filename%.*}"
-  [ -z "$foldername" ] && foldername="$filename"
-
-  dest_root="$TARGET_DIR/$foldername"
-  src_dir="$dest_root/src"
-  instr_dir="$dest_root/instr"
-
-#   mkdir -p "$src_dir" "$instr_dir"
-
-  # copy original file into src (preserve attributes)
-#   cp -a -- "$file" "$src_dir/"
-
-  # canonical absolute paths
-  src_dir_abs="$(cd "$src_dir" && pwd)"
-  instr_dir_abs="$(cd "$instr_dir" && pwd)"
-
-  # shell-escape the paths for safe embedding into the generated script
-  esc_src="$(printf '%q' "$src_dir_abs")"
-  esc_instr="$(printf '%q' "$instr_dir_abs")"
-
-  # build the command line
-  cmd="python3 ACE.py instrument \\
-    --src_dir $esc_src \\
-    -out_dir $esc_instr \\
-    --instr_languages c,cpp,python,java"
-    # append to the output script
-    {
-        printf '\n# For file: %s\n' "$filename"
-        printf '%s\n' "$cmd"
-    } >> "$OUT_SCRIPT"
-
-    count=$((count + 1))
-    done
-
-    # make the generated script executable
-    chmod +x "$OUT_SCRIPT"
-
-    echo "Done. Wrote $count command(s) to $OUT_SCRIPT"
-    echo "Run: $OUT_SCRIPT  to execute the instrumentation commands (script is executable)."
+echo "📄 All commands saved to: $COMMAND_FILE"
+echo "Use: ./all_commands.sh"

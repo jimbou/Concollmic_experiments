@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Manual interrupt only — timeout will NOT trigger this
+trap 'echo "❗ Manual interrupt. Exiting..."; kill 0' INT
+
 # =====================================================
 # Batch ACE run execution script with timeout + JSON report
 # =====================================================
@@ -37,11 +40,10 @@ run_ace() {
   local instr_dir="$1"
   local name
   name="$(basename "$(dirname "$instr_dir")")_$(basename "$instr_dir")"
-  local out_dir="$RESULTS_DIR/$bench_name/out"
+  local out_dir="$RESULTS_DIR/$name/out"
   mkdir -p "$out_dir"
   local log_file="$LOG_DIR/${name}_run.log"
 
-  # mkdir -p "$out_dir"
   mkdir -p "$(dirname "$log_file")"
   : > "$log_file"
 
@@ -57,28 +59,39 @@ run_ace() {
     echo
   } > "$log_file"
 
-  local cmd="python3 ACE.py run --project_dir \"$HARNESS\" --out \"$out_dir\" --rounds 1 --parallel_num 1"
+  local cmd="python3 ACE.py run --project_dir \"$instr_dir\" --execution \"$HARNESS\" --out \"$out_dir\" --rounds 1 --parallel_num 1"
   echo "Command: timeout $TIMEOUT_DURATION $cmd" >> "$log_file"
   echo >> "$log_file"
 
-  # --- Run command with timeout
-  if timeout "$TIMEOUT_DURATION" bash -c "$cmd" >> "$log_file" 2>&1; then
+  # ============================================================
+  # ✔ Run with timeout, but NEVER exit the whole script
+  # ============================================================
+  # ============================================================
+  # Run with timeout, show output on terminal, log to file
+  # ============================================================
+  timeout "$TIMEOUT_DURATION" bash -c "$cmd" 2>&1 | tee -a "$log_file"
+  local status=${PIPESTATUS[0]}   # Exit code from timeout
+
+
+  if [[ $status -eq 0 ]]; then
     echo "✅ SUCCESS: $name"
     echo "✅ SUCCESS: $name" >> "$log_file"
     append_result "$name" "success" "$log_file" "$cmd"
+
+  elif [[ $status -eq 124 ]]; then
+    echo "⏰ TIMEOUT: $name (exceeded $TIMEOUT_DURATION)"
+    echo "⏰ TIMEOUT: process exceeded $TIMEOUT_DURATION" >> "$log_file"
+    append_result "$name" "timeout" "$log_file" "$cmd"
+
   else
-    local status=$?
-    if [[ $status -eq 124 ]]; then
-      echo "⏰ TIMEOUT: $name (exceeded $TIMEOUT_DURATION)"
-      echo "⏰ TIMEOUT: process exceeded $TIMEOUT_DURATION" >> "$log_file"
-      append_result "$name" "timeout" "$log_file" "$cmd"
-    else
-      echo "❌ FAILED: $name (exit code $status)"
-      echo "❌ FAILED (exit code $status)" >> "$log_file"
-      append_result "$name" "failed" "$log_file" "$cmd"
-    fi
+    echo "❌ FAILED: $name (exit code $status)"
+    echo "❌ FAILED (exit code $status)" >> "$log_file"
+    append_result "$name" "failed" "$log_file" "$cmd"
   fi
+
+  return 0   # <== ALWAYS return 0 so the for-loop keeps going
 }
+
 
 # -----------------------------------------------------
 # Find all instrumented directories recursively and run
