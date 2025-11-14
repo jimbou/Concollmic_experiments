@@ -48,8 +48,8 @@ def register_all_models() -> None:
     common.register_model(closeai.DeepSeekReasoner())
 
     # register default model as selected
-    # common.SELECTED_MODEL = closeai.Claude37SonnetLatest()
+    common.SELECTED_MODEL = closeai.Claude37SonnetLatest()
     # common.SELECTED_MODEL = closeai.GPT4o()
-    common.SELECTED_MODEL = closeai.DeepSeekChat()
+    # common.SELECTED_MODEL = closeai.DeepSeekChat()
     # common.SELECTED_MODEL = closeai.DeepSeekReasoner()
     # common.SELECTED_MODEL = closeai.GPT5()
