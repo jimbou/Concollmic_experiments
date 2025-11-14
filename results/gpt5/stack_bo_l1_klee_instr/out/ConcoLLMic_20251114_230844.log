@@ -1,0 +1,748 @@
+2025-11-14 23:08:44 | INFO | Concolic execution command: ACE.py run --project_dir /home/jim/ConcoLLMic/logic_bombs/copies/stack_bo_l1_klee/instr --execution /home/jim/ConcoLLMic/logic_bombs/copies/harness/count.py --out /home/jim/ConcoLLMic/results/gpt5/stack_bo_l1_klee_instr/out --rounds 1 --parallel_num 1
+2025-11-14 23:08:44 | INFO | Starting concolic execution phase, using testcase selection strategy: TestCaseSelection.RANDOM, parallel_num: 1, plateau_slot: None, rounds: 1...
+2025-11-14 23:08:44 | INFO | Project directory /home/jim/ConcoLLMic/logic_bombs/copies/stack_bo_l1_klee/instr
+2025-11-14 23:08:44 | DEBUG | Child process changed working directory to /home/jim/ConcoLLMic/logic_bombs/copies/stack_bo_l1_klee/instr
+2025-11-14 23:08:44 | DEBUG | Restored working directory to /home/jim/ConcoLLMic
+2025-11-14 23:08:44 | DEBUG | Child process finished with exit code: 0
+2025-11-14 23:08:44 | INFO | Loading file from /home/jim/ConcoLLMic/logic_bombs/copies/stack_bo_l1_klee/instr/stack_bo_l1_klee.c
+2025-11-14 23:08:44 | DEBUG | Newly covered code contents:
+9:     int flag = 0;
+10:     char buf[8];
+11:     strcpy(buf, symvar);
+18:     fprintf(stderr, "Path without the bomb\n");
+19:     return 0;
+23:     if (argc < 2) {
+26:     }
+27:     char *s = argv[1];
+29:     return logic_bomb(s);
+2025-11-14 23:08:44 | INFO | ====== Iteration 1: Current state: SELECT ======
+2025-11-14 23:08:44 | INFO | Selecting test case using RANDOM STRATEGY from list: [0]
+2025-11-14 23:08:44 | INFO | Using test case #0 as the base test case.
+2025-11-14 23:08:44 | INFO | ====== Iteration 1: Current state: SUMMARIZE ======
+2025-11-14 23:08:44 | DEBUG | Caching message for role "system" and clearing previous messages with cache_control for roles "[]"
+2025-11-14 23:08:44 | DEBUG | Caching message for role "user" and clearing previous messages with cache_control for roles "['user', 'tool', 'assistant']"
+2025-11-14 23:08:44 | DEBUG | Estimated tokens: 0, input tokens: 0, newly added tokens: 0
+2025-11-14 23:08:55 | INFO | Model (claude-3-7-sonnet-latest) [anthropic] usage: in=5666, out=197, cache_r=5663, cache_w=982, cost=0.008345$, latency=10.928s
+2025-11-14 23:08:55 | INFO | Summarizer agent response: 
+I'll analyze this execution trace and help identify target branches to explore. Let me start by understanding the code and execution flow.
+
+The program appears to be a simple buffer overflow example. It takes a command-line argument, passes it to `logic_bomb()` function which copies it into a small buffer (`buf[8]`), and checks if a flag variable has been modified. The current execution doesn't trigger the bomb (when flag == 1).
+
+Let me request the code for the unexecuted sections to better understand what I need to target.
+2025-11-14 23:08:55 | INFO | Summarizer agent calling tool `request_code`
+2025-11-14 23:08:55 | INFO | Code request received for 1 file(s): stack_bo_l1_klee.c (1-30)
+2025-11-14 23:08:55 | INFO | Loading file from /home/jim/ConcoLLMic/logic_bombs/copies/stack_bo_l1_klee/instr/stack_bo_l1_klee.c
+2025-11-14 23:08:55 | INFO | Total lines of code requested: 30
+2025-11-14 23:08:55 | DEBUG | Caching message for role "tool" and clearing previous messages with cache_control for roles "['user', 'tool', 'assistant']"
+2025-11-14 23:09:16 | INFO | Model (claude-3-7-sonnet-latest) [anthropic] usage: in=451, out=368, cache_r=0, cache_w=0, cost=0.006873$, latency=21.168s
+2025-11-14 23:09:16 | DEBUG | Estimated tokens: 7296, input tokens: 6845, newly added tokens: 451
+2025-11-14 23:09:28 | INFO | Model (claude-3-7-sonnet-latest) [anthropic] usage: in=5667, out=503, cache_r=5663, cache_w=1632, cost=0.015376$, latency=11.968s
+2025-11-14 23:09:28 | INFO | Summarizer agent response: 
+Now I understand the code better. The program has a classic stack buffer overflow vulnerability. Let me analyze what's happening:
+
+1. The `logic_bomb` function has a small buffer (8 bytes) and uses `strcpy` without bounds checking
+2. The flag variable is initialized to 0 and checked immediately after the strcpy
+3. If the flag becomes 1, it would trigger the "Logic bomb" path, but this doesn't happen in the current execution
+
+Let me think through how to reach the unexplored branch:
+2025-11-14 23:09:28 | INFO | Summarizer agent calling tool `think`
+2025-11-14 23:09:28 | INFO | Thinking process: Looking at the code, I can see this is a classic stack buffer overflow vulnerability:
+
+1. `flag` is initialized to 0
+2. `buf` is a small 8-byte buffer on the stack
+3. `strcpy(buf, symvar)` is used without bounds checking
+4. The condition `if(flag == 1)` checks if the flag has been modified
+
+The key insight is that in typical stack layouts, local variables are placed next to each other on the stack. If `flag` is located right after `buf` in memory (which is likely given the declaration order), then overflowing `buf` with more than 8 bytes could overwrite the value of `flag`.
+
+The current execution doesn't trigger the bomb because the input "AAAA" is only 4 bytes long and doesn't overflow the buffer enough to modify the flag variable.
+
+To reach the unexplored branch, I need to create a constraint that will cause the program to overflow the buffer and set `flag` to 1. This involves understanding:
+
+1. The memory layout (buf followed by flag on the stack)
+2. How many bytes to overflow to reach the flag variable
+3. What value to put at that position to set flag to 1
+
+Since this is a 32-bit or 64-bit system, the flag is likely 4 or 8 bytes after the buffer. The input would need to be at least 8 bytes (to fill the buffer) plus additional bytes to overwrite the flag with the value 1.
+2025-11-14 23:09:28 | DEBUG | Caching message for role "tool" and clearing previous messages with cache_control for roles "['user', 'tool', 'assistant']"
+2025-11-14 23:09:36 | INFO | Model (claude-3-7-sonnet-latest) [anthropic] usage: in=13, out=31, cache_r=0, cache_w=0, cost=0.000504$, latency=7.062s
+2025-11-14 23:09:36 | DEBUG | Estimated tokens: 7815, input tokens: 7802, newly added tokens: 13
+2025-11-14 23:09:44 | INFO | Model (claude-3-7-sonnet-latest) [anthropic] usage: in=7298, out=332, cache_r=7295, cache_w=517, cost=0.009116$, latency=8.493s
+2025-11-14 23:09:44 | INFO | Summarizer agent response: 
+Based on my analysis, I'll select the unexecuted branch where the logic bomb is triggered.
+2025-11-14 23:09:44 | INFO | Summarizer agent calling tool `select_target_branch`
+2025-11-14 23:09:44 | INFO | Target branch selected: if(flag == 1) -> true in stack_bo_l1_klee.c:logic_bomb
+Justification: This branch has 0% historical coverage (line cov: 0/2) and represents the core vulnerability in this program. The branch is protected by a condition that checks if `flag == 1`, but `flag` is initialized to 0 and never explicitly set to 1 in the code. 
+
+The vulnerability exists because `strcpy(buf, symvar)` is used without bounds checking on a small buffer (buf[8]). If the input string is longer than 8 bytes, it will overflow the buffer and potentially overwrite adjacent memory, including the `flag` variable that's likely stored nearby on the stack.
+
+Exploring this branch would significantly improve code coverage by executing the logic bomb path that's currently uncovered, and it would demonstrate the security vulnerability in the program.
+Expected covered lines: stack_bo_l1_klee.c:14-15
+2025-11-14 23:09:44 | INFO | Adding an new target branch "if(flag == 1) -> true in stack_bo_l1_klee.c:logic_bomb"
+2025-11-14 23:09:44 | DEBUG | Caching message for role "tool" and clearing previous messages with cache_control for roles "['user', 'tool', 'assistant']"
+2025-11-14 23:10:00 | INFO | Model (claude-3-7-sonnet-latest) [anthropic] usage: in=52, out=606, cache_r=0, cache_w=0, cost=0.009246$, latency=15.551s
+2025-11-14 23:10:00 | DEBUG | Estimated tokens: 8199, input tokens: 8147, newly added tokens: 52
+2025-11-14 23:10:12 | INFO | Model (claude-3-7-sonnet-latest) [anthropic] usage: in=7815, out=471, cache_r=7812, cache_w=388, cost=0.010873$, latency=12.487s
+2025-11-14 23:10:12 | INFO | Summarizer agent response: 
+Now I'll generate the path constraints needed to reach the selected target branch.
+2025-11-14 23:10:12 | INFO | Summarizer agent calling tool `generate_path_constraint`
+2025-11-14 23:10:12 | INFO | Path constraint generated: To reach the target branch `if(flag == 1) -> true` in the logic_bomb function, we need to exploit a stack buffer overflow vulnerability. Here are the constraints:
+
+1. Program must be executed with at least one command-line argument (to pass the `if (argc < 2)` check in main)
+
+2. The command-line argument must be carefully crafted to:
+   a. Have a length greater than 8 bytes to overflow the buffer
+   b. Contain specific bytes at a particular position to overwrite the `flag` variable with the value 1
+
+3. Memory layout constraints:
+   - The program declares variables in this order: `int flag = 0;` followed by `char buf[8];`
+   - On most architectures, the stack grows downward, so `buf` would be at a lower address than `flag`
+   - The `strcpy(buf, symvar)` operation will copy bytes starting at the beginning of `buf` and continue writing beyond its bounds if the input is longer than 8 bytes
+
+4. Specific byte-level constraints:
+   - The input string must be at least 12 bytes long
+   - Bytes 0-7 can be any values (they fill the buffer)
+   - Bytes 8-11 must represent the integer value 1 in the target architecture's memory layout
+   - For little-endian systems (most common), this means:
+     * Byte 8: 0x01
+     * Bytes 9-11: 0x00 (to represent the value 1 as a 32-bit integer)
+
+In summary, the command-line argument must be constructed to overflow the 8-byte buffer and write the value 1 to the memory location of the `flag` variable.
+2025-11-14 23:10:12 | INFO | Generated path constraint for branch "if(flag == 1) -> true in stack_bo_l1_klee.c:logic_bomb".
+2025-11-14 23:10:12 | DEBUG | Caching message for role "tool" and clearing previous messages with cache_control for roles "['user', 'tool', 'assistant']"
+2025-11-14 23:10:22 | INFO | Model (claude-3-7-sonnet-latest) [anthropic] usage: in=87, out=142, cache_r=0, cache_w=0, cost=0.002391$, latency=9.436s
+2025-11-14 23:10:22 | INFO | Yielding branch 1
+2025-11-14 23:10:22 | INFO | Processing new branch: if(flag == 1) -> true in stack_bo_l1_klee.c:logic_bomb...
+2025-11-14 23:10:22 | INFO | Submitting TestCase #1 to thread pool
+2025-11-14 23:10:22 | DEBUG | TestCase #1 successfully submitted
+2025-11-14 23:10:22 | INFO | Submitted new test case #1 for solving and executing
+2025-11-14 23:10:22 | INFO | Reached the maximum number (1) of branches to explore, finishing summarization...
+2025-11-14 23:10:22 | DEBUG | Calling model for target branch selection and path constraint summarization. Completed message thread: [{'role': 'system',
+  'content': [{'type': 'text',
+               'text': '<instructions>\n'
+                       'You are an expert in concolic execution tasked with analyzing program execution path and generating symbolic constraints. You will '
+                       'receive:\n'
+                       '\n'
+                       '1. Execution Information: Provided in <execution_information> tag - Contains details about how the program was executed\n'
+                       "2. Execution Trace: Provided in <execution_trace> tag - Shows the program's execution flow with the following components:\n"
+                       '   A. Function Call Chain: Provided in <function_call_chain> tag - Shows the sequence of function calls during execution\n'
+                       '      - Format: [file_name](function_name) => [file_name](function_name) => ...\n'
+                       '      - This helps you understand the execution flow and dependencies between functions\n'
+                       '   B. Source Code Execution:\n'
+                       '      - Only actually executed code is shown in the trace\n'
+                       '      - Unexecuted code blocks are removed and replaced with comments like "Unexecuted code (lines BEGIN-END) is removed"\n'
+                       "      - Executed conditional statements remain visible, even if their corresponding blocks weren't executed. This helps you identify "
+                       '(1) the valuable target branch to explore next, and (2) the corresponding path constraints to reach it\n'
+                       '   C. Coverage Information: Provided within above Source Code Execution as comments - Shows coverage information for the code '
+                       'protected by the unexecuted branches\n'
+                       '      - Format: "line cov: X/Y (Z%)" means, for that deleted code block (not executed in this execution trace), the test suite has '
+                       'executed X lines out of the total Y lines (excluding blank lines), achieving a coverage ratio of Z%\n'
+                       '    - No or low execution counts indicate potential targets for new test cases\n'
+                       '4. Already Selected Branch But Not Reached [OPTIONAL]: Provided in <already_selected_branch_but_not_reached> tag - Contains a list of '
+                       'branches previously selected but failed to reach during exploration attempts, which may due to errors in constraint '
+                       'summarization/solving, or the branch is indeed unreachable based on current execution trace. When this information is provided, avoid '
+                       're-selecting these branches unless you are quite confident that the branch can be reached and you can provide correct and complete '
+                       'constraints to reach it. If all high-priority branches appear here, select the next best alternative instead.\n'
+                       '\n'
+                       'Your task is to analyze the execution flow and generate constraints that lead to multiple new execution paths. You are expected to '
+                       'select several target branches in sequence, generating path constraints for each. Follow this workflow:\n'
+                       '\n'
+                       '1. Target Branch Selection: select a branch, which are not executed in this execution trace, to explore next\n'
+                       '    - Your primary goal is to improve the overall test coverage of the project\n'
+                       '    - Choose branches that would lead to alternative execution paths and trigger new program behaviors\n'
+                       '    - Prioritize important branches: select the most promising branches first\n'
+                       '    - Clearly justify your selection with reference to the coverage information\n'
+                       '    - Submit your answer with the final `select_target_branch` tool.\n'
+                       '\n'
+                       '2. Path Constraint Generation: create symbolic constraints required to reach the previously selected target branch\n'
+                       '    - Express constraints at the **program input and environment levels**. Avoid intermediate program states\n'
+                       '    - Each constraint can be expressed in one of **natural language**, **code snippets**, or **SMT formulas**\n'
+                       '    - Ensure constraints are complete - any satisfying input-environment pairs will witness the same concrete execution path\n'
+                       '    - Present constraints in chronological execution order\n'
+                       '    - The constraints would be passed to another colleague who HAS NEVER SEEN THE CODE. Ensure that:\n'
+                       '      * All constraints are SELF-CONTAINED and DO NOT reference internal variables without explanation\n'
+                       '      * File format requirements are EXPLICITLY described (exact byte positions, values, and their meanings)\n'
+                       '      * Avoid jargon or function names without providing context about what they validate\n'
+                       '    - Submit your answer with the final `generate_path_constraint` tool.\n'
+                       '\n'
+                       '3. Repeat or Finish:\n'
+                       '   - Return to step 1-2 to select another branch and generate its path constraints if there are more valuable branches to explore\n'
+                       '   - Always generate path constraints for your current selected target branch BEFORE selecting a new branch. Only skip this rule if '
+                       'you need to replace/correct your previous branch selection. Basic workflow: select one branch &#8594; generate its path constraints '
+                       '&#8594; then select another branch\n'
+                       "   - Use the `finish` tool when you've explored all worthwhile branches based on current provided information\n"
+                       '\n'
+                       'Optionally, if you need help, you may invoke the following tools wisely anytime:\n'
+                       '   - The `think` tool allows you to reason step-by-step about complex problems\n'
+                       '   - The `request_code` tool allows you to see the code protected by branches to better assess their importance if necessary\n'
+                       '\n'
+                       'Important Guidelines:\n'
+                       '- You MUST select at least one target branch and generate path constraints for it before finishing\n'
+                       '- Maintain a diverse set of target branches to maximize code coverage\n'
+                       '- Focus on symbolic analysis rather than concrete execution\n'
+                       '- Be precise and unambiguous in constraint specifications\n'
+                       '- Keep explanations clear and concise\n'
+                       '</instructions>\n'
+                       '<example_user_input><execution_information>\n'
+                       '```python\n'
+                       'def execute_program(timeout: int) -> tuple[str, int]:\n'
+                       '    import os\n'
+                       '    import subprocess\n'
+                       '    import tempfile\n'
+                       '\n'
+                       '    # Create a temporary file\n'
+                       "    with tempfile.NamedTemporaryFile(mode='w') as temp_file:\n"
+                       "        temp_file.write('3 0.5\\n1.1 2.2 3.3')\n"
+                       '        temp_file_path = temp_file.name\n'
+                       '    \n'
+                       '        try:\n'
+                       "            result = subprocess.run(['./program', temp_file_path], \n"
+                       '                                    capture_output=True, \n'
+                       '                                    text=True,\n'
+                       '                                    timeout=timeout)\n'
+                       '            return result.stderr, result.returncode\n'
+                       '        except Exception as e:\n'
+                       '            raise e\n'
+                       '```\n'
+                       '</execution_information>\n'
+                       '<execution_trace><function_call_chain>[has_close_elements.c](main) => [has_close_elements.c](has_close_elements) => '
+                       '[has_close_elements.c](main)</function_call_chain>\n'
+                       '\n'
+                       '\n'
+                       '```c\n'
+                       '// has_close_elements.c (47 lines total)\n'
+                       'bool has_close_elements(vector<float> numbers, float threshold) {\n'
+                       '    for (size_t i = 0; i < numbers.size(); i++) {\n'
+                       '        for (size_t j = i + 1; j < numbers.size(); j++) {\n'
+                       '            if (fabs(numbers[i] - numbers[j]) < threshold) {\n'
+                       '                // Unexecuted code (line 5) is removed. Its line cov: 0/1 (0.0%)\n'
+                       '            }\n'
+                       '        }\n'
+                       '    }\n'
+                       '    return false;\n'
+                       '}\n'
+                       '\n'
+                       'int main(int argc, char *argv[]) {\n'
+                       '    if (argc != 2) {\n'
+                       '        // Unexecuted code (lines 14-15) is removed. Its line cov: 0/2 (0.0%)\n'
+                       '    }\n'
+                       '\n'
+                       '    FILE *file = fopen(argv[1], "r");\n'
+                       '    if (!file) {\n'
+                       '        // Unexecuted code (lines 20-21) is removed. Its line cov: 0/2 (0.0%)\n'
+                       '    }\n'
+                       '\n'
+                       '    int num;\n'
+                       '    float threshold;\n'
+                       '\n'
+                       '    if (fscanf(file, "%d %f", &num, &threshold) != 2) {\n'
+                       '        // Unexecuted code (lines 28-30) is removed. Its line cov: 0/3 (0.0%)\n'
+                       '    }\n'
+                       '\n'
+                       '    vector<float> numbers(num);\n'
+                       '\n'
+                       '    for (int i = 0; i < num; i++) {\n'
+                       '        if (fscanf(file, "%f", &numbers[i]) != 1) {\n'
+                       '            // Unexecuted code (lines 37-39) is removed. Its line cov: 0/3 (0.0%)\n'
+                       '        }\n'
+                       '    }\n'
+                       '    fclose(file);\n'
+                       '\n'
+                       '    printf(has_close_elements(numbers, threshold) \n'
+                       '           ? "Close elements found.\n'
+                       '" \n'
+                       '           : "No close elements.\n'
+                       '");\n'
+                       '}\n'
+                       '```\n'
+                       '</execution_trace>\n'
+                       '</example_user_input>\n'
+                       '# Example of Target Branch Selection and Path Constraint Generation:\n'
+                       '## Select Target Branch:\n'
+                       '\n'
+                       'Target Branch: `if (fabs(numbers[i] - numbers[j]) < threshold)` -> true in function `has_close_elements()`\n'
+                       '\n'
+                       'Justification: This branch has 0.0% coverage. Although there are multiple uncovered branches, this branch is the core functionality of '
+                       'the program and would significantly improve code coverage when explored.\n'
+                       '\n'
+                       'Expected Covered Lines:\n'
+                       '- Filepath: has_close_elements.c\n'
+                       '- Lines: 5-5\n'
+                       '\n'
+                       '## Path Constraint to reach the target branch:\n'
+                       '\n'
+                       '1. Command-Line Arguments: `argc == 2`\n'
+                       '2. File Validity: argv[1] must refer to a valid file that can be successfully opened for reading: `fopen(argv[1], "r") != NULL`\n'
+                       '3. File Format and Content:\n'
+                       '    a. First line must contain valid integer `num` and float `threshold`: `fscanf(file, "%d %f", &num, &threshold) == 2`\n'
+                       '    b. File must then contain at least `num` valid floats, each successfully parsed into the `numbers` vector: `fscanf(file, "%f", '
+                       '&numbers[i]) == 1 for each i in [0, num)`\n'
+                       '4. Array Elements Constraint: Must exist two elements in the `numbers` vector that have an absolute difference less than `threshold`: '
+                       '`∃ i, j ∈ [0, num), i < j: fabs(numbers[i] - numbers[j]) < threshold`\n',
+               'cache_control': {'type': 'ephemeral'}}]},
+ {'role': 'user',
+  'content': [{'type': 'text',
+               'text': '<execution_information>\n'
+                       '```python\n'
+                       '# #!/usr/bin/env python3\n'
+                       '# """\n'
+                       '# Harness that always executes a binary with one fixed string argument.\n'
+                       "# Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).\n"
+                       '# """\n'
+                       '\n'
+                       '# import subprocess\n'
+                       '# import signal\n'
+                       '# from typing import Tuple\n'
+                       '\n'
+                       '# def execute_program(timeout: int) -> Tuple[str, int]:\n'
+                       '#     """\n'
+                       '#     Execute the instrumented program with one string argument.\n'
+                       '#     Returns (stderr_text, return_code).\n'
+                       '#     """\n'
+                       '#     # &#9989; Always run this binary (adjust path if needed)\n'
+                       '#     exe_path = "./temp_executable"\n'
+                       '\n'
+                       '#     # &#9989; Always pass one string argument (change if your program needs specific format)\n'
+                       '#     arg = "AAAA"\n'
+                       '\n'
+                       '#     try:\n'
+                       '#         result = subprocess.run(\n'
+                       '#             [exe_path, arg],\n'
+                       '#             capture_output=True,\n'
+                       '#             text=True,\n'
+                       '#             timeout=timeout,\n'
+                       '#         )\n'
+                       '#         return result.stderr or "", result.returncode\n'
+                       '#     except subprocess.TimeoutExpired as e:\n'
+                       '#         stderr_text = e.stderr if isinstance(e.stderr, str) else ""\n'
+                       '#         return stderr_text, -getattr(signal, "SIGKILL", 9)\n'
+                       '#     except Exception as e:\n'
+                       '#         return f"Harness error: {type(e).__name__}: {e}", -1\n'
+                       '\n'
+                       '\n'
+                       'def execute_program(timeout: int) -> tuple[str, int]:\n'
+                       '    import signal\n'
+                       '    import subprocess\n'
+                       '\n'
+                       '    try:\n'
+                       '        result = subprocess.run(\n'
+                       '            ["./temp_executable AAAA"],\n'
+                       '            capture_output=True,\n'
+                       '            encoding="utf-8",\n'
+                       '            errors="replace",\n'
+                       '            shell=True,\n'
+                       '            timeout=timeout,\n'
+                       '        )\n'
+                       '        # Return stderr and the return code\n'
+                       '        return result.stderr, result.returncode\n'
+                       '    except subprocess.TimeoutExpired as e:\n'
+                       '        # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL\n'
+                       '        return e.stderr, -signal.SIGKILL\n'
+                       '    except Exception as e:\n'
+                       '        # ensure to raise the error if run failed\n'
+                       '        raise e\n'
+                       '\n'
+                       '```\n'
+                       '</execution_information>\n'
+                       '<execution_trace><function_call_chain>[stack_bo_l1_klee.c](main) => [stack_bo_l1_klee.c](logic_bomb)</function_call_chain>\n'
+                       '\n'
+                       '\n'
+                       '```c\n'
+                       '// stack_bo_l1_klee.c (30 lines total)\n'
+                       '#include <stdio.h>\n'
+                       '#include <string.h> \n'
+                       '#include "utils.h"\n'
+                       '#include "a_tester.h"\n'
+                       '\n'
+                       '\n'
+                       '// {"symvar":{"length": 64}}\n'
+                       'int logic_bomb(char* symvar) {\n'
+                       '    int flag = 0;\n'
+                       '    char buf[8];\n'
+                       '    strcpy(buf, symvar);\n'
+                       '\n'
+                       '    if(flag == 1){\n'
+                       '        // Unexecuted code (lines 14-15) removed. Its line cov: 0/2 (0%)\n'
+                       '    }\n'
+                       '\n'
+                       '    fprintf(stderr, "Path without the bomb\\n");\n'
+                       '    return 0;\n'
+                       '}\n'
+                       '\n'
+                       'int main(int argc, char **argv) {\n'
+                       '    if (argc < 2) {\n'
+                       '        // Unexecuted code (lines 24-25) removed. Its line cov: 0/2 (0%)\n'
+                       '    }\n'
+                       '    char *s = argv[1];\n'
+                       '\n'
+                       '    return logic_bomb(s);\n'
+                       '}\n'
+                       '```\n'
+                       '\n'
+                       '</execution_trace>\n'}]},
+ {'role': 'assistant',
+  'content': [{'type': 'text',
+               'text': "I'll analyze this execution trace and help identify target branches to explore. Let me start by understanding the code and execution "
+                       'flow.\n'
+                       '\n'
+                       'The program appears to be a simple buffer overflow example. It takes a command-line argument, passes it to `logic_bomb()` function '
+                       "which copies it into a small buffer (`buf[8]`), and checks if a flag variable has been modified. The current execution doesn't trigger "
+                       'the bomb (when flag == 1).\n'
+                       '\n'
+                       'Let me request the code for the unexecuted sections to better understand what I need to target.'}],
+  'tool_calls': [{'id': 'toolu_bdrk_014PcqdtqCVteVdk68jUMf1K',
+                  'type': 'function',
+                  'function': {'name': 'request_code', 'arguments': '{"file_requests": [{"filepath": "stack_bo_l1_klee.c", "lines": "1-30"}]}'}}]},
+ {'role': 'tool',
+  'content': [{'type': 'text',
+               'text': '====================\n'
+                       '[FILE: stack_bo_l1_klee.c (30 lines total)] [LINES: 1-30]:\n'
+                       "('-' means have NOT been covered, '+' means have been covered)\n"
+                       '==================== \n'
+                       '\n'
+                       '```c\n'
+                       ' 1| +| #include <stdio.h>\n'
+                       ' 2| +| #include <string.h> \n'
+                       ' 3| +| #include "utils.h"\n'
+                       ' 4| +| #include "a_tester.h"\n'
+                       ' 5| +| \n'
+                       ' 6| +| \n'
+                       ' 7| +| // {"symvar":{"length": 64}}\n'
+                       ' 8| +| int logic_bomb(char* symvar) {\n'
+                       ' 9| +|     int flag = 0;\n'
+                       '10| +|     char buf[8];\n'
+                       '11| +|     strcpy(buf, symvar);\n'
+                       '12| +| \n'
+                       '13| +|     if(flag == 1){\n'
+                       '14| -|         fprintf(stderr, "Logic bomb triggered\\n");\n'
+                       '15| -|         return 1;\n'
+                       '16| +|     }\n'
+                       '17| +| \n'
+                       '18| +|     fprintf(stderr, "Path without the bomb\\n");\n'
+                       '19| +|     return 0;\n'
+                       '20| +| }\n'
+                       '21| +| \n'
+                       '22| +| int main(int argc, char **argv) {\n'
+                       '23| +|     if (argc < 2) {\n'
+                       '24| -|         fprintf(stderr, "Usage: %s <input-string>\\n", argv[0]);\n'
+                       '25| -|         return 2;\n'
+                       '26| +|     }\n'
+                       '27| +|     char *s = argv[1];\n'
+                       '28| +| \n'
+                       '29| +|     return logic_bomb(s);\n'
+                       '30| +| }\n'
+                       '```\n'
+                       '\n'
+                       '\n'
+                       ' NOTE: You have 9 attempts for code requests left and use them wisely (e.g., batch multiple requests together in one single call)!'}],
+  'tool_call_id': 'toolu_bdrk_014PcqdtqCVteVdk68jUMf1K',
+  'name': 'request_code'},
+ {'role': 'assistant',
+  'content': [{'type': 'text',
+               'text': "Now I understand the code better. The program has a classic stack buffer overflow vulnerability. Let me analyze what's happening:\n"
+                       '\n'
+                       '1. The `logic_bomb` function has a small buffer (8 bytes) and uses `strcpy` without bounds checking\n'
+                       '2. The flag variable is initialized to 0 and checked immediately after the strcpy\n'
+                       '3. If the flag becomes 1, it would trigger the "Logic bomb" path, but this doesn\'t happen in the current execution\n'
+                       '\n'
+                       'Let me think through how to reach the unexplored branch:'}],
+  'tool_calls': [{'id': 'toolu_bdrk_01GbGQBU9MVE3Qbur3xyozmC',
+                  'type': 'function',
+                  'function': {'name': 'think',
+                               'arguments': '{"reasoning": "Looking at the code, I can see this is a classic stack buffer overflow vulnerability:\\n\\n1. '
+                                            '`flag` is initialized to 0\\n2. `buf` is a small 8-byte buffer on the stack\\n3. `strcpy(buf, symvar)` is used '
+                                            'without bounds checking\\n4. The condition `if(flag == 1)` checks if the flag has been modified\\n\\nThe key '
+                                            'insight is that in typical stack layouts, local variables are placed next to each other on the stack. If `flag` '
+                                            'is located right after `buf` in memory (which is likely given the declaration order), then overflowing `buf` with '
+                                            "more than 8 bytes could overwrite the value of `flag`.\\n\\nThe current execution doesn't trigger the bomb "
+                                            'because the input \\"AAAA\\" is only 4 bytes long and doesn\'t overflow the buffer enough to modify the flag '
+                                            'variable.\\n\\nTo reach the unexplored branch, I need to create a constraint that will cause the program to '
+                                            'overflow the buffer and set `flag` to 1. This involves understanding:\\n\\n1. The memory layout (buf followed by '
+                                            'flag on the stack)\\n2. How many bytes to overflow to reach the flag variable\\n3. What value to put at that '
+                                            'position to set flag to 1\\n\\nSince this is a 32-bit or 64-bit system, the flag is likely 4 or 8 bytes after the '
+                                            'buffer. The input would need to be at least 8 bytes (to fill the buffer) plus additional bytes to overwrite the '
+                                            'flag with the value 1."}'}}]},
+ {'role': 'tool',
+  'content': [{'type': 'text', 'text': "I've recorded your reasoning."}],
+  'tool_call_id': 'toolu_bdrk_01GbGQBU9MVE3Qbur3xyozmC',
+  'name': 'think'},
+ {'role': 'assistant',
+  'content': [{'type': 'text', 'text': "Based on my analysis, I'll select the unexecuted branch where the logic bomb is triggered."}],
+  'tool_calls': [{'id': 'toolu_bdrk_01F1eonx2CjoVfr2uoHVGi87',
+                  'type': 'function',
+                  'function': {'name': 'select_target_branch',
+                               'arguments': '{"target_branch": "if(flag == 1) -> true in stack_bo_l1_klee.c:logic_bomb", "justification": "This branch has 0% '
+                                            'historical coverage (line cov: 0/2) and represents the core vulnerability in this program. The branch is '
+                                            'protected by a condition that checks if `flag == 1`, but `flag` is initialized to 0 and never explicitly set to 1 '
+                                            'in the code. \\n\\nThe vulnerability exists because `strcpy(buf, symvar)` is used without bounds checking on a '
+                                            'small buffer (buf[8]). If the input string is longer than 8 bytes, it will overflow the buffer and potentially '
+                                            "overwrite adjacent memory, including the `flag` variable that's likely stored nearby on the stack.\\n\\nExploring "
+                                            "this branch would significantly improve code coverage by executing the logic bomb path that's currently "
+                                            'uncovered, and it would demonstrate the security vulnerability in the program.", "expected_covered_lines": '
+                                            '{"filepath": "stack_bo_l1_klee.c", "lines": "14-15"}}'}}]},
+ {'role': 'tool',
+  'content': [{'type': 'text',
+               'text': 'New Target branch successfully selected and recorded. Now please generate path constraints to reach this branch: "if(flag == 1) -> '
+                       'true in stack_bo_l1_klee.c:logic_bomb".'}],
+  'tool_call_id': 'toolu_bdrk_01F1eonx2CjoVfr2uoHVGi87',
+  'name': 'select_target_branch'},
+ {'role': 'assistant',
+  'content': [{'type': 'text', 'text': "Now I'll generate the path constraints needed to reach the selected target branch."}],
+  'tool_calls': [{'id': 'toolu_bdrk_01LNZLALj6iGJGBqw9wnYyGC',
+                  'type': 'function',
+                  'function': {'name': 'generate_path_constraint',
+                               'arguments': '{"path_constraint": "To reach the target branch `if(flag == 1) -> true` in the logic_bomb function, we need to '
+                                            'exploit a stack buffer overflow vulnerability. Here are the constraints:\\n\\n1. Program must be executed with at '
+                                            'least one command-line argument (to pass the `if (argc < 2)` check in main)\\n\\n2. The command-line argument '
+                                            'must be carefully crafted to:\\n   a. Have a length greater than 8 bytes to overflow the buffer\\n   b. Contain '
+                                            'specific bytes at a particular position to overwrite the `flag` variable with the value 1\\n\\n3. Memory layout '
+                                            'constraints:\\n   - The program declares variables in this order: `int flag = 0;` followed by `char buf[8];`\\n   '
+                                            '- On most architectures, the stack grows downward, so `buf` would be at a lower address than `flag`\\n   - The '
+                                            '`strcpy(buf, symvar)` operation will copy bytes starting at the beginning of `buf` and continue writing beyond '
+                                            'its bounds if the input is longer than 8 bytes\\n\\n4. Specific byte-level constraints:\\n   - The input string '
+                                            'must be at least 12 bytes long\\n   - Bytes 0-7 can be any values (they fill the buffer)\\n   - Bytes 8-11 must '
+                                            "represent the integer value 1 in the target architecture's memory layout\\n   - For little-endian systems (most "
+                                            'common), this means:\\n     * Byte 8: 0x01\\n     * Bytes 9-11: 0x00 (to represent the value 1 as a 32-bit '
+                                            'integer)\\n\\nIn summary, the command-line argument must be constructed to overflow the 8-byte buffer and write '
+                                            'the value 1 to the memory location of the `flag` variable."}'}}]},
+ {'role': 'tool',
+  'content': [{'type': 'text',
+               'text': 'Path constraint for "if(flag == 1) -> true in stack_bo_l1_klee.c:logic_bomb" successfully generated and recorded.Now, you can (1) '
+                       'explore another branch further using the `select_target_branch` tool, or (2) finish the exploration process using the `finish` tool if '
+                       'you believe no further branches need exploration.'}],
+  'tool_call_id': 'toolu_bdrk_01LNZLALj6iGJGBqw9wnYyGC',
+  'name': 'generate_path_constraint',
+  'cache_control': {'type': 'ephemeral'}}]
+2025-11-14 23:10:22 | DEBUG | Target branch selection and path constraint summary completed. Result: 
+
+EXPLORATION SUMMARY:
+
+--- Branch 1 ---
+TARGET BRANCH:
+if(flag == 1) -> true in stack_bo_l1_klee.c:logic_bomb
+
+JUSTIFICATION:
+This branch has 0% historical coverage (line cov: 0/2) and represents the core vulnerability in this program. The branch is protected by a condition that checks if `flag == 1`, but `flag` is initialized to 0 and never explicitly set to 1 in the code. 
+
+The vulnerability exists because `strcpy(buf, symvar)` is used without bounds checking on a small buffer (buf[8]). If the input string is longer than 8 bytes, it will overflow the buffer and potentially overwrite adjacent memory, including the `flag` variable that's likely stored nearby on the stack.
+
+Exploring this branch would significantly improve code coverage by executing the logic bomb path that's currently uncovered, and it would demonstrate the security vulnerability in the program.
+
+EXPECTED COVERED LINES:
+stack_bo_l1_klee.c:14-15
+
+PATH CONSTRAINT:
+To reach the target branch `if(flag == 1) -> true` in the logic_bomb function, we need to exploit a stack buffer overflow vulnerability. Here are the constraints:
+
+1. Program must be executed with at least one command-line argument (to pass the `if (argc < 2)` check in main)
+
+2. The command-line argument must be carefully crafted to:
+   a. Have a length greater than 8 bytes to overflow the buffer
+   b. Contain specific bytes at a particular position to overwrite the `flag` variable with the value 1
+
+3. Memory layout constraints:
+   - The program declares variables in this order: `int flag = 0;` followed by `char buf[8];`
+   - On most architectures, the stack grows downward, so `buf` would be at a lower address than `flag`
+   - The `strcpy(buf, symvar)` operation will copy bytes starting at the beginning of `buf` and continue writing beyond its bounds if the input is longer than 8 bytes
+
+4. Specific byte-level constraints:
+   - The input string must be at least 12 bytes long
+   - Bytes 0-7 can be any values (they fill the buffer)
+   - Bytes 8-11 must represent the integer value 1 in the target architecture's memory layout
+   - For little-endian systems (most common), this means:
+     * Byte 8: 0x01
+     * Bytes 9-11: 0x00 (to represent the value 1 as a 32-bit integer)
+
+In summary, the command-line argument must be constructed to overflow the 8-byte buffer and write the value 1 to the memory location of the `flag` variable.
+
+2025-11-14 23:10:22 | INFO | ====== Iteration 1: Current state: SOLVE_AND_EXECUTE ======
+2025-11-14 23:10:22 | INFO | Waiting for all submitted test cases to finish... (Round #1)
+2025-11-14 23:10:22 | INFO | Waiting for 1 test cases to complete: [1]
+2025-11-14 23:10:22 | INFO | TestCase #1: Solving path constraint...
+2025-11-14 23:10:22 | DEBUG | Caching message for role "system" and clearing previous messages with cache_control for roles "[]"
+2025-11-14 23:10:22 | DEBUG | Caching message for role "user" and clearing previous messages with cache_control for roles "['user', 'tool', 'assistant']"
+2025-11-14 23:10:22 | DEBUG | Caching message for role "user" and clearing previous messages with cache_control for roles "[]"
+2025-11-14 23:10:37 | INFO | Model (claude-3-7-sonnet-latest) [anthropic] usage: in=3316, out=643, cache_r=3313, cache_w=412, cost=0.012193$, latency=15.417s
+2025-11-14 23:10:37 | INFO | Solver agent response: 
+I'll analyze the target path constraint and create a solution to exploit the stack buffer overflow vulnerability to reach the target branch.
+2025-11-14 23:10:37 | INFO | Solver agent calling tool `think`
+2025-11-14 23:10:37 | INFO | Thinking process: Let me analyze the problem:
+
+1. We have a program with a stack buffer overflow vulnerability.
+2. The program has these variables in this order: `int flag = 0;` followed by `char buf[8];`
+3. Since the stack grows downward, `buf` would be at a lower address than `flag`.
+4. The `strcpy(buf, symvar)` operation will copy bytes from the command-line argument into `buf`.
+5. If the input is longer than 8 bytes, it will overflow and potentially overwrite `flag`.
+
+The target is to make `flag == 1` to reach a specific branch.
+
+For this, I need to craft a command-line argument that:
+1. Is at least 12 bytes long
+2. Has specific bytes at positions 8-11 to overwrite `flag` with the value 1
+3. For little-endian systems (most common):
+   - Byte 8: 0x01
+   - Bytes 9-11: 0x00
+
+Looking at the execution information, the harness runs the program with a single argument "AAAA". This is not long enough to trigger the buffer overflow. I need to modify this argument.
+
+The command is executed as:
+```
+["./temp_executable AAAA"]
+```
+
+This is problematic because it's using shell=True, which means "AAAA" is not passed as a separate argument but as part of the command string. This would be interpreted by the shell as a single command "./temp_executable AAAA" rather than the executable with "AAAA" as an argument.
+
+For proper argument passing, it should be:
+```
+["./temp_executable", "AAAA"]
+```
+
+or with shell=True:
+```
+"./temp_executable 'AAAA'"
+```
+
+I need to modify the command to pass a carefully crafted string that will overflow the buffer and set flag to 1.
+
+My payload will be:
+- 8 bytes to fill the buffer (can be any character, e.g., "AAAAAAAA")
+- Followed by the bytes to represent the integer 1 in little-endian: \x01\x00\x00\x00
+
+So the full payload would be: "AAAAAAAA\x01\x00\x00\x00"
+
+However, I need to be careful about how to represent this in Python, especially with shell=True. I'll need to properly escape the special characters.
+2025-11-14 23:10:37 | DEBUG | Caching message for role "tool" and clearing previous messages with cache_control for roles "['user', 'tool', 'assistant']"
+2025-11-14 23:10:43 | INFO | Model (claude-3-7-sonnet-latest) [anthropic] usage: in=3729, out=221, cache_r=3725, cache_w=655, cost=0.006901$, latency=5.525s
+2025-11-14 23:10:43 | INFO | Solver agent response: 
+Let me solve this buffer overflow challenge. I need to craft a command-line argument that will overflow the 8-byte buffer and overwrite the `flag` variable with the value 1.
+2025-11-14 23:10:43 | INFO | Solver agent calling tool `execute_python`
+2025-11-14 23:10:43 | DEBUG | LLM requested to execute Python code:
+# Test how to properly represent the payload in Python
+payload = "AAAAAAAA\x01\x00\x00\x00"
+print(f"Payload length: {len(payload)}")
+print(f"Payload bytes: {[hex(ord(c)) for c in payload]}")
+print(f"Payload representation: {repr(payload)}")
+
+# Let's also check how to properly escape this for shell=True
+import shlex
+print(f"Shell-escaped payload: {shlex.quote(payload)}")
+2025-11-14 23:10:43 | DEBUG | Using project directory: /home/jim/ConcoLLMic/logic_bombs/copies/stack_bo_l1_klee/instr
+2025-11-14 23:10:43 | INFO | Python execution succeeded. stdout length: 216, hex dump generated: False
+2025-11-14 23:10:43 | DEBUG | Caching message for role "tool" and clearing previous messages with cache_control for roles "['user', 'tool', 'assistant']"
+2025-11-14 23:10:52 | INFO | Model (claude-3-7-sonnet-latest) [anthropic] usage: in=3318, out=278, cache_r=3313, cache_w=1418, cost=0.010496$, latency=9.078s
+2025-11-14 23:10:52 | INFO | Solver agent response: 
+I notice that the shell-escaped payload is not correctly representing the null bytes. Let me try a different approach to ensure our payload is properly passed to the program.
+2025-11-14 23:10:52 | INFO | Solver agent calling tool `execute_python`
+2025-11-14 23:10:52 | DEBUG | LLM requested to execute Python code:
+# Let's create the payload as a byte array and then encode it for passing to the command
+import base64
+
+# Create the payload: 8 'A's followed by the little-endian representation of 1
+payload = b'AAAAAAAA' + b'\x01\x00\x00\x00'
+print(f"Payload bytes: {payload}")
+print(f"Payload length: {len(payload)}")
+
+# Encode the payload in base64 for safe passing through the shell
+b64_payload = base64.b64encode(payload).decode('ascii')
+print(f"Base64 encoded payload: {b64_payload}")
+
+# Command to decode and use the payload
+print(f"Shell command: ./temp_executable $(echo -n {b64_payload} | base64 -d)")
+2025-11-14 23:10:52 | DEBUG | Using project directory: /home/jim/ConcoLLMic/logic_bombs/copies/stack_bo_l1_klee/instr
+2025-11-14 23:10:52 | INFO | Python execution succeeded. stdout length: 176, hex dump generated: False
+2025-11-14 23:10:52 | DEBUG | Caching message for role "tool" and clearing previous messages with cache_control for roles "['user', 'tool', 'assistant']"
+2025-11-14 23:11:01 | INFO | Model (claude-3-7-sonnet-latest) [anthropic] usage: in=4384, out=437, cache_r=4380, cache_w=731, cost=0.010622$, latency=9.176s
+2025-11-14 23:11:01 | INFO | Solver agent response: 
+Now I have a way to safely pass our crafted payload to the program. Let's create the solution:
+2025-11-14 23:11:01 | INFO | Solver agent calling tool `provide_solution`
+2025-11-14 23:11:01 | DEBUG | Child process changed working directory to /home/jim/ConcoLLMic/logic_bombs/copies/stack_bo_l1_klee/instr
+2025-11-14 23:11:02 | DEBUG | Restored working directory to /home/jim/ConcoLLMic
+2025-11-14 23:11:02 | DEBUG | Child process finished with exit code: 1
+2025-11-14 23:11:02 | ERROR | TestCase #1: Exception during solve_and_execute: 122 is not a valid Signals
+2025-11-14 23:11:02 | ERROR | Exception in TestCase #1: 122 is not a valid Signals
+2025-11-14 23:11:02 | ERROR | Uncaught exception:
+Traceback (most recent call last):
+
+> File "/home/jim/ConcoLLMic/ACE.py", line 332, in <module>
+    main()
+    └ <function main at 0x79bfa45e3920>
+
+  File "/home/jim/ConcoLLMic/ACE.py", line 282, in main
+    run_concolic_execution(
+    └ <function run_concolic_execution at 0x79bfa45e27a0>
+
+  File "/home/jim/ConcoLLMic/app/commands/run.py", line 852, in run_concolic_execution
+    task_executor.wait_for_all_tasks()
+    │             └ <function TaskExecutor.wait_for_all_tasks at 0x79bfa45e2a20>
+    └ <app.commands.run.TaskExecutor object at 0x79bfa45438c0>
+
+  File "/home/jim/ConcoLLMic/app/commands/run.py", line 464, in wait_for_all_tasks
+    future.result()
+    │      └ <function Future.result at 0x79bfacc55ee0>
+    └ <Future at 0x79bfa9f3c110 state=finished raised ValueError>
+
+  File "/usr/lib/python3.12/concurrent/futures/_base.py", line 449, in result
+    return self.__get_result()
+           └ None
+  File "/usr/lib/python3.12/concurrent/futures/_base.py", line 401, in __get_result
+    raise self._exception
+          └ None
+  File "/usr/lib/python3.12/concurrent/futures/thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             │        │            └ None
+             │        └ None
+             └ None
+
+  File "/home/jim/ConcoLLMic/app/commands/run.py", line 216, in solve_and_execute
+    ) = solve(
+        └ <function solve at 0x79bfa45e1da0>
+
+  File "/home/jim/ConcoLLMic/app/agents/agent_solver.py", line 210, in solve
+    process_solution(is_sat, python_exec)
+    │                │       └ 'def execute_program(timeout: int) -> tuple[str, int]:\n    import signal\n    import subprocess\n    import base64\n    \n  ...
+    │                └ True
+    └ <function process_solution at 0x79bfa5e10400>
+
+  File "/home/jim/ConcoLLMic/app/agents/tools/provide_solution.py", line 91, in process_solution
+    result = run_target(
+             └ <function run_target at 0x79bfa5e071a0>
+
+  File "/home/jim/ConcoLLMic/app/utils/utils.py", line 967, in run_target
+    raise error
+
+  File "/home/jim/ConcoLLMic/app/utils/utils.py", line 928, in run_target
+    is_crashed, crash_reason = detected_crash(target_stderr, return_code)
+                               │              │              └ 134
+                               │              └ '[stack_bo_l1_klee.c] enter main 1\n[stack_bo_l1_klee.c] enter main 3\n[stack_bo_l1_klee.c] enter logic_bomb 1\n[stack_bo_l1_...
+                               └ <function detected_crash at 0x79bfa5e07240>
+
+  File "/home/jim/ConcoLLMic/app/utils/utils.py", line 991, in detected_crash
+    signal_name = signal.Signals(signal_num).name
+                  │      │       └ 122
+                  │      └ <enum 'Signals'>
+                  └ <module 'signal' from '/usr/lib/python3.12/signal.py'>
+
+  File "/usr/lib/python3.12/enum.py", line 757, in __call__
+    return cls.__new__(cls, value)
+           │   │       │    └ 122
+           │   │       └ <enum 'Signals'>
+           │   └ <function Enum.__new__ at 0x79bfaceb2f20>
+           └ <enum 'Signals'>
+  File "/usr/lib/python3.12/enum.py", line 1171, in __new__
+    raise ve_exc
+          └ None
+
+ValueError: 122 is not a valid Signals
+2025-11-14 23:11:02 | DEBUG | Shutting down thread pool executor...
+2025-11-14 23:11:02 | DEBUG | Thread pool executor has been shut down.
+2025-11-14 23:11:02 | INFO | ========================= LOG SUMMARY =========================
+2025-11-14 23:11:02 | INFO | [31mERRORS:[0m
+2025-11-14 23:11:02 | INFO | 	[31m660: TestCase #1: Exception during solve_and_execute: 122 is not a valid Signals[0m
+2025-11-14 23:11:02 | INFO | 	[31m661: Exception in TestCase #1: 122 is not a valid Signals[0m
+2025-11-14 23:11:02 | INFO | 	[31m662: Uncaught exception:[0m
+2025-11-14 23:11:02 | INFO | ---------------------------------------------------------------
+2025-11-14 23:11:02 | INFO | Log file: [36m/home/jim/ConcoLLMic/results/gpt5/stack_bo_l1_klee_instr/out/ConcoLLMic_20251114_230844.log[0m
+2025-11-14 23:11:02 | INFO | 	Warnings: [32m0[0m
+2025-11-14 23:11:02 | INFO | 	Errors: [31m3[0m
+2025-11-14 23:11:02 | INFO | Total LLM Retry Attempts: [32m0[0m
+2025-11-14 23:11:02 | INFO | ===============================================================

@@ -1,0 +1,363 @@
+id: 1
+src_id: 0
+create_time: '2025-11-14 19:47:57.242'
+time_taken: 174
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 29
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: claude-3-7-sonnet-latest
+    cost: $0.68029500
+    call_cnt: 7
+    latency: 59.01s
+    input_tokens: 41321
+    output_tokens: 2016
+    cache_read_tokens: 41294
+    cache_write_tokens: 7250
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.55534500
+      call_cnt: 5
+      latency: 36.28s
+      input_tokens: 34441
+      output_tokens: 1291
+      cache_read_tokens: 34421
+      cache_write_tokens: 6591
+    INITIAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.08499000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: claude-3-7-sonnet-latest
+      cost: $0.19153500
+      call_cnt: 2
+      latency: 9.62s
+      input_tokens: 11334
+      output_tokens: 187
+      cache_read_tokens: 11326
+      cache_write_tokens: 3509
+    think:
+      model: claude-3-7-sonnet-latest
+      cost: $0.13722000
+      call_cnt: 1
+      latency: 11.06s
+      input_tokens: 6727
+      output_tokens: 516
+      cache_read_tokens: 6723
+      cache_write_tokens: 1537
+    select_target_branch:
+      model: claude-3-7-sonnet-latest
+      cost: $0.13242000
+      call_cnt: 1
+      latency: 7.47s
+      input_tokens: 8116
+      output_tokens: 282
+      cache_read_tokens: 8112
+      cache_write_tokens: 677
+    generate_path_constraint:
+      model: claude-3-7-sonnet-latest
+      cost: $0.00918000
+      call_cnt: 1
+      latency: 8.13s
+      input_tokens: 8264
+      output_tokens: 306
+      cache_read_tokens: 8260
+      cache_write_tokens: 868
+  SOLVE:
+    TOTAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.12495000
+      call_cnt: 2
+      latency: 22.73s
+      input_tokens: 6880
+      output_tokens: 725
+      cache_read_tokens: 6873
+      cache_write_tokens: 659
+    INITIAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.04974000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: claude-3-7-sonnet-latest
+      cost: $0.06546000
+      call_cnt: 1
+      latency: 11.74s
+      input_tokens: 3316
+      output_tokens: 400
+      cache_read_tokens: 3313
+      cache_write_tokens: 247
+    provide_solution:
+      model: claude-3-7-sonnet-latest
+      cost: $0.00975000
+      call_cnt: 1
+      latency: 10.99s
+      input_tokens: 3564
+      output_tokens: 325
+      cache_read_tokens: 3560
+      cache_write_tokens: 412
+  EXECUTE:
+    TOTAL: {}
+target_branch: if(strlen(s) != 32) -> false in aes_cf_klee.c:logic_bomb
+target_file_lines: aes_cf_klee.c:27-29
+target_lines_content: |2-
+      uint8_t key[16];
+
+      sscanf(s,
+justification: This branch is the entry point to all the unexecuted code in the program.
+  Currently, the execution stops at this check because the input "AAAA" is only 4
+  characters long, not 32. Making this condition evaluate to false would allow execution
+  to continue to lines 27-62, which currently have 0% historical coverage. This branch
+  guards the core functionality of the program - the AES decryption logic and the
+  actual logic bomb condition. Exploring this branch is essential for improving overall
+  code coverage and understanding the program's behavior.
+target_path_constraint: |-
+  To reach the target branch "if(strlen(s) != 32) -> false" in the logic_bomb function, the following constraints must be satisfied:
+
+  1. Program Input Constraint:
+     - The program must be executed with exactly one command-line argument (in addition to the program name itself)
+     - This argument must be a string with exactly 32 characters
+
+  In terms of the execution harness:
+  - The string passed to "./temp_executable" must be exactly 32 characters long
+  - The current input "AAAA" is only 4 characters, which is why the target branch is not reached
+
+  The constraint can be expressed as:
+  - argc == 2 (the program is called with exactly one argument)
+  - strlen(argv[1]) == 32 (the argument is exactly 32 characters long)
+
+  Note that the content of the 32-character string doesn't matter for reaching this specific branch - any 32-character string will satisfy the constraint. The content would only matter for the subsequent logic bomb condition that compares decryption results.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          # Create a 32-character string to satisfy the strlen(s) == 32 constraint
+          input_string = "A" * 32
+          
+          result = subprocess.run(
+              ["./temp_executable", input_string],  # Pass as separate argument, not in the same string
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=False,  # Changed to False to properly handle the argument
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // aes_cf_klee.c (73 lines total)
+  #include <stdio.h>
+  /*
+  TOY:
+  * Solution: 2b7e151628aed2a6abf7158809cf4f3c
+  */
+  #include <inttypes.h>
+  #include "aes.h"
+  #include "utils.h"
+
+  void aes_print(uint8_t* str) {
+      // Unexecuted code (lines 11-14) removed. Its line cov: 0/4 (0%)
+  }
+
+  #include "a_tester.h"
+
+  // {"s":{"length": 32}}
+  int logic_bomb(char* s) {
+      if(strlen(s) != 32){
+          //printf("please input the 128-bit keys\n");
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+
+      // Unexecuted code (lines 27-62) removed. Its line cov: 0/31 (0%)
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 67-68) removed. Its line cov: 0/2 (0%)
+      }
+
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [aes_cf_klee.c] enter main 1
+  [aes_cf_klee.c] enter main 3
+  [aes_cf_klee.c] enter logic_bomb 1
+  [aes_cf_klee.c] enter logic_bomb 3
+  [aes_cf_klee.c] enter logic_bomb 5
+  Path without the bomb
+execution_summary: |2+
+
+  ```c
+  // aes_cf_klee.c (73 lines total)
+  #include <stdio.h>
+  /*
+  TOY:
+  * Solution: 2b7e151628aed2a6abf7158809cf4f3c
+  */
+  #include <inttypes.h>
+  #include "aes.h"
+  #include "utils.h"
+
+  void aes_print(uint8_t* str) {
+      // Unexecuted code (lines 11-14) removed. Its line cov: 0/4 (0%)
+  }
+
+  #include "a_tester.h"
+
+  // {"s":{"length": 32}}
+  int logic_bomb(char* s) {
+      if(strlen(s) != 32){
+          // Unexecuted code (lines 22-24) removed. Its line cov: 3/3 (100%)
+      }
+
+      uint8_t key[16];
+
+      sscanf(s,
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8,
+          &key[0],&key[1],
+          &key[2],&key[3],
+          &key[4],&key[5],
+          &key[6],&key[7],
+          &key[8],&key[9],
+          &key[10],&key[11],
+          &key[12],&key[13],
+          &key[14],&key[15]);
+
+      //aes_print(key);
+
+      uint8_t decodetext[16];
+      uint8_t ciphertext[] = {0x3a, 0xd7, 0x7b, 0xb4, 0x0d, 0x7a, 0x36, 0x60, 0xa8, 0x9e, 0xca, 0xf3, 0x24, 0x66, 0xef, 0x97};
+      uint8_t plaintext[] = {0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96, 0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a};
+
+      AES128_ECB_decrypt(ciphertext, key, decodetext);
+
+      //aes_print(decodetext);
+      if(0 == memcmp((char*) plaintext, (char*) decodetext, 16)){
+          // Unexecuted code (lines 57-58) removed. Its line cov: 0/2 (0%)
+      }else{
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 67-68) removed. Its line cov: 0/2 (0%)
+      }
+
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [aes_cf_klee.c] enter main 1
+  [aes_cf_klee.c] enter main 3
+  [aes_cf_klee.c] enter logic_bomb 1
+  [aes_cf_klee.c] enter logic_bomb 2
+  Path without the bomb

@@ -1,0 +1,240 @@
+id: 1
+src_id: 0
+create_time: '2025-11-14 23:16:21.133'
+time_taken: 102
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: false
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: claude-3-7-sonnet-latest
+    cost: $0.56397000
+    call_cnt: 5
+    latency: 53.08s
+    input_tokens: 33916
+    output_tokens: 1841
+    cache_read_tokens: 33896
+    cache_write_tokens: 5270
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.56397000
+      call_cnt: 5
+      latency: 53.08s
+      input_tokens: 33916
+      output_tokens: 1841
+      cache_read_tokens: 33896
+      cache_write_tokens: 5270
+    INITIAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.08499000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: claude-3-7-sonnet-latest
+      cost: $0.10779000
+      call_cnt: 1
+      latency: 6.70s
+      input_tokens: 5666
+      output_tokens: 235
+      cache_read_tokens: 5663
+      cache_write_tokens: 1049
+    batch_tool:
+      model: claude-3-7-sonnet-latest
+      cost: $0.11983500
+      call_cnt: 1
+      latency: 8.39s
+      input_tokens: 6716
+      output_tokens: 252
+      cache_read_tokens: 6712
+      cache_write_tokens: 770
+    think:
+      model: claude-3-7-sonnet-latest
+      cost: $0.10140000
+      call_cnt: 1
+      latency: 16.58s
+      input_tokens: 7485
+      output_tokens: 546
+      cache_read_tokens: 7482
+      cache_write_tokens: 336
+    select_target_branch:
+      model: claude-3-7-sonnet-latest
+      cost: $0.13600500
+      call_cnt: 1
+      latency: 8.94s
+      input_tokens: 5668
+      output_tokens: 343
+      cache_read_tokens: 5663
+      cache_write_tokens: 2713
+    generate_path_constraint:
+      model: claude-3-7-sonnet-latest
+      cost: $0.01395000
+      call_cnt: 1
+      latency: 12.48s
+      input_tokens: 8381
+      output_tokens: 465
+      cache_read_tokens: 8376
+      cache_write_tokens: 402
+target_branch: if(flag == 1) -> true in stacknocrash_bo_l1_klee.c:logic_bomb
+target_file_lines: stacknocrash_bo_l1_klee.c:20-21
+target_lines_content: |2-
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+justification: |-
+  This branch is the most interesting one with 0% historical coverage. It represents the "Logic bomb triggered" path which is the main security vulnerability in this program. 
+
+  The `flag` variable is initialized to 0 and is never explicitly set to 1 in the code. However, there's a buffer overflow vulnerability where `strcpy(buf, symvar)` is used without bounds checking. Since `flag` is declared before `buf` in the function, a carefully crafted input string of the right length could overflow `buf` and modify the value of `flag` on the stack to 1, triggering this branch.
+
+  This branch requires understanding memory layout and stack behavior, making it more complex than the other uncovered branches. Exploring this branch would reveal a security vulnerability and significantly improve code coverage by executing previously uncovered code paths.
+target_path_constraint: |-
+  To reach the target branch `if(flag == 1) -> true` in the logic_bomb function, the following constraints must be satisfied:
+
+  1. Command-line argument constraints:
+     - The program must be executed with at least one command-line argument (argc >= 2)
+     - This ensures we pass the check `if (argc < 2)` in main()
+
+  2. Input string length constraint:
+     - The length of the input string (argv[1]) must be <= 9 characters
+     - This ensures we pass the check `if(strlen(symvar) > 9)` in logic_bomb()
+
+  3. Buffer overflow constraint:
+     - The input string must be carefully crafted to overflow the buffer `buf[8]` and modify the `flag` variable
+     - Since `flag` is declared before `buf` in the function, it's likely at a higher memory address
+     - The input string must be long enough to overflow the buffer but not exceed 9 characters (to satisfy constraint #2)
+     - The overflow must modify the memory location of `flag` to contain the value 1
+     - Typically, this would require an input of 8 bytes to fill the buffer plus additional bytes to reach and modify the `flag` variable
+
+  4. Memory layout constraint:
+     - The exact payload depends on the stack layout, but generally:
+       - The input must be 8-12 bytes long
+       - The last 4 bytes (assuming 32-bit integer) must overwrite the memory location of `flag` with the value 1
+       - The input must not contain null bytes that would terminate the string copy early
+
+  5. String termination constraint:
+     - The input string must be properly null-terminated for strlen() to work correctly
+     - But the strcpy() operation must still overflow the buffer to modify `flag`
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code:
+returncode:
+src_execution_summary: |2+
+
+  ```c
+  // stacknocrash_bo_l1_klee.c (37 lines total)
+  #include <stdio.h>
+  #include <string.h> 
+  #include "utils.h"
+  #include "a_tester.h"
+
+
+  // {"symvar":{"length": 64}}
+  int logic_bomb(char* symvar) {
+      int flag = 0;
+      char buf[8];
+
+      if(strlen(symvar) > 9) {
+          // Unexecuted code (lines 13-14) removed. Its line cov: 0/2 (0%)
+      }
+
+      strcpy(buf, symvar);
+
+      if(flag == 1) {
+          // Unexecuted code (lines 20-21) removed. Its line cov: 0/2 (0%)
+      }
+
+      fprintf(stderr, "Path without the bomb\n");
+      return 0;
+  }
+
+  int main(int argc, char **argv) {
+      fprintf(stderr, "\n");
+      if (argc < 2) {
+          // Unexecuted code (lines 31-32) removed. Its line cov: 0/2 (0%)
+      }
+
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace:
+execution_summary:
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [stacknocrash_bo_l1_klee.c] enter main 3
+  [stacknocrash_bo_l1_klee.c] enter logic_bomb 1
+  [stacknocrash_bo_l1_klee.c] enter logic_bomb 3
+  [stacknocrash_bo_l1_klee.c] enter logic_bomb 5
+  Path without the bomb

@@ -1,0 +1,368 @@
+id: 1
+src_id: 0
+create_time: '2025-11-14 22:45:47.961'
+time_taken: 95
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: true
+newly_covered_lines: 10
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: claude-3-7-sonnet-latest
+    cost: $0.70459500
+    call_cnt: 7
+    latency: 64.65s
+    input_tokens: 41803
+    output_tokens: 2585
+    cache_read_tokens: 41778
+    cache_write_tokens: 9359
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.57439500
+      call_cnt: 5
+      latency: 43.67s
+      input_tokens: 34827
+      output_tokens: 1733
+      cache_read_tokens: 34809
+      cache_write_tokens: 8490
+    INITIAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.08499000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: claude-3-7-sonnet-latest
+      cost: $0.22455000
+      call_cnt: 2
+      latency: 22.30s
+      input_tokens: 12521
+      output_tokens: 968
+      cache_read_tokens: 12514
+      cache_write_tokens: 3605
+    request_code:
+      model: claude-3-7-sonnet-latest
+      cost: $0.10630500
+      call_cnt: 1
+      latency: 4.39s
+      input_tokens: 5667
+      output_tokens: 116
+      cache_read_tokens: 5663
+      cache_write_tokens: 1701
+    select_target_branch:
+      model: claude-3-7-sonnet-latest
+      cost: $0.14697000
+      call_cnt: 1
+      latency: 7.99s
+      input_tokens: 7367
+      output_tokens: 263
+      cache_read_tokens: 7364
+      cache_write_tokens: 2388
+    generate_path_constraint:
+      model: claude-3-7-sonnet-latest
+      cost: $0.01158000
+      call_cnt: 1
+      latency: 9.00s
+      input_tokens: 9272
+      output_tokens: 386
+      cache_read_tokens: 9268
+      cache_write_tokens: 796
+  SOLVE:
+    TOTAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.13020000
+      call_cnt: 2
+      latency: 20.98s
+      input_tokens: 6976
+      output_tokens: 852
+      cache_read_tokens: 6969
+      cache_write_tokens: 869
+    INITIAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.04974000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: claude-3-7-sonnet-latest
+      cost: $0.07032000
+      call_cnt: 1
+      latency: 9.11s
+      input_tokens: 3316
+      output_tokens: 514
+      cache_read_tokens: 3313
+      cache_write_tokens: 343
+    provide_solution:
+      model: claude-3-7-sonnet-latest
+      cost: $0.01014000
+      call_cnt: 1
+      latency: 11.87s
+      input_tokens: 3660
+      output_tokens: 338
+      cache_read_tokens: 3656
+      cache_write_tokens: 526
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (ping_it(&dst) == 1) -> true in logic_bomb function
+target_file_lines: ping_csv_klee.c:95-96
+target_lines_content: |2-
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+justification: This branch is critical as it leads to the "Logic bomb triggered" message,
+  which appears to be the main functionality of the program. It has 0% historical
+  coverage (lines 95-96), indicating it has never been executed in the test suite.
+  While the condition appears to evaluate to true in the current execution (since
+  ping_it returns 1), the branch body is not executed, suggesting there might be some
+  issue with the execution flow. Exploring this branch would significantly improve
+  code coverage and help understand the core functionality of the program.
+target_path_constraint: |-
+  To reach the target branch "if (ping_it(&dst) == 1) -> true" in the logic_bomb function and execute its body, the following constraints must be satisfied:
+
+  1. Command-line argument constraints:
+     - argc must be at least 2 (the program name and at least one argument)
+     
+  2. Input format constraints:
+     - argv[1] must be a valid IP address string that can be successfully parsed by inet_aton()
+     - A valid IP address has the format "a.b.c.d" where a, b, c, and d are integers between 0 and 255
+     - Examples of valid IP addresses include "127.0.0.1", "192.168.1.1", "8.8.8.8"
+
+  3. Function return value constraints:
+     - The ping_it() function must return 1
+     - Note: In the current implementation, ping_it() always returns 1 at the end of the function, regardless of the execution path within it
+
+  These constraints ensure that:
+  1. The program doesn't exit early due to missing arguments
+  2. The inet_aton() call succeeds (returns non-zero), avoiding the error path
+  3. The ping_it() function returns 1, causing the condition (ping_it(&dst) == 1) to evaluate to true
+  4. The body of the if statement (lines 95-96) will be executed, triggering the "Logic bomb"
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          # Modified to use a valid IP address instead of "AAAA"
+          result = subprocess.run(
+              ["./temp_executable", "127.0.0.1"],  # Valid IP address as argument
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=False,  # Changed to shell=False for proper argument passing
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // ping_csv_klee.c (111 lines total)
+  #include <stdio.h>
+  #include <stdio.h>
+  #include <errno.h>
+  #include <string.h>
+  #include <stdlib.h>
+  #include <sys/socket.h>
+  #include <sys/socket.h>
+  #include <netinet/in.h>
+  #include <netinet/ip_icmp.h>
+  #include <arpa/inet.h>
+  #include <sys/select.h>
+
+
+  int ping_it(struct in_addr *dst)
+  {
+      // Unexecuted code (lines 16-77) removed. Its line cov: 0/55 (0%)
+      return 1;
+  }
+
+  #include "a_tester.h"
+
+  // {"s":{"length": 32}}
+  int logic_bomb(char* s) {
+      struct in_addr dst;
+
+      if (inet_aton(s, &dst) == 0) {
+          perror("inet_aton");
+          //printf("%s isn't a valid IP address\n", s);
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+
+      if (ping_it(&dst) == 1){
+          // Unexecuted code (lines 95-96) removed. Its line cov: 0/2 (0%)
+      }else{
+          // Unexecuted code (lines 98-99) removed. Its line cov: 0/2 (0%)
+      }
+  }
+
+  int main(int argc, char **argv) {
+      fprintf(stderr, "\n");
+      if (argc < 2) {
+          // Unexecuted code (lines 106-107) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [ping_csv_klee.c] enter main 3
+  [ping_csv_klee.c] enter logic_bomb 1
+  [ping_csv_klee.c] enter ping_it 1
+  [ping_csv_klee.c] enter ping_it 2
+  socket: Permission denied
+  [ping_csv_klee.c] enter logic_bomb 4
+  Path without the bomb
+execution_summary: |2+
+
+  ```c
+  // ping_csv_klee.c (111 lines total)
+  #include <stdio.h>
+  #include <stdio.h>
+  #include <errno.h>
+  #include <string.h>
+  #include <stdlib.h>
+  #include <sys/socket.h>
+  #include <sys/socket.h>
+  #include <netinet/in.h>
+  #include <netinet/ip_icmp.h>
+  #include <arpa/inet.h>
+  #include <sys/select.h>
+
+
+  int ping_it(struct in_addr *dst)
+  {
+      struct icmphdr icmp_hdr;
+      struct sockaddr_in addr;
+      int sequence = 0;
+      int sock = socket(AF_INET,SOCK_DGRAM,IPPROTO_ICMP);
+      if (sock < 0) {
+          perror("socket");
+          return -1;
+      }
+
+      // Unexecuted code (lines 25-77) removed. Its line cov: 0/47 (0%)
+      return 1;
+  }
+
+  #include "a_tester.h"
+
+  // {"s":{"length": 32}}
+  int logic_bomb(char* s) {
+      struct in_addr dst;
+
+      if (inet_aton(s, &dst) == 0) {
+          // Unexecuted code (lines 88-91) removed. Its line cov: 4/4 (100%)
+      }
+
+      if (ping_it(&dst) == 1){
+          // Unexecuted code (lines 95-96) removed. Its line cov: 0/2 (0%)
+      }else{
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+  }
+
+  int main(int argc, char **argv) {
+      fprintf(stderr, "\n");
+      if (argc < 2) {
+          // Unexecuted code (lines 106-107) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [ping_csv_klee.c] enter main 3
+  [ping_csv_klee.c] enter logic_bomb 1
+  [ping_csv_klee.c] enter logic_bomb 2
+  inet_aton: Success
+  Path without the bomb

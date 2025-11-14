@@ -1,0 +1,366 @@
+id: 1
+src_id: 0
+create_time: '2025-11-14 19:34:43.931'
+time_taken: 102
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: claude-3-7-sonnet-latest
+    cost: $0.46303500
+    call_cnt: 7
+    latency: 63.91s
+    input_tokens: 25597
+    output_tokens: 2636
+    cache_read_tokens: 25570
+    cache_write_tokens: 20659
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.38379000
+      call_cnt: 5
+      latency: 45.54s
+      input_tokens: 21956
+      output_tokens: 1815
+      cache_read_tokens: 21936
+      cache_write_tokens: 16615
+    INITIAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.00004500
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: claude-3-7-sonnet-latest
+      cost: $0.14217000
+      call_cnt: 2
+      latency: 23.63s
+      input_tokens: 7651
+      output_tokens: 1044
+      cache_read_tokens: 7644
+      cache_write_tokens: 7274
+    request_code:
+      model: claude-3-7-sonnet-latest
+      cost: $0.10690500
+      call_cnt: 1
+      latency: 4.91s
+      input_tokens: 5
+      output_tokens: 106
+      cache_read_tokens: 0
+      cache_write_tokens: 7381
+    select_target_branch:
+      model: claude-3-7-sonnet-latest
+      cost: $0.12387000
+      call_cnt: 1
+      latency: 7.99s
+      input_tokens: 6915
+      output_tokens: 305
+      cache_read_tokens: 6911
+      cache_write_tokens: 733
+    generate_path_constraint:
+      model: claude-3-7-sonnet-latest
+      cost: $0.01080000
+      call_cnt: 1
+      latency: 9.02s
+      input_tokens: 7385
+      output_tokens: 360
+      cache_read_tokens: 7381
+      cache_write_tokens: 1227
+  SOLVE:
+    TOTAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.07924500
+      call_cnt: 2
+      latency: 18.37s
+      input_tokens: 3641
+      output_tokens: 821
+      cache_read_tokens: 3634
+      cache_write_tokens: 4044
+    INITIAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.00004500
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: claude-3-7-sonnet-latest
+      cost: $0.06648000
+      call_cnt: 1
+      latency: 10.41s
+      input_tokens: 3
+      output_tokens: 397
+      cache_read_tokens: 0
+      cache_write_tokens: 3634
+    provide_solution:
+      model: claude-3-7-sonnet-latest
+      cost: $0.01272000
+      call_cnt: 1
+      latency: 7.97s
+      input_tokens: 3638
+      output_tokens: 424
+      cache_read_tokens: 3634
+      cache_write_tokens: 410
+  EXECUTE:
+    TOTAL: {}
+target_branch: if(i == 50) -> true in 2thread_pp_l1_klee.c:logic_bomb
+target_file_lines: 2thread_pp_l1_klee.c:31-32
+target_lines_content: |2-
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+justification: |-
+  This branch has 0% historical coverage (line cov: 0/2) and represents the core logic bomb functionality of the program. When triggered, it would execute code that prints "Logic bomb triggered" and returns a different value (1) than the normal path. This branch is important because:
+
+  1. It has zero historical coverage, making it a high-priority target
+  2. It represents the intended trigger condition of the logic bomb
+  3. It leads to completely unexplored program behavior
+  4. The branch condition depends on the result of a multi-threaded computation, which makes it interesting from a concurrency perspective
+
+  The branch is reachable through the current test harness by manipulating the input string argument.
+target_path_constraint: |-
+  To reach the target branch `if(i == 50) -> true` in the logic_bomb function, the following constraints must be satisfied:
+
+  1. Command-line argument constraints:
+     - The program must be called with at least one argument (argc >= 2)
+     - The first argument (argv[1]) must be a non-null string
+
+  2. Input value constraint:
+     - The first character of the input string (s[0]) must have ASCII value 55 (the character '7')
+     - This results in symvar = s[0] - 48 = 7
+
+  3. Thread execution order constraint:
+     - The Mult thread must complete its operation before the Inc thread modifies the value
+     - This means the thread scheduler must execute the Mult function (which squares the value) before the Inc function (which increments the value)
+     - When this happens, the computation becomes: i = symvar² + 1 = 7² + 1 = 49 + 1 = 50
+
+  4. Thread synchronization:
+     - Both threads must successfully complete (pthread_join operations succeed)
+
+  The key insight is that due to the race condition between the two threads, the value of i depends on thread execution order. For i to equal 50, we need the Mult thread to square the value (7) before the Inc thread increments it.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          # Changed the argument from "AAAA" to "7xxx"
+          # The first character '7' will set symvar = 7 (after subtracting 48)
+          # This allows i = symvar² + 1 = 49 + 1 = 50 when Mult executes before Inc
+          result = subprocess.run(
+              ["./temp_executable", "7xxx"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // 2thread_pp_l1_klee.c (49 lines total)
+  #include <stdio.h>
+  #include <pthread.h>
+  #include <time.h>
+  #include <unistd.h>
+  #include "a_tester.h"
+
+  void* Inc(void* i){
+      ++ *((int*) i);
+  }
+
+  void* Mult(void* i){
+      *((int*) i) =  *((int*) i) * *((int*) i);
+  }
+
+  int ThreadProp(int in){
+      pthread_t tid[2];
+      int rc1 = pthread_create(&tid[0], NULL, Inc, (void *) &in); 
+      int rc2 = pthread_create(&tid[1], NULL, Mult, (void *) &in); 
+      rc1 = pthread_join(tid[0], NULL); 
+      rc2 = pthread_join(tid[1], NULL); 
+      int out = in;
+      return out;
+  }
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0] - 48;
+      int i=ThreadProp(symvar);
+
+      if(i == 50){
+          // Unexecuted code (lines 31-32) removed. Its line cov: 0/2 (0%)
+      }
+
+      fprintf(stderr, "Path without the bomb\n");
+      return 0;
+  }
+
+
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 43-44) removed. Its line cov: 0/2 (0%)
+      }
+
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [2thread_pp_l1_klee.c] enter main 1
+  [2thread_pp_l1_klee.c] enter main 3
+  [2thread_pp_l1_klee.c] enter logic_bomb 1
+  [2thread_pp_l1_klee.c] enter ThreadProp 1
+  [2thread_pp_l1_klee.c] enter Inc 1
+  [2thread_pp_l1_klee.c] enter Mult 1
+  [2thread_pp_l1_klee.c] enter logic_bomb 3
+  Path without the bomb
+execution_summary: |2+
+
+  ```c
+  // 2thread_pp_l1_klee.c (49 lines total)
+  #include <stdio.h>
+  #include <pthread.h>
+  #include <time.h>
+  #include <unistd.h>
+  #include "a_tester.h"
+
+  void* Inc(void* i){
+      ++ *((int*) i);
+  }
+
+  void* Mult(void* i){
+      *((int*) i) =  *((int*) i) * *((int*) i);
+  }
+
+  int ThreadProp(int in){
+      pthread_t tid[2];
+      int rc1 = pthread_create(&tid[0], NULL, Inc, (void *) &in); 
+      int rc2 = pthread_create(&tid[1], NULL, Mult, (void *) &in); 
+      rc1 = pthread_join(tid[0], NULL); 
+      rc2 = pthread_join(tid[1], NULL); 
+      int out = in;
+      return out;
+  }
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0] - 48;
+      int i=ThreadProp(symvar);
+
+      if(i == 50){
+          // Unexecuted code (lines 31-32) removed. Its line cov: 0/2 (0%)
+      }
+
+      fprintf(stderr, "Path without the bomb\n");
+      return 0;
+  }
+
+
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 43-44) removed. Its line cov: 0/2 (0%)
+      }
+
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [2thread_pp_l1_klee.c] enter main 1
+  [2thread_pp_l1_klee.c] enter main 3
+  [2thread_pp_l1_klee.c] enter logic_bomb 1
+  [2thread_pp_l1_klee.c] enter ThreadProp 1
+  [2thread_pp_l1_klee.c] enter Mult 1
+  [2thread_pp_l1_klee.c] enter Inc 1
+  [2thread_pp_l1_klee.c] enter logic_bomb 3
+  Path without the bomb

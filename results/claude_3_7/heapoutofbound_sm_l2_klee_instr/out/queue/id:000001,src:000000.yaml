@@ -1,0 +1,353 @@
+id: 1
+src_id: 0
+create_time: '2025-11-14 20:28:51.320'
+time_taken: 99
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: claude-3-7-sonnet-latest
+    cost: $0.71280000
+    call_cnt: 8
+    latency: 70.46s
+    input_tokens: 41076
+    output_tokens: 3222
+    cache_read_tokens: 41042
+    cache_write_tokens: 6598
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.43966500
+      call_cnt: 4
+      latency: 36.27s
+      input_tokens: 25979
+      output_tokens: 1666
+      cache_read_tokens: 25962
+      cache_write_tokens: 3613
+    INITIAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.08499000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: claude-3-7-sonnet-latest
+      cost: $0.09237000
+      call_cnt: 1
+      latency: 6.17s
+      input_tokens: 5666
+      output_tokens: 245
+      cache_read_tokens: 5663
+      cache_write_tokens: 1054
+    select_target_branch:
+      model: claude-3-7-sonnet-latest
+      cost: $0.11641500
+      call_cnt: 1
+      latency: 8.37s
+      input_tokens: 5668
+      output_tokens: 316
+      cache_read_tokens: 5663
+      cache_write_tokens: 1461
+    think:
+      model: claude-3-7-sonnet-latest
+      cost: $0.13353000
+      call_cnt: 1
+      latency: 12.49s
+      input_tokens: 7129
+      output_tokens: 693
+      cache_read_tokens: 7124
+      cache_write_tokens: 388
+    generate_path_constraint:
+      model: claude-3-7-sonnet-latest
+      cost: $0.01236000
+      call_cnt: 1
+      latency: 9.24s
+      input_tokens: 7516
+      output_tokens: 412
+      cache_read_tokens: 7512
+      cache_write_tokens: 710
+  SOLVE:
+    TOTAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.27313500
+      call_cnt: 4
+      latency: 34.19s
+      input_tokens: 15097
+      output_tokens: 1556
+      cache_read_tokens: 15080
+      cache_write_tokens: 2985
+    INITIAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.04974000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: claude-3-7-sonnet-latest
+      cost: $0.06325500
+      call_cnt: 1
+      latency: 11.25s
+      input_tokens: 3316
+      output_tokens: 450
+      cache_read_tokens: 3313
+      cache_write_tokens: 369
+    execute_python:
+      model: claude-3-7-sonnet-latest
+      cost: $0.14955000
+      call_cnt: 2
+      latency: 15.83s
+      input_tokens: 7004
+      output_tokens: 753
+      cache_read_tokens: 6995
+      cache_write_tokens: 1921
+    provide_solution:
+      model: claude-3-7-sonnet-latest
+      cost: $0.01059000
+      call_cnt: 1
+      latency: 7.11s
+      input_tokens: 4777
+      output_tokens: 353
+      cache_read_tokens: 4772
+      cache_write_tokens: 695
+  EXECUTE:
+    TOTAL: {}
+target_branch: if(array[symvar]<0 || array[symvar]>10) -> true in heapoutofbound_sm_l2_klee.c:logic_bomb
+target_file_lines: heapoutofbound_sm_l2_klee.c:18-19
+target_lines_content: |2-
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+justification: "This branch has 0% historical coverage (line cov: 0/2) and represents
+  the main logic bomb in the program. It's triggered when array[symvar] is out of
+  bounds (less than 0 or greater than 10). The current execution with input \"AAAA\"\
+  \ doesn't trigger this branch. Exploring this branch would significantly improve
+  code coverage and reveal the program's behavior when the logic bomb is triggered."
+target_path_constraint: |-
+  To reach the target branch where `if(array[symvar]<0 || array[symvar]>10)` evaluates to true in the logic_bomb function, the following constraints must be satisfied:
+
+  1. The program must be executed with at least one command-line argument (argc >= 2) to avoid the check in main().
+
+  2. The first character of the input string (argv[1][0]) must satisfy one of these conditions:
+     a. argv[1][0] < 48 (ASCII '0')
+        This would make symvar negative (symvar = argv[1][0] - 48 < 0), causing array[symvar] to access memory before the allocated array.
+     OR
+     b. argv[1][0] >= 58 (ASCII ':')
+        This would make symvar >= 10 (symvar = argv[1][0] - 48 >= 10), causing array[symvar] to access memory beyond the allocated array.
+
+  3. The command-line argument must be a valid string (null-terminated).
+
+  When these constraints are satisfied, the program will attempt to access memory outside the bounds of the allocated array (which has indices 0-9), and depending on the memory contents at that location, the condition `array[symvar]<0 || array[symvar]>10` may evaluate to true.
+
+  Note that accessing memory outside array bounds is undefined behavior in C. The most reliable way to trigger the condition is to use option 2b above, as out-of-bounds heap access is more likely to contain arbitrary values that could satisfy the condition.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          # Using a character with ASCII value >= 58 to make symvar >= 10
+          # 'Z' has ASCII value 90, so symvar = 90-48 = 42, which is > 10
+          # This will cause array[symvar] to access memory beyond the allocated array
+          result = subprocess.run(
+              ["./temp_executable", "ZAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=False,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // heapoutofbound_sm_l2_klee.c (34 lines total)
+  #include <stdio.h>
+  #include<stdio.h>
+  #include<stdlib.h>
+  #include"utils.h"
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0] - 48;
+      int *array = (int *) malloc(sizeof(int) * 10);
+      int k = 0;
+
+      for (k=0; k<10; k++){
+          array[k] = k;
+      }
+
+      if(array[symvar]<0 || array[symvar]>10){
+          // Unexecuted code (lines 18-19) removed. Its line cov: 0/2 (0%)
+      }
+
+      fprintf(stderr, "Path without the bomb\n");
+      return 0;
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 28-29) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [heapoutofbound_sm_l2_klee.c] enter main 1
+  [heapoutofbound_sm_l2_klee.c] enter main 3
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 1
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 2
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 2
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 2
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 2
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 2
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 2
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 2
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 2
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 2
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 2
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 4
+  Path without the bomb
+execution_summary: |2+
+
+  ```c
+  // heapoutofbound_sm_l2_klee.c (34 lines total)
+  #include <stdio.h>
+  #include<stdio.h>
+  #include<stdlib.h>
+  #include"utils.h"
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0] - 48;
+      int *array = (int *) malloc(sizeof(int) * 10);
+      int k = 0;
+
+      for (k=0; k<10; k++){
+          array[k] = k;
+      }
+
+      if(array[symvar]<0 || array[symvar]>10){
+          // Unexecuted code (lines 18-19) removed. Its line cov: 0/2 (0%)
+      }
+
+      fprintf(stderr, "Path without the bomb\n");
+      return 0;
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 28-29) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [heapoutofbound_sm_l2_klee.c] enter main 1
+  [heapoutofbound_sm_l2_klee.c] enter main 3
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 1
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 2
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 2
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 2
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 2
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 2
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 2
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 2
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 2
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 2
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 2
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 4
+  Path without the bomb

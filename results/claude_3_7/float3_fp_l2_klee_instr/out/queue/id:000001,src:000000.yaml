@@ -1,0 +1,311 @@
+id: 1
+src_id: 0
+create_time: '2025-11-14 20:15:48.885'
+time_taken: 133
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 2
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: claude-3-7-sonnet-latest
+    cost: $0.79212000
+    call_cnt: 9
+    latency: 115.66s
+    input_tokens: 45650
+    output_tokens: 3579
+    cache_read_tokens: 45612
+    cache_write_tokens: 14616
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.19474500
+      call_cnt: 2
+      latency: 29.31s
+      input_tokens: 11335
+      output_tokens: 824
+      cache_read_tokens: 11326
+      cache_write_tokens: 2412
+    INITIAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.08499000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: claude-3-7-sonnet-latest
+      cost: $0.09586500
+      call_cnt: 1
+      latency: 14.17s
+      input_tokens: 5666
+      output_tokens: 361
+      cache_read_tokens: 5663
+      cache_write_tokens: 994
+    generate_path_constraint:
+      model: claude-3-7-sonnet-latest
+      cost: $0.01389000
+      call_cnt: 1
+      latency: 15.14s
+      input_tokens: 5669
+      output_tokens: 463
+      cache_read_tokens: 5663
+      cache_write_tokens: 1418
+  SOLVE:
+    TOTAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.59737500
+      call_cnt: 7
+      latency: 86.36s
+      input_tokens: 34315
+      output_tokens: 2755
+      cache_read_tokens: 34286
+      cache_write_tokens: 12204
+    INITIAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.04974000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: claude-3-7-sonnet-latest
+      cost: $0.06358500
+      call_cnt: 1
+      latency: 9.96s
+      input_tokens: 3316
+      output_tokens: 461
+      cache_read_tokens: 3313
+      cache_write_tokens: 405
+    execute_python:
+      model: claude-3-7-sonnet-latest
+      cost: $0.47175000
+      call_cnt: 5
+      latency: 65.36s
+      input_tokens: 26162
+      output_tokens: 1884
+      cache_read_tokens: 26141
+      cache_write_tokens: 6740
+    provide_solution:
+      model: claude-3-7-sonnet-latest
+      cost: $0.01230000
+      call_cnt: 1
+      latency: 11.03s
+      input_tokens: 4837
+      output_tokens: 410
+      cache_read_tokens: 4832
+      cache_write_tokens: 5059
+  EXECUTE:
+    TOTAL: {}
+target_branch: if(1024+x == 1024 && x>0) -> true in float3_fp_l2_klee.c:logic_bomb
+target_file_lines: float3_fp_l2_klee.c:12-13
+target_lines_content: |2-
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+justification: |-
+  This branch has 0% historical coverage (line cov: 0/2) and represents the core logic bomb condition in the program. It's a perfect target because:
+  1. It's completely uncovered in the historical test suite
+  2. It contains interesting floating-point precision behavior that tests the limits of numerical representation
+  3. The branch condition combines two constraints (equality after addition and positivity) that make it non-trivial
+  4. Reaching this branch would significantly improve code coverage by executing previously uncovered code
+target_path_constraint: |-
+  To reach the target branch "if(1024+x == 1024 && x>0) -> true" in the logic_bomb function, the following constraints must be satisfied:
+
+  1. Program Execution Constraints:
+     - The program must be executed with at least one command-line argument: argc >= 2
+     - The first command-line argument (argv[1]) must be a string that can be converted to a floating-point number
+
+  2. Floating-Point Precision Constraints:
+     - Let's define 'input_string' as the string passed as argv[1]
+     - Let x = atof(input_string) / 10000.0
+     - x must satisfy two conditions simultaneously:
+       a. 1024 + x == 1024  (floating-point addition must result in no change)
+       b. x > 0  (x must be strictly positive)
+
+  This is a floating-point precision problem. For condition (a) to be true, x must be small enough that when added to 1024, the limited precision of floating-point representation causes the result to be indistinguishable from 1024. For a standard IEEE 754 single-precision float, this happens when x is smaller than 2^(e-23), where e is the exponent of 1024 (which is 10).
+
+  Therefore, x must be positive but smaller than approximately 2^-13 ≈ 0.0001220703125.
+
+  Since x = atof(input_string) / 10000.0, the input_string must represent a positive number that, when divided by 10000.0, falls into this range. This means input_string should represent a positive number less than approximately 1.22.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Use a value that satisfies our constraints:
+      # 1. x > 0
+      # 2. 1024 + x == 1024 (floating-point precision issue)
+      # 
+      # We'll use 5.684341886080801e-10 as our input string
+      # This represents 2^-44 * 10000, which when divided by 10000 gives
+      # a value small enough that when added to 1024, equals 1024 in floating-point
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable", "5.684341886080801e-10"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=False,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 1
+src_execution_summary: |2+
+
+  ```c
+  // float3_fp_l2_klee.c (28 lines total)
+  #include <stdio.h>
+  #include<stdio.h>
+  #include <stdlib.h>
+  #include "a_tester.h"
+
+  // {"s":{"length": 8}}
+  int logic_bomb(char* symvar) {
+      float x = atof(symvar);
+      x = x/10000.0;
+
+      if(1024+x == 1024 && x>0){
+          // Unexecuted code (lines 12-13) removed. Its line cov: 0/2 (0%)
+      } else {
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 22-23) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [float3_fp_l2_klee.c] enter main 1
+  [float3_fp_l2_klee.c] enter main 3
+  [float3_fp_l2_klee.c] enter logic_bomb 1
+  [float3_fp_l2_klee.c] enter logic_bomb 2
+  Logic bomb triggered
+execution_summary: |2+
+
+  ```c
+  // float3_fp_l2_klee.c (28 lines total)
+  #include <stdio.h>
+  #include<stdio.h>
+  #include <stdlib.h>
+  #include "a_tester.h"
+
+  // {"s":{"length": 8}}
+  int logic_bomb(char* symvar) {
+      float x = atof(symvar);
+      x = x/10000.0;
+
+      if(1024+x == 1024 && x>0){
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+      } else {
+          // Unexecuted code (lines 15-16) removed. Its line cov: 2/2 (100%)
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 22-23) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [float3_fp_l2_klee.c] enter main 1
+  [float3_fp_l2_klee.c] enter main 3
+  [float3_fp_l2_klee.c] enter logic_bomb 1
+  [float3_fp_l2_klee.c] enter logic_bomb 3
+  Path without the bomb

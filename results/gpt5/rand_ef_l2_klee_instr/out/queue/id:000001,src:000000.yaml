@@ -1,0 +1,320 @@
+id: 1
+src_id: 0
+create_time: '2025-11-14 22:53:19.457'
+time_taken: 119
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 2
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: claude-3-7-sonnet-latest
+    cost: $0.72145500
+    call_cnt: 8
+    latency: 75.29s
+    input_tokens: 43389
+    output_tokens: 2354
+    cache_read_tokens: 43359
+    cache_write_tokens: 5479
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.52498500
+      call_cnt: 5
+      latency: 40.85s
+      input_tokens: 32647
+      output_tokens: 1176
+      cache_read_tokens: 32630
+      cache_write_tokens: 3912
+    INITIAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.08499000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: claude-3-7-sonnet-latest
+      cost: $0.19342500
+      call_cnt: 2
+      latency: 12.11s
+      input_tokens: 12334
+      output_tokens: 280
+      cache_read_tokens: 12327
+      cache_write_tokens: 1336
+    think:
+      model: claude-3-7-sonnet-latest
+      cost: $0.11523000
+      call_cnt: 1
+      latency: 10.03s
+      input_tokens: 5667
+      output_tokens: 340
+      cache_read_tokens: 5663
+      cache_write_tokens: 1624
+    select_target_branch:
+      model: claude-3-7-sonnet-latest
+      cost: $0.12228000
+      call_cnt: 1
+      latency: 8.19s
+      input_tokens: 7002
+      output_tokens: 254
+      cache_read_tokens: 6999
+      cache_write_tokens: 642
+    generate_path_constraint:
+      model: claude-3-7-sonnet-latest
+      cost: $0.00906000
+      call_cnt: 1
+      latency: 10.53s
+      input_tokens: 7644
+      output_tokens: 302
+      cache_read_tokens: 7641
+      cache_write_tokens: 310
+  SOLVE:
+    TOTAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.19647000
+      call_cnt: 3
+      latency: 34.44s
+      input_tokens: 10742
+      output_tokens: 1178
+      cache_read_tokens: 10729
+      cache_write_tokens: 1567
+    INITIAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.04974000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    execute_python:
+      model: claude-3-7-sonnet-latest
+      cost: $0.13554000
+      call_cnt: 2
+      latency: 22.49s
+      input_tokens: 6634
+      output_tokens: 805
+      cache_read_tokens: 6626
+      cache_write_tokens: 1049
+    provide_solution:
+      model: claude-3-7-sonnet-latest
+      cost: $0.01119000
+      call_cnt: 1
+      latency: 11.95s
+      input_tokens: 4108
+      output_tokens: 373
+      cache_read_tokens: 4103
+      cache_write_tokens: 518
+  EXECUTE:
+    TOTAL: {}
+target_branch: if(r == 77) -> true in rand_ef_l2_klee.c:logic_bomb
+target_file_lines: rand_ef_l2_klee.c:17-18
+target_lines_content: |2-
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+justification: "This branch has 0% historical coverage (line cov: 0/2) and represents
+  the core functionality of the program - the \"logic bomb\" that the program is designed
+  to trigger. The branch is protected by a condition that depends on a random number
+  generated from a seed derived from the input string. Since this branch is completely
+  unexplored and represents the main purpose of the program, exploring it would significantly
+  improve code coverage and reveal the program's intended behavior."
+target_path_constraint: |-
+  To reach the target branch `if(r == 77) -> true` in the `logic_bomb` function, the following constraints must be satisfied:
+
+  1. Program Input Structure:
+     - The program must be called with at least one command-line argument (argc >= 2)
+     - The first command-line argument (argv[1]) must be a string with at least one character
+
+  2. Core Constraint:
+     - The first character of the input string (s[0]) must be a value such that when used as a seed for srand(), the subsequent call to rand()%100 produces the value 77
+     
+     Specifically:
+     - Let X be the ASCII value of s[0]
+     - srand(X) must initialize the random number generator such that
+     - rand()%100 == 77
+
+  This is a deterministic relationship - for any given value of s[0], the random number generated will always be the same. The constraint requires finding the specific value(s) of s[0] that will produce 77 when rand()%100 is called after seeding with that value.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          # Using 'T' as the first character of the input string
+          # This will make srand(T's ASCII value) produce rand()%100 == 77
+          result = subprocess.run(
+              ["./temp_executable", "TAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 1
+src_execution_summary: |2+
+
+  ```c
+  // rand_ef_l2_klee.c (33 lines total)
+  #include <stdio.h>
+  /*
+  TOY:
+  Solution: 7
+  */
+  #include <string.h> 
+  #include "utils.h"
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0];
+      srand(symvar);
+      int r = rand()%100;
+
+      if(r == 77){
+          // Unexecuted code (lines 17-18) removed. Its line cov: 0/2 (0%)
+      }else{
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 27-28) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [rand_ef_l2_klee.c] enter main 1
+  [rand_ef_l2_klee.c] enter main 3
+  [rand_ef_l2_klee.c] enter logic_bomb 1
+  [rand_ef_l2_klee.c] enter logic_bomb 2
+  Logic bomb triggered
+execution_summary: |2+
+
+  ```c
+  // rand_ef_l2_klee.c (33 lines total)
+  #include <stdio.h>
+  /*
+  TOY:
+  Solution: 7
+  */
+  #include <string.h> 
+  #include "utils.h"
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0];
+      srand(symvar);
+      int r = rand()%100;
+
+      if(r == 77){
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+      }else{
+          // Unexecuted code (lines 20-21) removed. Its line cov: 2/2 (100%)
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 27-28) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [rand_ef_l2_klee.c] enter main 1
+  [rand_ef_l2_klee.c] enter main 3
+  [rand_ef_l2_klee.c] enter logic_bomb 1
+  [rand_ef_l2_klee.c] enter logic_bomb 3
+  Path without the bomb

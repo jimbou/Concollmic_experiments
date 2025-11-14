@@ -1,0 +1,613 @@
+id: 1
+src_id: 0
+create_time: '2025-11-14 16:49:20.931'
+time_taken: 114
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 2
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: deepseek-chat
+    cost: $0.03732915
+    call_cnt: 8
+    latency: 95.74s
+    input_tokens: 37106
+    output_tokens: 2634
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: deepseek-chat
+      cost: $0.01681155
+      call_cnt: 3
+      latency: 30.83s
+      input_tokens: 18146
+      output_tokens: 722
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: deepseek-chat
+      cost: $0.00478088
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: deepseek-chat
+      cost: $0.00569955
+      call_cnt: 1
+      latency: 11.49s
+      input_tokens: 5795
+      output_tokens: 270
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: deepseek-chat
+      cost: $0.00559928
+      call_cnt: 1
+      latency: 7.87s
+      input_tokens: 6074
+      output_tokens: 165
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: deepseek-chat
+      cost: $0.00073185
+      call_cnt: 1
+      latency: 11.46s
+      input_tokens: 6277
+      output_tokens: 287
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: deepseek-chat
+      cost: $0.02051760
+      call_cnt: 5
+      latency: 64.91s
+      input_tokens: 18960
+      output_tokens: 1912
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: deepseek-chat
+      cost: $0.00247005
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: deepseek-chat
+      cost: $0.00328073
+      call_cnt: 1
+      latency: 8.19s
+      input_tokens: 2994
+      output_tokens: 238
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    execute_python:
+      model: deepseek-chat
+      cost: $0.01377997
+      call_cnt: 3
+      latency: 42.63s
+      input_tokens: 10990
+      output_tokens: 1287
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: deepseek-chat
+      cost: $0.00098685
+      call_cnt: 1
+      latency: 14.09s
+      input_tokens: 4976
+      output_tokens: 387
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if(loopcount == 25) -> true in logic_bomb function
+target_file_lines: collaz_lo_l1_klee.c:26-27
+target_lines_content: |2-
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+justification: This branch has 0% historical coverage and represents the core 'bomb'
+  logic that wasn't triggered in the current execution. The branch protects the bomb
+  activation code (lines 26-27) which is the main security vulnerability this program
+  is designed to test. Successfully reaching this branch would significantly improve
+  code coverage and exercise the critical program behavior.
+target_path_constraint: |-
+  1. Command-Line Argument: The program must be executed with exactly one command-line argument (argc == 2)
+  2. Input String Format: The first argument must be a non-empty string with at least one character
+  3. Character Value Constraint: The first character of the input string (s[0]) must satisfy the following condition:
+     - Let n = (ASCII value of s[0]) - 48 + 94
+     - The Collatz-like sequence starting from n must take exactly 25 iterations to reach 1
+     - The sequence is defined by: f(x) = x/2 if x is even, 3*x + 1 if x is odd
+     - The loopcount is the number of iterations until the sequence reaches 1
+
+  Mathematically: ∃ n ∈ ℤ such that:
+     n = (ASCII(s[0]) - 48 + 94)
+     f^25(n) = 1 ∧ f^k(n) ≠ 1 for all k < 25
+     where f^25 denotes 25 iterations of function f
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          # Use '4' as the argument since it satisfies the constraint:
+          # n = (ASCII('4') - 48 + 94) = (52 - 48 + 94) = 98
+          # The Collatz sequence starting from 98 takes exactly 25 iterations to reach 1
+          result = subprocess.run(
+              ["./temp_executable", "4"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 1
+src_execution_summary: |2+
+
+  ```c
+  // collaz_lo_l1_klee.c (41 lines total)
+  #include <stdio.h>
+  #include <string.h> 
+  #include "utils.h"
+  #include "a_tester.h"
+
+  int f(int x){
+      if (x%2 == 0) {
+          return x/2;
+      }
+      return 3*x + 1;
+  }
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0] - 48;
+      symvar = symvar + 94;
+      int j = f(symvar);
+      int loopcount = 1;
+
+      while(j != 1){
+          j = f(j);
+          loopcount ++;
+      }
+
+      if(loopcount == 25){
+          // Unexecuted code (lines 26-27) removed. Its line cov: 0/2 (0%)
+      } else {
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 36-37) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [collaz_lo_l1_klee.c] enter main 1
+  [collaz_lo_l1_klee.c] enter main 3
+  [collaz_lo_l1_klee.c] enter logic_bomb 1
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 3
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 3
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 3
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 3
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 3
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 3
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 3
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 3
+  Logic bomb triggered
+execution_summary: |2+
+
+  ```c
+  // collaz_lo_l1_klee.c (41 lines total)
+  #include <stdio.h>
+  #include <string.h> 
+  #include "utils.h"
+  #include "a_tester.h"
+
+  int f(int x){
+      if (x%2 == 0) {
+          return x/2;
+      }
+      return 3*x + 1;
+  }
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0] - 48;
+      symvar = symvar + 94;
+      int j = f(symvar);
+      int loopcount = 1;
+
+      while(j != 1){
+          j = f(j);
+          loopcount ++;
+      }
+
+      if(loopcount == 25){
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+      } else {
+          // Unexecuted code (lines 29-30) removed. Its line cov: 2/2 (100%)
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 36-37) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [collaz_lo_l1_klee.c] enter main 1
+  [collaz_lo_l1_klee.c] enter main 3
+  [collaz_lo_l1_klee.c] enter logic_bomb 1
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 3
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 3
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 3
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 3
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 3
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 3
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 3
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 3
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 3
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 3
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 3
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 3
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 3
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 3
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 3
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 3
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 3
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 3
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 3
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 3
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 3
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 3
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 3
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 3
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 2
+  [collaz_lo_l1_klee.c] enter f 1
+  [collaz_lo_l1_klee.c] enter f 2
+  [collaz_lo_l1_klee.c] enter logic_bomb 4
+  Path without the bomb

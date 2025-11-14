@@ -1,0 +1,326 @@
+id: 1
+src_id: 0
+create_time: '2025-11-14 17:14:17.052'
+time_taken: 83
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 1
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: deepseek-chat
+    cost: $0.02817293
+    call_cnt: 6
+    latency: 64.68s
+    input_tokens: 28505
+    output_tokens: 1826
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: deepseek-chat
+      cost: $0.01730490
+      call_cnt: 3
+      latency: 30.34s
+      input_tokens: 18370
+      output_tokens: 843
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: deepseek-chat
+      cost: $0.00478995
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: deepseek-chat
+      cost: $0.00603600
+      call_cnt: 1
+      latency: 12.43s
+      input_tokens: 5806
+      output_tokens: 367
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: deepseek-chat
+      cost: $0.00566295
+      call_cnt: 1
+      latency: 7.26s
+      input_tokens: 6182
+      output_tokens: 156
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: deepseek-chat
+      cost: $0.00081600
+      call_cnt: 1
+      latency: 10.64s
+      input_tokens: 6382
+      output_tokens: 320
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: deepseek-chat
+      cost: $0.01086802
+      call_cnt: 3
+      latency: 34.34s
+      input_tokens: 10135
+      output_tokens: 983
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: deepseek-chat
+      cost: $0.00250717
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: deepseek-chat
+      cost: $0.00757290
+      call_cnt: 2
+      latency: 23.29s
+      input_tokens: 6404
+      output_tokens: 674
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: deepseek-chat
+      cost: $0.00078795
+      call_cnt: 1
+      latency: 11.05s
+      input_tokens: 3731
+      output_tokens: 309
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (strcmp(content, "7") == 0) -> true in function logic_bomb()
+target_file_lines: forkpipe_pp_l1_klee.c:26-26
+target_lines_content: '            fprintf(stderr, "Logic bomb triggered\n");'
+justification: This branch has 0% historical coverage and represents the core logic
+  bomb functionality of the program. When this condition is true, the program returns
+  1 instead of 0 and would execute the bomb path. This is the most important uncovered
+  branch as it represents the main alternative execution path that the program is
+  designed to test.
+target_path_constraint: |-
+  1. Command-Line Arguments: The program must be executed with exactly one command-line argument (argc == 2), where argv[0] is the program name and argv[1] is the input string.
+
+  2. String Content Constraint: The command-line argument string must be exactly "7" (two characters: '7' followed by null terminator). This is because:
+     - The child process writes the entire string `s` to the pipe using `write(fd[1], s, sizeof(s))`
+     - `sizeof(s)` is the size of a char pointer (typically 4 or 8 bytes), not the string length
+     - The parent reads exactly 8 bytes from the pipe using `read(fd[0], content, 8)`
+     - For the comparison `strcmp(content, "7") == 0` to be true, the first 8 bytes read must contain exactly "7" followed by null terminator and then whatever follows
+
+  3. Critical Detail: Since `sizeof(s)` writes the pointer size (not string length), and the parent reads exactly 8 bytes, the input string must be "7" exactly to ensure that when the pointer-sized write occurs and 8 bytes are read back, the string comparison succeeds. The null terminator after "7" ensures `strcmp` stops comparing at the first character.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          # Change the argument from "AAAA" to "7" to satisfy the path constraint
+          result = subprocess.run(
+              ["./temp_executable 7"],  # Argument changed to "7" as required
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 1
+src_execution_summary: |2+
+
+  ```c
+  // forkpipe_pp_l1_klee.c (41 lines total)
+  #include <stdio.h>
+  #include <unistd.h>
+  #include "utils.h"
+  #include "a_tester.h"
+
+  // {"s":{"length": 2}}
+  int logic_bomb(char* s) {
+      int pid, fd[2];
+      pipe(fd);
+      if ((pid = fork()) == -1) {
+          // Unexecuted code (line 11) removed. Its line cov: 0/1 (0%)
+          return 0;
+      }
+
+      if (pid == 0) {
+          close(fd[0]);
+          write(fd[1], s, sizeof(s));
+          wait(NULL);
+          exit(0);
+      }
+      else {
+          char content[8];
+          close(fd[1]);
+          read(fd[0], content, 8);
+          if (strcmp(content, "7") == 0) {
+              // Unexecuted code (line 26) removed. Its line cov: 0/1 (0%)
+              return 1;
+          }
+          fprintf(stderr, "Path without the bomb\n");
+          return 0; 
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (line 36) removed. Its line cov: 0/1 (0%)
+          return 2;
+      }
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [forkpipe_pp_l1_klee.c] enter main 1
+  [forkpipe_pp_l1_klee.c] enter main 3
+  [forkpipe_pp_l1_klee.c] enter logic_bomb 1
+  [forkpipe_pp_l1_klee.c] enter logic_bomb 4
+  [forkpipe_pp_l1_klee.c] enter logic_bomb 3
+  [forkpipe_pp_l1_klee.c] enter logic_bomb 5
+  Logic bomb triggered
+execution_summary: |2+
+
+  ```c
+  // forkpipe_pp_l1_klee.c (41 lines total)
+  #include <stdio.h>
+  #include <unistd.h>
+  #include "utils.h"
+  #include "a_tester.h"
+
+  // {"s":{"length": 2}}
+  int logic_bomb(char* s) {
+      int pid, fd[2];
+      pipe(fd);
+      if ((pid = fork()) == -1) {
+          // Unexecuted code (line 11) removed. Its line cov: 0/1 (0%)
+          return 0;
+      }
+
+      if (pid == 0) {
+          close(fd[0]);
+          write(fd[1], s, sizeof(s));
+          wait(NULL);
+          exit(0);
+      }
+      else {
+          char content[8];
+          close(fd[1]);
+          read(fd[0], content, 8);
+          if (strcmp(content, "7") == 0) {
+              fprintf(stderr, "Logic bomb triggered\n");
+              return 1;
+          }
+          // Unexecuted code (line 29) removed. Its line cov: 1/1 (100%)
+          return 0; 
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (line 36) removed. Its line cov: 0/1 (0%)
+          return 2;
+      }
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [forkpipe_pp_l1_klee.c] enter main 1
+  [forkpipe_pp_l1_klee.c] enter main 3
+  [forkpipe_pp_l1_klee.c] enter logic_bomb 1
+  [forkpipe_pp_l1_klee.c] enter logic_bomb 4
+  [forkpipe_pp_l1_klee.c] enter logic_bomb 3
+  [forkpipe_pp_l1_klee.c] enter logic_bomb 6
+  Path without the bomb

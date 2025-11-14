@@ -1,0 +1,375 @@
+id: 1
+src_id: 0
+create_time: '2025-11-14 20:24:40.019'
+time_taken: 66
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 3
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: claude-3-7-sonnet-latest
+    cost: $0.44352000
+    call_cnt: 5
+    latency: 50.19s
+    input_tokens: 25466
+    output_tokens: 2051
+    cache_read_tokens: 25446
+    cache_write_tokens: 4860
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.32251500
+      call_cnt: 3
+      latency: 29.21s
+      input_tokens: 18833
+      output_tokens: 1334
+      cache_read_tokens: 18820
+      cache_write_tokens: 3580
+    INITIAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.08499000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: claude-3-7-sonnet-latest
+      cost: $0.09996000
+      call_cnt: 1
+      latency: 10.50s
+      input_tokens: 5666
+      output_tokens: 498
+      cache_read_tokens: 5663
+      cache_write_tokens: 1322
+    select_target_branch:
+      model: claude-3-7-sonnet-latest
+      cost: $0.12328500
+      call_cnt: 1
+      latency: 8.18s
+      input_tokens: 5668
+      output_tokens: 360
+      cache_read_tokens: 5663
+      cache_write_tokens: 1831
+    generate_path_constraint:
+      model: claude-3-7-sonnet-latest
+      cost: $0.01428000
+      call_cnt: 1
+      latency: 10.54s
+      input_tokens: 7499
+      output_tokens: 476
+      cache_read_tokens: 7494
+      cache_write_tokens: 427
+  SOLVE:
+    TOTAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.12100500
+      call_cnt: 2
+      latency: 20.97s
+      input_tokens: 6633
+      output_tokens: 717
+      cache_read_tokens: 6626
+      cache_write_tokens: 1280
+    INITIAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.04974000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: claude-3-7-sonnet-latest
+      cost: $0.06181500
+      call_cnt: 1
+      latency: 9.82s
+      input_tokens: 3316
+      output_tokens: 402
+      cache_read_tokens: 3313
+      cache_write_tokens: 433
+    provide_solution:
+      model: claude-3-7-sonnet-latest
+      cost: $0.00945000
+      call_cnt: 1
+      latency: 11.15s
+      input_tokens: 3317
+      output_tokens: 315
+      cache_read_tokens: 3313
+      cache_write_tokens: 847
+  EXECUTE:
+    TOTAL: {}
+target_branch: if(strcmp(c_addr, "7") == 0) -> true in forkshm_pp_l1_klee.c:logic_bomb
+target_file_lines: forkshm_pp_l1_klee.c:35-35
+target_lines_content: '            flag = 1;'
+justification: |-
+  This branch represents the core logic of the program's "logic bomb" functionality and has 0% historical coverage. The condition checks if the value read from shared memory equals exactly "7". When this branch evaluates to true, it would execute line 35 which has never been covered by any test cases. This branch is particularly important because:
+
+  1. It's the main condition that determines whether the "bomb" is triggered
+  2. It has zero historical coverage (line cov: 0/1)
+  3. It's directly related to the program's input, which we can control through the command-line argument
+  4. It would likely lead to setting the flag variable, which would then enable execution of another uncovered branch at line 38
+
+  This branch is reachable with the current test harness by simply modifying the input string argument from "AAAA" to "7".
+target_path_constraint: |-
+  To reach the target branch `if(strcmp(c_addr, "7") == 0) -> true` in the `logic_bomb` function, the following constraints must be satisfied:
+
+  1. Command-line argument constraint:
+     - The program must be executed with at least one command-line argument (argc >= 2)
+     - The first command-line argument (argv[1]) must be exactly the string "7"
+
+  2. Shared memory creation constraint:
+     - The shared memory creation via `shmget(IPC_PRIVATE, 1024, S_IRUSR|S_IWUSR)` must succeed
+     - This means the system must have sufficient resources for shared memory allocation
+     - The return value `shmid` must be >= 0
+
+  3. Process forking constraint:
+     - The `fork()` call must succeed and create a child process
+     - For the parent process path: the return value of `fork()` must be > 0
+     - For the child process path: the return value of `fork()` must be 0
+
+  4. Child process execution constraint:
+     - The child process must successfully attach to shared memory via `shmat()`
+     - The child process must successfully copy the string "7" to the shared memory
+     - The child process must exit normally
+
+  5. Parent process execution constraint:
+     - The parent process must successfully attach to the shared memory via `shmat()`
+     - After the sleep(1), the parent must read the shared memory
+     - The content of the shared memory (c_addr) must be exactly the string "7"
+     - Thus, strcmp(c_addr, "7") must return 0
+
+  The primary constraint that can be directly controlled is the command-line argument, which must be exactly "7". The other constraints are related to system conditions that are generally expected to be satisfied in a normal operating environment.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          # Changed the argument from "AAAA" to "7" to satisfy the target constraint
+          result = subprocess.run(
+              ["./temp_executable", "7"],  # Properly separate executable and argument
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 1
+src_execution_summary: |2+
+
+  ```c
+  // forkshm_pp_l1_klee.c (55 lines total)
+  #include <stdio.h>
+  #include <unistd.h>
+  #include <stdlib.h>
+  #include <unistd.h>
+  #include <string.h>
+  #include <sys/shm.h>
+  #include <sys/ipc.h>
+  #include <sys/stat.h>
+  #include <sys/types.h>
+  #include "utils.h"
+  #include "a_tester.h"
+
+  // {"s":{"length": 2}}
+  int logic_bomb(char* symvar) {
+      char *p_addr, *c_addr;
+      int flag = 0;
+      key_t shmid = shmget(IPC_PRIVATE, 1024, S_IRUSR|S_IWUSR);
+      if (shmid < 0) {
+          // Unexecuted code (line 19) removed. Its line cov: 0/1 (0%)
+          return 0;
+      }
+
+      pid_t pid = fork();
+      if(pid == 0){
+          p_addr = shmat(shmid,0,0);
+          memset(p_addr,'/0',1024);
+          strncpy(p_addr, symvar, 1024);
+          exit(0);
+      }
+
+      if (pid > 0){
+          sleep(1);
+          c_addr = shmat(shmid,0,0);
+          if(strcmp(c_addr, "7") == 0) {
+              // Unexecuted code (line 35) removed. Its line cov: 0/1 (0%)
+          }
+          shmctl(shmid,IPC_RMID,0);
+          if(flag == 1){
+              // Unexecuted code (lines 39-40) removed. Its line cov: 0/2 (0%)
+          }
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 49-50) removed. Its line cov: 0/2 (0%)
+      }
+
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [forkshm_pp_l1_klee.c] enter main 1
+  [forkshm_pp_l1_klee.c] enter main 3
+  [forkshm_pp_l1_klee.c] enter logic_bomb 1
+  [forkshm_pp_l1_klee.c] enter logic_bomb 3
+  [forkshm_pp_l1_klee.c] enter logic_bomb 5
+  [forkshm_pp_l1_klee.c] enter logic_bomb 4
+  [forkshm_pp_l1_klee.c] enter logic_bomb 6
+  [forkshm_pp_l1_klee.c] enter logic_bomb 7
+  Logic bomb triggered
+execution_summary: |2+
+
+  ```c
+  // forkshm_pp_l1_klee.c (55 lines total)
+  #include <stdio.h>
+  #include <unistd.h>
+  #include <stdlib.h>
+  #include <unistd.h>
+  #include <string.h>
+  #include <sys/shm.h>
+  #include <sys/ipc.h>
+  #include <sys/stat.h>
+  #include <sys/types.h>
+  #include "utils.h"
+  #include "a_tester.h"
+
+  // {"s":{"length": 2}}
+  int logic_bomb(char* symvar) {
+      char *p_addr, *c_addr;
+      int flag = 0;
+      key_t shmid = shmget(IPC_PRIVATE, 1024, S_IRUSR|S_IWUSR);
+      if (shmid < 0) {
+          // Unexecuted code (line 19) removed. Its line cov: 0/1 (0%)
+          return 0;
+      }
+
+      pid_t pid = fork();
+      if(pid == 0){
+          p_addr = shmat(shmid,0,0);
+          memset(p_addr,'/0',1024);
+          strncpy(p_addr, symvar, 1024);
+          exit(0);
+      }
+
+      if (pid > 0){
+          sleep(1);
+          c_addr = shmat(shmid,0,0);
+          if(strcmp(c_addr, "7") == 0) {
+              flag = 1;
+          }
+          shmctl(shmid,IPC_RMID,0);
+          if(flag == 1){
+              fprintf(stderr, "Logic bomb triggered\n");
+              return 1;
+          }
+          // Unexecuted code (lines 42-43) removed. Its line cov: 2/2 (100%)
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 49-50) removed. Its line cov: 0/2 (0%)
+      }
+
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [forkshm_pp_l1_klee.c] enter main 1
+  [forkshm_pp_l1_klee.c] enter main 3
+  [forkshm_pp_l1_klee.c] enter logic_bomb 1
+  [forkshm_pp_l1_klee.c] enter logic_bomb 3
+  [forkshm_pp_l1_klee.c] enter logic_bomb 5
+  [forkshm_pp_l1_klee.c] enter logic_bomb 4
+  [forkshm_pp_l1_klee.c] enter logic_bomb 8
+  Path without the bomb

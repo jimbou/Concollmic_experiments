@@ -1,0 +1,223 @@
+id: 1
+src_id: 0
+create_time: '2025-11-14 23:12:53.366'
+time_taken: 102
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: false
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: claude-3-7-sonnet-latest
+    cost: $0.54025500
+    call_cnt: 5
+    latency: 43.65s
+    input_tokens: 33167
+    output_tokens: 1425
+    cache_read_tokens: 33149
+    cache_write_tokens: 4430
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.54025500
+      call_cnt: 5
+      latency: 43.65s
+      input_tokens: 33167
+      output_tokens: 1425
+      cache_read_tokens: 33149
+      cache_write_tokens: 4430
+    INITIAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.08499000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: claude-3-7-sonnet-latest
+      cost: $0.20068500
+      call_cnt: 2
+      latency: 10.18s
+      input_tokens: 11333
+      output_tokens: 226
+      cache_read_tokens: 11326
+      cache_write_tokens: 2604
+    think:
+      model: claude-3-7-sonnet-latest
+      cost: $0.11299500
+      call_cnt: 1
+      latency: 10.33s
+      input_tokens: 7260
+      output_tokens: 428
+      cache_read_tokens: 7257
+      cache_write_tokens: 196
+    select_target_branch:
+      model: claude-3-7-sonnet-latest
+      cost: $0.12907500
+      call_cnt: 1
+      latency: 8.88s
+      input_tokens: 6677
+      output_tokens: 354
+      cache_read_tokens: 6673
+      cache_write_tokens: 1220
+    generate_path_constraint:
+      model: claude-3-7-sonnet-latest
+      cost: $0.01251000
+      call_cnt: 1
+      latency: 14.26s
+      input_tokens: 7897
+      output_tokens: 417
+      cache_read_tokens: 7893
+      cache_write_tokens: 410
+target_branch: if(buf < 0) -> true in stack_bo_l2_klee.c:logic_bomb
+target_file_lines: stack_bo_l2_klee.c:17-17
+target_lines_content: '        return trigger();'
+justification: |-
+  This branch has 0% historical coverage (line 17) and represents the core security vulnerability in this program. The condition `if(buf < 0)` checks if the buffer address has become negative, which is likely related to a buffer overflow vulnerability. 
+
+  The function `logic_bomb` copies the input string into a small fixed-size buffer (buf[8]) using strcpy(), which doesn't perform bounds checking. If we can manipulate the input to cause a buffer overflow that makes the buffer pointer appear negative, we would trigger this branch and execute the `trigger()` function which has never been covered in the test suite.
+
+  This branch is particularly important because:
+  1. It has zero historical coverage (0%)
+  2. It contains the security-critical "logic bomb" functionality
+  3. It's directly manipulable through the program input (symvar parameter)
+  4. It represents a classic buffer overflow vulnerability pattern
+target_path_constraint: |-
+  To reach the target branch `if(buf < 0) -> true` in the `logic_bomb` function, we need to create a path constraint that will cause the buffer address to become negative after the `strcpy` operation.
+
+  The key constraints are:
+
+  1. Program Execution Path:
+     - The program must be executed with at least one command-line argument (`argc >= 2`)
+     - The first argument (`argv[1]`) is passed to the `logic_bomb` function
+
+  2. Buffer Overflow Constraint:
+     - The input string must cause a buffer overflow in the `char buf[8]` array through the unchecked `strcpy(buf, symvar)` operation
+     - The overflow must specifically manipulate memory in such a way that after the overflow, the pointer `buf` itself evaluates to a negative value when interpreted as a signed integer
+
+  3. Technical Explanation of the Constraint:
+     - The buffer overflow must modify the stack frame or memory layout to change how the `buf` variable is evaluated
+     - When `buf` is evaluated in the expression `buf < 0`, its memory address must be interpreted as a negative number
+     - This likely requires overwriting stack memory beyond the 8 bytes allocated for `buf` to corrupt the stack frame or memory pointers
+
+  4. Input Requirements:
+     - The input string must be longer than 8 bytes to cause the overflow
+     - The specific byte pattern must be crafted to manipulate the memory in a way that affects how the `buf` variable is evaluated
+     - The overflow pattern needs to specifically target memory locations that would affect the evaluation of `buf` in the comparison
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code:
+returncode:
+src_execution_summary: |2+
+
+  ```c
+  // stack_bo_l2_klee.c (32 lines total)
+  #include <stdio.h>
+  #include <string.h> 
+  #include "utils.h"
+  #include "a_tester.h"
+
+  int trigger(){
+      // Unexecuted code (lines 7-8) removed. Its line cov: 0/2 (0%)
+  }
+
+  // {"symvar":{"length": 128}}
+  int logic_bomb(char* symvar) {
+      char buf[8];
+      strcpy(buf, symvar);
+
+      if(buf < 0) {
+          // Unexecuted code (line 17) removed. Its line cov: 0/1 (0%)
+      }
+
+      fprintf(stderr, "Path without the bomb\n");
+      return 0;
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 26-27) removed. Its line cov: 0/2 (0%)
+      }
+
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace:
+execution_summary:
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [stack_bo_l2_klee.c] enter main 1
+  [stack_bo_l2_klee.c] enter main 3
+  [stack_bo_l2_klee.c] enter logic_bomb 1
+  [stack_bo_l2_klee.c] enter logic_bomb 3
+  Path without the bomb

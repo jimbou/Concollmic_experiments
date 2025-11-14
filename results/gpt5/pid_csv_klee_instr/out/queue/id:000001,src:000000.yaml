@@ -1,0 +1,391 @@
+id: 1
+src_id: 0
+create_time: '2025-11-14 22:43:51.740'
+time_taken: 72
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: claude-3-7-sonnet-latest
+    cost: $0.42306000
+    call_cnt: 5
+    latency: 58.84s
+    input_tokens: 22780
+    output_tokens: 2712
+    cache_read_tokens: 22760
+    cache_write_tokens: 4219
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.21246000
+      call_cnt: 2
+      latency: 26.11s
+      input_tokens: 12330
+      output_tokens: 917
+      cache_read_tokens: 12322
+      cache_write_tokens: 1409
+    INITIAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.08499000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: claude-3-7-sonnet-latest
+      cost: $0.11073000
+      call_cnt: 1
+      latency: 9.04s
+      input_tokens: 5666
+      output_tokens: 359
+      cache_read_tokens: 5663
+      cache_write_tokens: 996
+    generate_path_constraint:
+      model: claude-3-7-sonnet-latest
+      cost: $0.01674000
+      call_cnt: 1
+      latency: 17.07s
+      input_tokens: 6664
+      output_tokens: 558
+      cache_read_tokens: 6659
+      cache_write_tokens: 413
+  SOLVE:
+    TOTAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.21060000
+      call_cnt: 3
+      latency: 32.73s
+      input_tokens: 10450
+      output_tokens: 1795
+      cache_read_tokens: 10438
+      cache_write_tokens: 2810
+    INITIAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.04974000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: claude-3-7-sonnet-latest
+      cost: $0.07752000
+      call_cnt: 1
+      latency: 12.29s
+      input_tokens: 3316
+      output_tokens: 676
+      cache_read_tokens: 3313
+      cache_write_tokens: 499
+    execute_python:
+      model: claude-3-7-sonnet-latest
+      cost: $0.06018000
+      call_cnt: 1
+      latency: 7.67s
+      input_tokens: 3816
+      output_tokens: 347
+      cache_read_tokens: 3812
+      cache_write_tokens: 689
+    provide_solution:
+      model: claude-3-7-sonnet-latest
+      cost: $0.02316000
+      call_cnt: 1
+      latency: 12.77s
+      input_tokens: 3318
+      output_tokens: 772
+      cache_read_tokens: 3313
+      cache_write_tokens: 1622
+  EXECUTE:
+    TOTAL: {}
+target_branch: if(pid%78 == symvar) -> true in pid_csv_klee.c:logic_bomb
+target_file_lines: pid_csv_klee.c:15-16
+target_lines_content: |2-
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+justification: 'This branch has 0% historical coverage (line cov: 0/2) and represents
+  the core logic bomb functionality of the program. Exploring this branch will significantly
+  improve code coverage by executing previously uncovered code. The condition depends
+  on the process ID and the first character of the input string, making it a non-trivial
+  branch to reach that requires specific input crafting.'
+target_path_constraint: |-
+  To reach the target branch "if(pid%78 == symvar) -> true" in pid_csv_klee.c:logic_bomb, the following constraints must be satisfied:
+
+  1. Command-line argument constraints:
+     - The program must be called with at least one argument (argc >= 2)
+     - argv[1] must be a valid string pointer (non-NULL)
+     - argv[1] must contain at least one character
+
+  2. Core constraint:
+     - Let's define:
+       * symvar = the first character of argv[1] converted to an integer by subtracting 48
+       * pid = the process ID of the running program
+     
+     - The constraint that must be satisfied is:
+       * pid % 78 == symvar
+     
+     - This means:
+       * The remainder when dividing the current process ID by 78 must equal the integer value derived from the first character of the input string
+       * Since symvar is derived by subtracting 48 from the ASCII value of the first character, and we want symvar to be a valid digit (0-9), the first character of argv[1] should be in the range '0' (ASCII 48) to '9' (ASCII 57)
+       * Therefore, the value of symvar will be in the range 0-9
+       * The first character of argv[1] must be chosen such that its value minus 48 equals pid % 78
+       * Since pid % 78 can be any value from 0 to 77, if pid % 78 > 9, this constraint cannot be satisfied with a digit character
+
+  3. Additional considerations:
+     - The process ID is determined by the operating system and is not directly controllable through program inputs
+     - To satisfy this constraint in practice, one would need to:
+       a) Determine the current process ID at runtime
+       b) Calculate pid % 78
+       c) If the result is between 0-9, set the first character of argv[1] to be '0' + (pid % 78)
+       d) If the result is greater than 9, the constraint cannot be satisfied with a digit character
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import os
+      import signal
+      import subprocess
+
+      try:
+          # Get the current process ID
+          # Note: This is the parent process ID, but the child process ID will be different
+          # We'll use a technique to get the child's PID and adjust the input accordingly
+          
+          # Create a temporary script that will:
+          # 1. Get its own PID
+          # 2. Calculate the appropriate character based on PID % 78
+          # 3. Execute the target program with the appropriate argument
+          
+          temp_script = """#!/usr/bin/env python3
+  import os
+  import subprocess
+  import sys
+
+  # Get the current process ID
+  pid = os.getpid()
+
+  # Calculate pid % 78
+  remainder = pid % 78
+
+  # Determine the appropriate character
+  char = chr(remainder + 48)
+
+  # Create the argument - first character is the calculated one, followed by "AAA"
+  arg = char + "AAA"
+
+  # Execute the target program with the calculated argument
+  result = subprocess.run(["./temp_executable", arg], capture_output=True, text=True)
+
+  # Output the results so the parent process can capture them
+  print(f"PID:{pid}")
+  print(f"PID%78:{remainder}")
+  print(f"CHAR:{char}")
+  print(f"ARG:{arg}")
+  sys.stderr.write(result.stderr)
+  exit(result.returncode)
+  """
+
+          # Write the temporary script
+          with open("temp_script.py", "w") as f:
+              f.write(temp_script)
+          
+          # Make it executable
+          os.chmod("temp_script.py", 0o755)
+          
+          # Execute the script
+          result = subprocess.run(
+              ["python3", "temp_script.py"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              timeout=timeout
+          )
+          
+          # Clean up
+          try:
+              os.remove("temp_script.py")
+          except:
+              pass
+          
+          # Print diagnostic information from the script
+          print(result.stdout)
+          
+          # Return stderr and the return code from the target program
+          return result.stderr, result.returncode
+          
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred
+          stderr = e.stderr if e.stderr else ""
+          
+          # Clean up
+          try:
+              os.remove("temp_script.py")
+          except:
+              pass
+              
+          return stderr, -signal.SIGKILL
+          
+      except Exception as e:
+          # Clean up
+          try:
+              os.remove("temp_script.py")
+          except:
+              pass
+              
+          # Raise the error
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // pid_csv_klee.c (31 lines total)
+  #include <stdio.h>
+  #define _GNU_SOURCE
+  #include <stdio.h>
+  #include <stdlib.h>
+  #include <unistd.h>
+
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+     int symvar = s[0] - 48;
+     int pid = (int) getpid();
+
+     if(pid%78 == symvar){
+          // Unexecuted code (lines 15-16) removed. Its line cov: 0/2 (0%)
+     } else {
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 25-26) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [pid_csv_klee.c] enter main 1
+  [pid_csv_klee.c] enter main 3
+  [pid_csv_klee.c] enter logic_bomb 1
+  [pid_csv_klee.c] enter logic_bomb 3
+  Path without the bomb
+execution_summary: |2+
+
+  ```c
+  // pid_csv_klee.c (31 lines total)
+  #include <stdio.h>
+  #define _GNU_SOURCE
+  #include <stdio.h>
+  #include <stdlib.h>
+  #include <unistd.h>
+
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+     int symvar = s[0] - 48;
+     int pid = (int) getpid();
+
+     if(pid%78 == symvar){
+          // Unexecuted code (lines 15-16) removed. Its line cov: 0/2 (0%)
+     } else {
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 25-26) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [pid_csv_klee.c] enter main 1
+  [pid_csv_klee.c] enter main 3
+  [pid_csv_klee.c] enter logic_bomb 1
+  [pid_csv_klee.c] enter logic_bomb 3
+  Path without the bomb

@@ -1,0 +1,239 @@
+id: 1
+src_id: 0
+create_time: '2025-11-14 22:28:32.781'
+time_taken: 82
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: false
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: claude-3-7-sonnet-latest
+    cost: $0.54663000
+    call_cnt: 5
+    latency: 48.81s
+    input_tokens: 33214
+    output_tokens: 1614
+    cache_read_tokens: 33197
+    cache_write_tokens: 5302
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.54663000
+      call_cnt: 5
+      latency: 48.81s
+      input_tokens: 33214
+      output_tokens: 1614
+      cache_read_tokens: 33197
+      cache_write_tokens: 5302
+    INITIAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.08499000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: claude-3-7-sonnet-latest
+      cost: $0.08827500
+      call_cnt: 1
+      latency: 8.12s
+      input_tokens: 5666
+      output_tokens: 109
+      cache_read_tokens: 5663
+      cache_write_tokens: 1022
+    think:
+      model: claude-3-7-sonnet-latest
+      cost: $0.12618000
+      call_cnt: 1
+      latency: 15.21s
+      input_tokens: 5667
+      output_tokens: 549
+      cache_read_tokens: 5663
+      cache_write_tokens: 1648
+    batch_tool:
+      model: claude-3-7-sonnet-latest
+      cost: $0.10465500
+      call_cnt: 1
+      latency: 6.65s
+      input_tokens: 7314
+      output_tokens: 144
+      cache_read_tokens: 7311
+      cache_write_tokens: 564
+    select_target_branch:
+      model: claude-3-7-sonnet-latest
+      cost: $0.12939000
+      call_cnt: 1
+      latency: 9.21s
+      input_tokens: 6689
+      output_tokens: 374
+      cache_read_tokens: 6685
+      cache_write_tokens: 1411
+    generate_path_constraint:
+      model: claude-3-7-sonnet-latest
+      cost: $0.01314000
+      call_cnt: 1
+      latency: 9.61s
+      input_tokens: 7878
+      output_tokens: 438
+      cache_read_tokens: 7875
+      cache_write_tokens: 657
+target_branch: '`if (n != 5)` -> true in function `logic_bomb` in heap_bo_l1_klee.c'
+target_file_lines: heap_bo_l1_klee.c:17-18
+target_lines_content: |2-
+          free(p);
+          fprintf(stderr, "Logic bomb triggered\n");
+justification: |-
+  This branch has 0% historical coverage (line cov: 0/3) and represents the core logic bomb functionality that the program is designed to test. The branch is protected by a condition checking if the global variable `n` has been modified from its initial value of 5. 
+
+  The program appears to be testing a heap buffer overflow vulnerability, where the `strcpy(p, symvar)` operation could potentially overflow the 16-byte buffer allocated for `p`. If the input string is long enough, it might overwrite memory beyond the buffer, including the global variable `n`. This would trigger the logic bomb path, which prints "Logic bomb triggered" and returns a different exit code.
+
+  This branch is particularly valuable to explore because:
+  1. It has zero historical coverage (0%)
+  2. It represents the intended vulnerability test case of the program
+  3. Exploring it would reveal how the heap buffer overflow can be exploited to modify program behavior
+  4. It contains complex logic related to security vulnerability testing
+target_path_constraint: |-
+  To reach the target branch `if (n != 5)` -> true in function `logic_bomb`, we need to exploit a heap buffer overflow vulnerability to modify the global variable `n` from its initial value of 5 to any other value.
+
+  The constraints are:
+
+  1. Program must be executed with at least one command-line argument (to satisfy `argc >= 2` in main).
+
+  2. The input string (argv[1]) must be carefully crafted to:
+     a. Be long enough to overflow the 16-byte buffer allocated for pointer `p`
+     b. Contain specific byte values that will overwrite the global variable `n` in memory
+
+  3. Memory layout constraints:
+     a. The global variable `n` must be located in memory such that it can be overwritten by the buffer overflow
+     b. The overflow from buffer `p` must reach and modify the memory location of `n`
+
+  4. The overflow payload must:
+     a. Preserve the string structure (null-terminated) to avoid crashing before reaching the condition
+     b. Set the value at the memory location of `n` to any value other than 5
+
+  5. The heap allocation pattern must follow the expected sequence:
+     a. `p = malloc(16)` allocates first
+     b. `q = malloc(16)` allocates second
+     c. The overflow through `p` must be able to reach the global variable `n` despite the free(q) operation
+
+  The key constraint is crafting an input string of sufficient length (likely more than 16 bytes) with specific byte patterns that, when copied to the heap buffer `p`, will overflow and modify the value of the global variable `n` from 5 to any other value.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code:
+returncode:
+src_execution_summary: |2+
+
+  ```c
+  // heap_bo_l1_klee.c (35 lines total)
+  #include <stdio.h>
+  #include <string.h> 
+  #include "utils.h"
+  #include "a_tester.h"
+
+  int n = 5;
+
+  // {"symvar":{"length": 256}}
+  int logic_bomb(char* symvar) {
+      char *p, *q;
+      p = (char*)malloc(16);
+      q = (char*)malloc(16);
+      strcpy(p, symvar);
+      free(q);
+
+      if (n != 5){
+          // Unexecuted code (lines 17-19) removed. Its line cov: 0/3 (0%)
+      } else {
+          free(p);
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 29-30) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace:
+execution_summary:
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [heap_bo_l1_klee.c] enter main 1
+  [heap_bo_l1_klee.c] enter main 3
+  [heap_bo_l1_klee.c] enter logic_bomb 1
+  [heap_bo_l1_klee.c] enter logic_bomb 3
+  Path without the bomb
