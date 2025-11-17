@@ -1,0 +1,321 @@
+id: 1
+src_id: 0
+create_time: '2025-11-17 15:25:48.517'
+time_taken: 137
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: true
+is_hang: false
+usage: |
+  TOTAL:
+    model: deepseek-chat
+    cost: $0.03758753
+    call_cnt: 8
+    latency: 107.32s
+    input_tokens: 37107
+    output_tokens: 2735
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: deepseek-chat
+      cost: $0.01706303
+      call_cnt: 3
+      latency: 36.08s
+      input_tokens: 18049
+      output_tokens: 852
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: deepseek-chat
+      cost: $0.00470828
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: deepseek-chat
+      cost: $0.00584970
+      call_cnt: 1
+      latency: 15.10s
+      input_tokens: 5707
+      output_tokens: 336
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: deepseek-chat
+      cost: $0.00568395
+      call_cnt: 1
+      latency: 10.54s
+      input_tokens: 6052
+      output_tokens: 194
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: deepseek-chat
+      cost: $0.00082110
+      call_cnt: 1
+      latency: 10.43s
+      input_tokens: 6290
+      output_tokens: 322
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: deepseek-chat
+      cost: $0.02052450
+      call_cnt: 5
+      latency: 71.24s
+      input_tokens: 19058
+      output_tokens: 1883
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: deepseek-chat
+      cost: $0.00250553
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: deepseek-chat
+      cost: $0.01269203
+      call_cnt: 3
+      latency: 40.20s
+      input_tokens: 11115
+      output_tokens: 1037
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    solve_with_smt:
+      model: deepseek-chat
+      cost: $0.00426615
+      call_cnt: 1
+      latency: 14.74s
+      input_tokens: 3389
+      output_tokens: 430
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: deepseek-chat
+      cost: $0.00106080
+      call_cnt: 1
+      latency: 16.30s
+      input_tokens: 4554
+      output_tokens: 416
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if(buf < 0) -> true in stack_bo_l2_klee.c:logic_bomb
+target_file_lines: stack_bo_l2_klee.c:17-17
+target_lines_content: '        return trigger();'
+justification: This branch has 0% historical coverage and represents the core vulnerability
+  detection logic of the program. The condition `if(buf < 0)` appears to be checking
+  for buffer overflow by examining if the buffer address has been corrupted (which
+  would happen if a buffer overflow occurs and overwrites the stack frame). This is
+  the main security vulnerability this program is designed to detect.
+target_path_constraint: |-
+  To reach the target branch `if(buf < 0) -> true` in function `logic_bomb`:
+
+  1. Command-Line Argument: The program must be executed with exactly one command-line argument (the program name plus one argument). This means `argc == 2`.
+
+  2. Buffer Overflow Trigger: The command-line argument string must be long enough to overflow the 8-byte buffer `buf` in the `logic_bomb` function. Specifically, the string length must be greater than 8 bytes to cause a buffer overflow that corrupts the stack frame.
+
+  3. Stack Corruption Pattern: The buffer overflow must overwrite the stack in such a way that the address of `buf` (which is a local variable on the stack) appears to be negative when interpreted as a signed integer. This requires specific byte patterns in the overflow data that modify the memory location where `buf`'s address is stored or interpreted.
+
+  4. String Content: The command-line argument must be a valid null-terminated string that can be processed by `strcpy()` without causing early termination or errors.
+
+  Note: The condition `buf < 0` is checking if the buffer address has been corrupted by a buffer overflow. In normal execution, `buf` is a stack address that should be positive. A negative value indicates stack corruption, likely from a buffer overflow that overwrote the stack frame.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Create a string that will overflow the 8-byte buffer and potentially corrupt the stack
+      # We need at least 9 bytes to overflow the buffer
+      # To make buf appear negative, we need bytes with the high bit set in the overflow portion
+      # Using a pattern with bytes >= 128 (0x80) to potentially set the sign bit
+      overflow_string = "AAAAAAAA\x80"  # 8 'A's to fill buffer + 1 byte with high bit set
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable", overflow_string],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          stderr_text = e.stderr.decode('utf-8', errors='replace') if e.stderr else ""
+          return stderr_text, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: -6
+src_execution_summary: |2+
+
+  ```c
+  // stack_bo_l2_klee.c (32 lines total)
+  #include <stdio.h>
+  #include <string.h> 
+  #include "utils.h"
+  #include "a_tester.h"
+
+  int trigger(){
+      // Unexecuted code (lines 7-8) removed. Its line cov: 0/2 (0%)
+  }
+
+  // {"symvar":{"length": 128}}
+  int logic_bomb(char* symvar) {
+      char buf[8];
+      strcpy(buf, symvar);
+
+      if(buf < 0) {
+          // Unexecuted code (line 17) removed. Its line cov: 0/1 (0%)
+      }
+
+      fprintf(stderr, "Path without the bomb\n");
+      return 0;
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 26-27) removed. Its line cov: 0/2 (0%)
+      }
+
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info: |
+  Crash reason: Terminated by signal 6 (SIGABRT)
+  Stderr:
+  Path without the bomb
+  *** stack smashing detected ***: terminated
+execution_trace: |
+  [stack_bo_l2_klee.c] enter main 1
+  [stack_bo_l2_klee.c] enter main 3
+  [stack_bo_l2_klee.c] enter logic_bomb 1
+  [stack_bo_l2_klee.c] enter logic_bomb 3
+  Path without the bomb
+  *** stack smashing detected ***: terminated
+execution_summary: |2+
+
+  ```c
+  // stack_bo_l2_klee.c (32 lines total)
+  #include <stdio.h>
+  #include <string.h> 
+  #include "utils.h"
+  #include "a_tester.h"
+
+  int trigger(){
+      // Unexecuted code (lines 7-8) removed. Its line cov: 0/2 (0%)
+  }
+
+  // {"symvar":{"length": 128}}
+  int logic_bomb(char* symvar) {
+      char buf[8];
+      strcpy(buf, symvar);
+
+      if(buf < 0) {
+          // Unexecuted code (line 17) removed. Its line cov: 0/1 (0%)
+      }
+
+      fprintf(stderr, "Path without the bomb\n");
+      return 0;
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 26-27) removed. Its line cov: 0/2 (0%)
+      }
+
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [stack_bo_l2_klee.c] enter main 1
+  [stack_bo_l2_klee.c] enter main 3
+  [stack_bo_l2_klee.c] enter logic_bomb 1
+  [stack_bo_l2_klee.c] enter logic_bomb 3
+  Path without the bomb

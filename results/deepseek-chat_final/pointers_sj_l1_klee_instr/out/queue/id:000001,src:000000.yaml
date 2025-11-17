@@ -1,0 +1,328 @@
+id: 1
+src_id: 0
+create_time: '2025-11-14 17:32:34.527'
+time_taken: 107
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 2
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: deepseek-chat
+    cost: $0.03186217
+    call_cnt: 6
+    latency: 72.92s
+    input_tokens: 32235
+    output_tokens: 2066
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: deepseek-chat
+      cost: $0.02341432
+      call_cnt: 4
+      latency: 39.33s
+      input_tokens: 25253
+      output_tokens: 1012
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: deepseek-chat
+      cost: $0.00477510
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: deepseek-chat
+      cost: $0.00606503
+      call_cnt: 1
+      latency: 14.87s
+      input_tokens: 5788
+      output_tokens: 380
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: deepseek-chat
+      cost: $0.00559110
+      call_cnt: 1
+      latency: 4.91s
+      input_tokens: 6177
+      output_tokens: 78
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: deepseek-chat
+      cost: $0.00602430
+      call_cnt: 1
+      latency: 6.34s
+      input_tokens: 6536
+      output_tokens: 178
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: deepseek-chat
+      cost: $0.00095880
+      call_cnt: 1
+      latency: 13.20s
+      input_tokens: 6752
+      output_tokens: 376
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: deepseek-chat
+      cost: $0.00844785
+      call_cnt: 2
+      latency: 33.59s
+      input_tokens: 6982
+      output_tokens: 1054
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: deepseek-chat
+      cost: $0.00254678
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: deepseek-chat
+      cost: $0.00525083
+      call_cnt: 1
+      latency: 24.28s
+      input_tokens: 3087
+      output_tokens: 799
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: deepseek-chat
+      cost: $0.00065025
+      call_cnt: 1
+      latency: 9.31s
+      input_tokens: 3895
+      output_tokens: 255
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (ret == 5) -> true in function logic_bomb()
+target_file_lines: pointers_sj_l1_klee.c:22-23
+target_lines_content: |2-
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+justification: This branch has 0% historical coverage and represents the core logic
+  bomb functionality. When triggered, it would execute the 'Logic bomb triggered'
+  message and return 1, which is a significant program behavior change. The branch
+  is reachable through the current test harness by providing the right input string.
+  This is more valuable than the argc < 2 branch since the current harness always
+  provides one argument, making the argc branch less likely to be reachable without
+  modifying the harness.
+target_path_constraint: |-
+  To reach the target branch where ret == 5 in logic_bomb() function:
+
+  1. Command-Line Argument: The program must be executed with exactly one command-line argument (in addition to the program name). This ensures argc >= 2.
+
+  2. Input String Format: The first command-line argument must be a string with at least one character (length >= 1).
+
+  3. First Character Constraint: The first character of the input string (s[0]) must satisfy the mathematical condition: (s[0] - 48) % 7 == 5
+     - Where s[0] is the ASCII value of the first character
+     - 48 is the ASCII value of '0'
+     - This converts the character to its numeric equivalent (e.g., '0' -> 0, '1' -> 1, etc.)
+     - The modulo 7 operation must result in 5
+
+  4. Valid Character Range: The first character must be a digit or character that when converted to numeric value (by subtracting 48) results in a value that modulo 7 equals 5. Examples of valid characters include:
+     - '5' (53-48=5, 5%7=5)
+     - '\' (92-48=44, 44%7=2) - NOT valid
+     - 'F' (70-48=22, 22%7=1) - NOT valid
+
+  This constraint ensures that the function pointer array index (symvar%7) equals 5, which calls func5() that returns 5, triggering the logic bomb.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable", "5"],  # Changed from "AAAA" to "5" to satisfy the constraint
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 1
+src_execution_summary: |2+
+
+  ```c
+  // pointers_sj_l1_klee.c (36 lines total)
+  #include <stdio.h>
+  #include <stdio.h>
+  #include "utils.h"
+
+  #include "a_tester.h"
+
+  int func0(){return 0;}
+  int func1(){return 1;}
+  int func2(){return 2;}
+  int func3(){return 3;}
+  int func4(){return 4;}
+  int func5(){return 5;}
+  int func6(){return 6;}
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int (*f[7])() = {func0, func1, func2, func3, func4, func5, func6};
+      int symvar = s[0] - 48;
+      int ret = f[symvar%7](); 
+      printf ("ret = %d\n", ret);
+      if (ret == 5){
+          // Unexecuted code (lines 22-23) removed. Its line cov: 0/2 (0%)
+      }
+      fprintf(stderr, "Path without the bomb\n");
+      return 0;
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 31-32) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [pointers_sj_l1_klee.c] enter main 1
+  [pointers_sj_l1_klee.c] enter main 3
+  [pointers_sj_l1_klee.c] enter logic_bomb 1
+  [pointers_sj_l1_klee.c] enter logic_bomb 2
+  Logic bomb triggered
+execution_summary: |2+
+
+  ```c
+  // pointers_sj_l1_klee.c (36 lines total)
+  #include <stdio.h>
+  #include <stdio.h>
+  #include "utils.h"
+
+  #include "a_tester.h"
+
+  int func0(){return 0;}
+  int func1(){return 1;}
+  int func2(){return 2;}
+  int func3(){return 3;}
+  int func4(){return 4;}
+  int func5(){return 5;}
+  int func6(){return 6;}
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int (*f[7])() = {func0, func1, func2, func3, func4, func5, func6};
+      int symvar = s[0] - 48;
+      int ret = f[symvar%7](); 
+      printf ("ret = %d\n", ret);
+      if (ret == 5){
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+      }
+      // Unexecuted code (lines 25-26) removed. Its line cov: 2/2 (100%)
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 31-32) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [pointers_sj_l1_klee.c] enter main 1
+  [pointers_sj_l1_klee.c] enter main 3
+  [pointers_sj_l1_klee.c] enter logic_bomb 1
+  [pointers_sj_l1_klee.c] enter logic_bomb 3
+  Path without the bomb

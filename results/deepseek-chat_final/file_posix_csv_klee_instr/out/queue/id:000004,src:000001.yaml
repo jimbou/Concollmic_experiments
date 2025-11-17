@@ -1,0 +1,328 @@
+id: 4
+src_id: 1
+create_time: '2025-11-17 14:07:43.518'
+time_taken: 619
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: deepseek-chat
+    cost: $0.03681503
+    call_cnt: 7
+    latency: 68.65s
+    input_tokens: 38427
+    output_tokens: 2005
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: deepseek-chat
+      cost: $0.03006563
+      call_cnt: 5
+      latency: 46.39s
+      input_tokens: 32357
+      output_tokens: 1322
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: deepseek-chat
+      cost: $0.00464475
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: deepseek-chat
+      cost: $0.01257638
+      call_cnt: 2
+      latency: 23.76s
+      input_tokens: 12207
+      output_tokens: 738
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: deepseek-chat
+      cost: $0.00574733
+      call_cnt: 1
+      latency: 6.04s
+      input_tokens: 6021
+      output_tokens: 126
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: deepseek-chat
+      cost: $0.00645713
+      call_cnt: 1
+      latency: 9.11s
+      input_tokens: 6942
+      output_tokens: 207
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: deepseek-chat
+      cost: $0.00064005
+      call_cnt: 1
+      latency: 7.48s
+      input_tokens: 7187
+      output_tokens: 251
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: deepseek-chat
+      cost: $0.00674940
+      call_cnt: 2
+      latency: 22.26s
+      input_tokens: 6070
+      output_tokens: 683
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: deepseek-chat
+      cost: $0.00238507
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: deepseek-chat
+      cost: $0.00333413
+      call_cnt: 1
+      latency: 8.96s
+      input_tokens: 2891
+      output_tokens: 279
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: deepseek-chat
+      cost: $0.00103020
+      call_cnt: 1
+      latency: 13.30s
+      input_tokens: 3179
+      output_tokens: 404
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if(fd != -1) -> false in function logic_bomb()
+target_file_lines: file_posix_csv_klee.c:20-21
+target_lines_content: |2-
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+justification: While the else branch (lines 20-21) shows 100% coverage, this specific
+  condition represents the core logic of the program. The current execution took the
+  true path (file opened successfully), but exploring the false path could help verify
+  that the file opening failure scenario is properly handled. Although the coverage
+  shows 100%, this branch is fundamental to the program's behavior and ensuring both
+  paths work correctly is valuable for comprehensive testing.
+target_path_constraint: |-
+  To reach the target branch where `if(fd != -1)` evaluates to false in the `logic_bomb()` function:
+
+  1. **Command-Line Arguments**: The program must be executed with exactly one argument (in addition to the program name), making `argc == 2`. This ensures execution proceeds to the `logic_bomb()` function call.
+
+  2. **File Access Constraint**: The argument provided (argv[1]) must point to a file that cannot be opened for reading. The `open()` system call will return -1 when:
+     - The file does not exist at the specified path
+     - The file exists but the current process lacks read permissions
+     - The path points to a directory instead of a regular file
+     - The file is locked by another process
+     - The path contains invalid characters or exceeds system path length limits
+
+  3. **No Additional Constraints**: No other constraints are needed as the program logic is straightforward - if the file cannot be opened, the trigger remains 0 and the else branch will be executed.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+      import os
+      
+      # Use a non-existent file path to ensure open() returns -1
+      # This satisfies the constraint that the file cannot be opened for reading
+      non_existent_file = "NON_EXISTENT_FILE_12345"
+      
+      # Verify the file does not exist (clean up if it somehow exists)
+      try:
+          if os.path.exists(non_existent_file):
+              os.remove(non_existent_file)
+      except:
+          pass
+      
+      try:
+          # Execute the program with the non-existent file as argument
+          # This ensures argc == 2 and the file cannot be opened
+          result = subprocess.run(
+              ["./temp_executable", non_existent_file],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=False,
+              timeout=timeout,
+          )
+          
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+          
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, return stderr and signal code
+          return e.stderr if e.stderr else "", -signal.SIGKILL
+      except Exception as e:
+          # Re-raise the exception
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // file_posix_csv_klee.c (33 lines total)
+  #include <stdio.h>
+  #include <string.h> 
+  #include "utils.h"
+
+  #include "a_tester.h"
+
+  // {"s":{"length": 16}}
+  int logic_bomb(char* s) {
+      int trigger = 0;
+      int fd = open(s, O_RDONLY);
+      if(fd != -1) {
+          trigger = 1;
+          close(fd);
+      }
+
+      if(trigger) {
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+      } else {
+          // Unexecuted code (lines 20-21) removed. Its line cov: 2/2 (100%)
+      }
+  }
+
+  int main(int argc, char **argv) {
+      fprintf(stderr, "\n");
+      if (argc < 2) {
+          // Unexecuted code (lines 28-29) removed. Its line cov: 2/2 (100%)
+      }
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [file_posix_csv_klee.c] enter main 3
+  [file_posix_csv_klee.c] enter logic_bomb 1
+  [file_posix_csv_klee.c] enter logic_bomb 4
+  Path without the bomb
+execution_summary: |2+
+
+  ```c
+  // file_posix_csv_klee.c (33 lines total)
+  #include <stdio.h>
+  #include <string.h> 
+  #include "utils.h"
+
+  #include "a_tester.h"
+
+  // {"s":{"length": 16}}
+  int logic_bomb(char* s) {
+      int trigger = 0;
+      int fd = open(s, O_RDONLY);
+      if(fd != -1) {
+          // Unexecuted code (lines 12-13) removed. Its line cov: 2/2 (100%)
+      }
+
+      if(trigger) {
+          // Unexecuted code (lines 17-18) removed. Its line cov: 2/2 (100%)
+      } else {
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+  }
+
+  int main(int argc, char **argv) {
+      fprintf(stderr, "\n");
+      if (argc < 2) {
+          // Unexecuted code (lines 28-29) removed. Its line cov: 2/2 (100%)
+      }
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+      import os
+      
+      # Create the file "AAAA" in the current working directory
+      # This satisfies the constraint that argv[1] must point to an existing, readable file
+      with open("AAAA", "w") as f:
+          f.write("dummy content")  # Write some content to make the file valid
+      
+      # Ensure the file has read permissions
+      os.chmod("AAAA", 0o644)
+      
+      try:
+          # Execute the program with the argument "AAAA"
+          # Note: The original harness uses shell=True and passes the entire command as one string
+          # This format ensures argc == 2 (program name + "AAAA" argument)
+          result = subprocess.run(
+              ["./temp_executable", "AAAA"],  # Separate arguments for proper argc == 2
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=False,  # Use shell=False to properly separate arguments
+              timeout=timeout,
+          )
+          
+          # Clean up the created file
+          try:
+              os.remove("AAAA")
+          except:
+              pass
+              
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+          
+      except subprocess.TimeoutExpired as e:
+          # Clean up the created file
+          try:
+              os.remove("AAAA")
+          except:
+              pass
+          
+          # Timeout occurred, return stderr and signal code
+          return e.stderr if e.stderr else "", -signal.SIGKILL
+      except Exception as e:
+          # Clean up the created file
+          try:
+              os.remove("AAAA")
+          except:
+              pass
+          
+          # Re-raise the exception
+          raise e
+src_execution_trace: |2
+
+  [file_posix_csv_klee.c] enter main 3
+  [file_posix_csv_klee.c] enter logic_bomb 1
+  [file_posix_csv_klee.c] enter logic_bomb 2
+  [file_posix_csv_klee.c] enter logic_bomb 3
+  Logic bomb triggered

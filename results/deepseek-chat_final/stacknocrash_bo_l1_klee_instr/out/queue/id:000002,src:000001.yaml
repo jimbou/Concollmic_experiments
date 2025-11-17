@@ -1,0 +1,309 @@
+id: 2
+src_id: 1
+create_time: '2025-11-17 15:29:41.360'
+time_taken: 210
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: true
+is_hang: false
+usage: |
+  TOTAL:
+    model: deepseek-chat
+    cost: $0.03137678
+    call_cnt: 7
+    latency: 93.89s
+    input_tokens: 30843
+    output_tokens: 2326
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: deepseek-chat
+      cost: $0.01699980
+      call_cnt: 3
+      latency: 38.30s
+      input_tokens: 17756
+      output_tokens: 922
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: deepseek-chat
+      cost: $0.00455152
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: deepseek-chat
+      cost: $0.00618570
+      call_cnt: 1
+      latency: 18.56s
+      input_tokens: 5517
+      output_tokens: 482
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: deepseek-chat
+      cost: $0.00558683
+      call_cnt: 1
+      latency: 8.91s
+      input_tokens: 6008
+      output_tokens: 175
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: deepseek-chat
+      cost: $0.00067575
+      call_cnt: 1
+      latency: 10.84s
+      input_tokens: 6231
+      output_tokens: 265
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: deepseek-chat
+      cost: $0.01437698
+      call_cnt: 4
+      latency: 55.59s
+      input_tokens: 13087
+      output_tokens: 1404
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: deepseek-chat
+      cost: $0.00225968
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: deepseek-chat
+      cost: $0.00341798
+      call_cnt: 1
+      latency: 13.79s
+      input_tokens: 2739
+      output_tokens: 341
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    execute_python:
+      model: deepseek-chat
+      cost: $0.00342983
+      call_cnt: 1
+      latency: 10.64s
+      input_tokens: 3089
+      output_tokens: 246
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    solve_with_smt:
+      model: deepseek-chat
+      cost: $0.00419085
+      call_cnt: 1
+      latency: 14.30s
+      input_tokens: 3397
+      output_tokens: 394
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: deepseek-chat
+      cost: $0.00107865
+      call_cnt: 1
+      latency: 16.86s
+      input_tokens: 3862
+      output_tokens: 423
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if(flag == 1) -> true in stacknocrash_bo_l1_klee.c:logic_bomb
+target_file_lines: stacknocrash_bo_l1_klee.c:20-21
+target_lines_content: |2-
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+justification: This branch has 0% historical coverage and represents the core logic
+  bomb functionality that wasn't triggered in the current execution. The current execution
+  took the path where strlen(symvar) > 9, but this branch represents the alternative
+  path where the bomb logic would be activated. Exploring this branch would significantly
+  improve code coverage and test the program's intended behavior.
+target_path_constraint: |-
+  1. Command-Line Arguments: The program must be executed with exactly one argument (the executable name plus one additional argument): `argc == 2`
+
+  2. Argument Length Constraint: The command-line argument (argv[1]) must have a length of 9 characters or less: `strlen(argv[1]) <= 9`
+
+  3. Buffer Overflow Trigger: The argument must cause a buffer overflow that modifies the `flag` variable. Since there's a `buf[8]` array and the condition checks `flag == 1`, the input must:
+     - Be longer than what the buffer can hold (more than 8 characters) to cause overflow
+     - But still satisfy the length constraint of <= 9 characters
+     - Overwrite the `flag` variable with the value 1
+
+  4. Memory Layout Constraint: The input string must be crafted such that when copied (likely via strcpy or similar function, though not shown in the trace), it overwrites the memory location of `flag` with the byte value 0x01 (ASCII '1' or appropriate byte pattern).
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          # Create a 9-character string where the 9th character is ASCII 1
+          # First 8 characters: 'A' (any printable character works)
+          # 9th character: ASCII 1 (SOH) to set flag=1 via buffer overflow
+          overflow_string = "AAAAAAAA" + chr(1)
+          
+          # Verify the string length is exactly 9
+          assert len(overflow_string) == 9, f"String length must be 9, got {len(overflow_string)}"
+          
+          # Execute with the crafted argument
+          result = subprocess.run(
+              ["./temp_executable", overflow_string],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=False,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: -6
+src_execution_summary: |2+
+
+  ```c
+  // stacknocrash_bo_l1_klee.c (37 lines total)
+  #include <stdio.h>
+  #include <string.h> 
+  #include "utils.h"
+  #include "a_tester.h"
+
+
+  // {"symvar":{"length": 64}}
+  int logic_bomb(char* symvar) {
+      int flag = 0;
+      char buf[8];
+
+      if(strlen(symvar) > 9) {
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+
+      // Unexecuted code (line 17) removed. Its line cov: 1/1 (100%)
+
+      if(flag == 1) {
+          // Unexecuted code (lines 20-21) removed. Its line cov: 0/2 (0%)
+      }
+
+      // Unexecuted code (lines 24-25) removed. Its line cov: 2/2 (100%)
+  }
+
+  int main(int argc, char **argv) {
+      fprintf(stderr, "\n");
+      if (argc < 2) {
+          // Unexecuted code (lines 31-32) removed. Its line cov: 0/2 (0%)
+      }
+
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info: |
+  Crash reason: Terminated by signal 6 (SIGABRT)
+  Stderr:
+  Path without the bomb
+  *** stack smashing detected ***: terminated
+execution_trace: |2
+
+  [stacknocrash_bo_l1_klee.c] enter main 3
+  [stacknocrash_bo_l1_klee.c] enter logic_bomb 1
+  [stacknocrash_bo_l1_klee.c] enter logic_bomb 3
+  [stacknocrash_bo_l1_klee.c] enter logic_bomb 5
+  Path without the bomb
+  *** stack smashing detected ***: terminated
+execution_summary: |2+
+
+  ```c
+  // stacknocrash_bo_l1_klee.c (37 lines total)
+  #include <stdio.h>
+  #include <string.h> 
+  #include "utils.h"
+  #include "a_tester.h"
+
+
+  // {"symvar":{"length": 64}}
+  int logic_bomb(char* symvar) {
+      int flag = 0;
+      char buf[8];
+
+      if(strlen(symvar) > 9) {
+          // Unexecuted code (lines 13-14) removed. Its line cov: 2/2 (100%)
+      }
+
+      strcpy(buf, symvar);
+
+      if(flag == 1) {
+          // Unexecuted code (lines 20-21) removed. Its line cov: 0/2 (0%)
+      }
+
+      fprintf(stderr, "Path without the bomb\n");
+      return 0;
+  }
+
+  int main(int argc, char **argv) {
+      fprintf(stderr, "\n");
+      if (argc < 2) {
+          // Unexecuted code (lines 31-32) removed. Its line cov: 0/2 (0%)
+      }
+
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          # Fix the subprocess call to properly separate executable and argument
+          # Provide an argument with length > 9 characters (e.g., 10 'A's)
+          result = subprocess.run(
+              ["./temp_executable", "AAAAAAAAAA"],  # 10 characters > 9
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=False,  # Use shell=False for proper argument separation
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [stacknocrash_bo_l1_klee.c] enter main 3
+  [stacknocrash_bo_l1_klee.c] enter logic_bomb 1
+  [stacknocrash_bo_l1_klee.c] enter logic_bomb 2
+  Path without the bomb

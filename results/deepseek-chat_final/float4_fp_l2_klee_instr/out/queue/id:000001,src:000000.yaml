@@ -1,0 +1,301 @@
+id: 1
+src_id: 0
+create_time: '2025-11-17 14:15:19.084'
+time_taken: 126
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 2
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: deepseek-chat
+    cost: $0.03292883
+    call_cnt: 6
+    latency: 105.47s
+    input_tokens: 30947
+    output_tokens: 2901
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: deepseek-chat
+      cost: $0.01676633
+      call_cnt: 3
+      latency: 34.67s
+      input_tokens: 17949
+      output_tokens: 768
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: deepseek-chat
+      cost: $0.00469838
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: deepseek-chat
+      cost: $0.00581955
+      call_cnt: 1
+      latency: 15.90s
+      input_tokens: 5695
+      output_tokens: 330
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: deepseek-chat
+      cost: $0.00549105
+      call_cnt: 1
+      latency: 6.29s
+      input_tokens: 6034
+      output_tokens: 141
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: deepseek-chat
+      cost: $0.00075735
+      call_cnt: 1
+      latency: 12.48s
+      input_tokens: 6220
+      output_tokens: 297
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: deepseek-chat
+      cost: $0.01616250
+      call_cnt: 3
+      latency: 70.80s
+      input_tokens: 12998
+      output_tokens: 2133
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: deepseek-chat
+      cost: $0.00249398
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    execute_python:
+      model: deepseek-chat
+      cost: $0.01244962
+      call_cnt: 2
+      latency: 55.27s
+      input_tokens: 7303
+      output_tokens: 1655
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: deepseek-chat
+      cost: $0.00121890
+      call_cnt: 1
+      latency: 15.54s
+      input_tokens: 5695
+      output_tokens: 478
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if(1024+x == 1024 && x>0) -> true in function logic_bomb()
+target_file_lines: float4_fp_l2_klee.c:12-13
+target_lines_content: |2-
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+justification: This branch has 0% historical coverage and contains the core logic
+  bomb functionality. It represents the main program behavior that wasn't triggered
+  in the current execution. The branch condition involves floating-point precision
+  and requires specific input values to reach, making it an interesting target for
+  exploration.
+target_path_constraint: |-
+  1. Command-Line Argument Format: The program must be executed with exactly one command-line argument that is a valid string representation of a floating-point number.
+
+  2. Argument Value Constraint: The string argument must represent a floating-point number that, when converted to float and divided by -10000.0, satisfies:
+     - The result (x) must be greater than 0: x > 0
+     - The result must be so small that when added to 1024, it equals 1024: 1024 + x == 1024
+     
+     This requires the input value to be a very small negative number. Specifically, if we let the input be v, then:
+     - x = v / (-10000.0) > 0 ⇒ v < 0 (since dividing by negative makes positive)
+     - 1024 + v/(-10000.0) == 1024 ⇒ v/(-10000.0) == 0 ⇒ v must be a very small negative number close to zero
+     
+     In floating-point arithmetic, this means v must be negative but have a magnitude small enough that v/(-10000.0) is within the floating-point precision limit where adding it to 1024 doesn't change the result.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # The target value that satisfies all constraints
+      # v must be negative and small enough that v/(-10000.0) is positive 
+      # but so small that 1024 + v/(-10000.0) == 1024
+      # Using v = -1e-11 which gives x = 1e-15, well below the threshold of ~1.14e-13
+      target_value = "-1e-11"
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable", target_value],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+          return stderr_text, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 1
+src_execution_summary: |2+
+
+  ```c
+  // float4_fp_l2_klee.c (28 lines total)
+  #include <stdio.h>
+  #include<stdio.h>
+  #include <stdlib.h>
+  #include "a_tester.h"
+
+  // {"s":{"length": 8}}
+  int logic_bomb(char* symvar) {
+      float x = atof(symvar);
+      x = x/-10000.0;
+
+      if(1024+x == 1024 && x>0){
+          // Unexecuted code (lines 12-13) removed. Its line cov: 0/2 (0%)
+      } else {
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 22-23) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [float4_fp_l2_klee.c] enter main 1
+  [float4_fp_l2_klee.c] enter main 3
+  [float4_fp_l2_klee.c] enter logic_bomb 1
+  [float4_fp_l2_klee.c] enter logic_bomb 2
+  Logic bomb triggered
+execution_summary: |2+
+
+  ```c
+  // float4_fp_l2_klee.c (28 lines total)
+  #include <stdio.h>
+  #include<stdio.h>
+  #include <stdlib.h>
+  #include "a_tester.h"
+
+  // {"s":{"length": 8}}
+  int logic_bomb(char* symvar) {
+      float x = atof(symvar);
+      x = x/-10000.0;
+
+      if(1024+x == 1024 && x>0){
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+      } else {
+          // Unexecuted code (lines 15-16) removed. Its line cov: 2/2 (100%)
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 22-23) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [float4_fp_l2_klee.c] enter main 1
+  [float4_fp_l2_klee.c] enter main 3
+  [float4_fp_l2_klee.c] enter logic_bomb 1
+  [float4_fp_l2_klee.c] enter logic_bomb 3
+  Path without the bomb

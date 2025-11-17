@@ -1,0 +1,331 @@
+id: 3
+src_id: 0
+create_time: '2025-11-17 14:05:56.607'
+time_taken: 510
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: deepseek-chat
+    cost: $0.03700560
+    call_cnt: 7
+    latency: 68.66s
+    input_tokens: 38692
+    output_tokens: 1994
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: deepseek-chat
+      cost: $0.03007208
+      call_cnt: 5
+      latency: 48.13s
+      input_tokens: 32609
+      output_tokens: 1243
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: deepseek-chat
+      cost: $0.00472478
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: deepseek-chat
+      cost: $0.01281923
+      call_cnt: 2
+      latency: 27.15s
+      input_tokens: 12305
+      output_tokens: 786
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: deepseek-chat
+      cost: $0.00566145
+      call_cnt: 1
+      latency: 5.12s
+      input_tokens: 6136
+      output_tokens: 92
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: deepseek-chat
+      cost: $0.00641273
+      call_cnt: 1
+      latency: 7.99s
+      input_tokens: 6973
+      output_tokens: 187
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: deepseek-chat
+      cost: $0.00045390
+      call_cnt: 1
+      latency: 7.88s
+      input_tokens: 7195
+      output_tokens: 178
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: deepseek-chat
+      cost: $0.00693353
+      call_cnt: 2
+      latency: 20.53s
+      input_tokens: 6083
+      output_tokens: 751
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: deepseek-chat
+      cost: $0.00238755
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: deepseek-chat
+      cost: $0.00336023
+      call_cnt: 1
+      latency: 8.97s
+      input_tokens: 2894
+      output_tokens: 286
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: deepseek-chat
+      cost: $0.00118575
+      call_cnt: 1
+      latency: 11.56s
+      input_tokens: 3189
+      output_tokens: 465
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if(trigger) -> true in function logic_bomb()
+target_file_lines: file_posix_csv_klee.c:17-18
+target_lines_content: |2-
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+justification: "This branch was not taken in the current execution with argument 'AAAA'.
+  While all branches have 100% historical coverage, selecting this branch would lead
+  to different program behavior: it would trigger the logic bomb, return exit code
+  1 instead of 0, and print 'Logic bomb triggered' instead of 'Path without the bomb'.
+  This represents an alternative execution path that wasn't explored in this specific
+  run."
+target_path_constraint: |-
+  1. Command-Line Arguments: The program must be executed with exactly one command-line argument (the filename).
+
+  2. File Existence: The file specified by the command-line argument must exist and be accessible for reading. The `open()` system call with O_RDONLY flag must succeed (return a non-negative file descriptor).
+
+  3. File Permissions: The file must have read permissions for the current user process.
+
+  4. File Accessibility: The file path must be valid and the file must not be locked or otherwise inaccessible.
+
+  In summary: The input string (command-line argument) must be a valid path to an existing, readable file that can be successfully opened by the program.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+      import tempfile
+      import os
+
+      # Create a temporary file that exists and is readable
+      with tempfile.NamedTemporaryFile(mode='w', delete=False) as temp_file:
+          temp_file.write("test content")  # Write some content to make it a valid file
+          temp_file_path = temp_file.name
+      
+      # Ensure the file has read permissions
+      os.chmod(temp_file_path, 0o644)
+
+      try:
+          # Execute the program with the valid file path as argument
+          result = subprocess.run(
+              ["./temp_executable", temp_file_path],  # Pass the file path as argument
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=False,  # Use shell=False for security with file paths
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, return stderr and signal code
+          stderr = e.stderr.decode('utf-8', errors='replace') if e.stderr and isinstance(e.stderr, bytes) else ""
+          return stderr, -signal.SIGKILL
+      except Exception as e:
+          # Re-raise the error if run failed
+          raise e
+      finally:
+          # Clean up the temporary file
+          try:
+              os.unlink(temp_file_path)
+          except:
+              pass  # Ignore cleanup errors
+returncode: 1
+src_execution_summary: |2+
+
+  ```c
+  // file_posix_csv_klee.c (33 lines total)
+  #include <stdio.h>
+  #include <string.h> 
+  #include "utils.h"
+
+  #include "a_tester.h"
+
+  // {"s":{"length": 16}}
+  int logic_bomb(char* s) {
+      int trigger = 0;
+      int fd = open(s, O_RDONLY);
+      if(fd != -1) {
+          // Unexecuted code (lines 12-13) removed. Its line cov: 2/2 (100%)
+      }
+
+      if(trigger) {
+          // Unexecuted code (lines 17-18) removed. Its line cov: 2/2 (100%)
+      } else {
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+  }
+
+  int main(int argc, char **argv) {
+      fprintf(stderr, "\n");
+      if (argc < 2) {
+          // Unexecuted code (lines 28-29) removed. Its line cov: 2/2 (100%)
+      }
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [file_posix_csv_klee.c] enter main 3
+  [file_posix_csv_klee.c] enter logic_bomb 1
+  [file_posix_csv_klee.c] enter logic_bomb 2
+  [file_posix_csv_klee.c] enter logic_bomb 3
+  Logic bomb triggered
+execution_summary: |2+
+
+  ```c
+  // file_posix_csv_klee.c (33 lines total)
+  #include <stdio.h>
+  #include <string.h> 
+  #include "utils.h"
+
+  #include "a_tester.h"
+
+  // {"s":{"length": 16}}
+  int logic_bomb(char* s) {
+      int trigger = 0;
+      int fd = open(s, O_RDONLY);
+      if(fd != -1) {
+          trigger = 1;
+          close(fd);
+      }
+
+      if(trigger) {
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+      } else {
+          // Unexecuted code (lines 20-21) removed. Its line cov: 2/2 (100%)
+      }
+  }
+
+  int main(int argc, char **argv) {
+      fprintf(stderr, "\n");
+      if (argc < 2) {
+          // Unexecuted code (lines 28-29) removed. Its line cov: 2/2 (100%)
+      }
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [file_posix_csv_klee.c] enter main 3
+  [file_posix_csv_klee.c] enter logic_bomb 1
+  [file_posix_csv_klee.c] enter logic_bomb 4
+  Path without the bomb
