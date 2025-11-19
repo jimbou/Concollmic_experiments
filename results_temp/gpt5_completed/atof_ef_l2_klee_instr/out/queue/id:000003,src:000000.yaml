@@ -1,0 +1,294 @@
+id: 3
+src_id: 0
+create_time: '2025-11-18 20:56:30.365'
+time_taken: 353
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.60338000
+    call_cnt: 3
+    latency: 65.78s
+    input_tokens: 13771
+    output_tokens: 5466
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.45758000
+      call_cnt: 2
+      latency: 51.39s
+      input_tokens: 10819
+      output_tokens: 4020
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10578000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.32558000
+      call_cnt: 1
+      latency: 45.67s
+      input_tokens: 5289
+      output_tokens: 3583
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.02622000
+      call_cnt: 1
+      latency: 5.72s
+      input_tokens: 5530
+      output_tokens: 437
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.14580000
+      call_cnt: 1
+      latency: 14.39s
+      input_tokens: 2952
+      output_tokens: 1446
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05904000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.08676000
+      call_cnt: 1
+      latency: 14.39s
+      input_tokens: 2952
+      output_tokens: 1446
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (i - 7 == 0) -> true in atof_ef_l2_klee.c:logic_bomb
+target_file_lines: atof_ef_l2_klee.c:14-15
+target_lines_content: |2-
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+justification: This is the only branch controllable via external input (the program’s
+  first command-line argument). While the branch body shows 100% historical coverage
+  (lines 14-15), it was not taken in the current run, and the only other unexecuted
+  branch (argc < 2 in main) has 0% historical coverage but is unreachable with the
+  fixed harness that always supplies one argument. Exercising this branch will drive
+  execution down the alternative path of the core check in logic_bomb and is the most
+  feasible coverage-improving action under the current harness constraints.
+target_path_constraint: |-
+  Constraints to reach the target branch (i - 7 == 0) -> true in logic_bomb:
+
+  1. Command invocation and argument count:
+     - The program must be executed with at least one command-line argument. The harness already invokes the binary with exactly one argument string; no change is required to the number of arguments.
+
+  2. Argument content and parseability as a floating-point number:
+     - The first command-line argument (argv[1]) must be a string that standard C atof recognizes as a valid floating-point number in decimal notation.
+     - Acceptable formats include optional leading/trailing whitespace, an optional sign (+ or -), digits with an optional decimal point, and optional exponent part (e.g., "7", "7.0", "+7", "7e0", "  7  ").
+     - The string must not be empty and should not contain leading non-numeric characters that would cause atof to return 0.0.
+
+  3. Numerical equality constraint after parsing:
+     - Let i be the double-precision value produced by atof on the argument string.
+     - The value must satisfy i == 7.0 exactly (as a double), ensuring that the expression (i - 7) evaluates to 0.
+     - To avoid floating-point representation issues, the textual representation should correspond to an exact IEEE-754 double for 7.0 (which common decimal forms like "7", "7.0", or "7e0" do).
+
+  4. Environment and encoding:
+     - The argument string must be encoded in UTF-8 (the harness uses text mode with UTF-8 encoding and errors="replace").
+     - No environment restrictions beyond standard execution; the process must be allowed to execute normally without signals or timeouts.
+
+  These constraints ensure that logic_bomb computes i = atof(argv[1]) as 7.0 and thus takes the true branch (i - 7 == 0).
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Provide an argument that atof parses exactly to 7.0
+      cmd = "./temp_executable 7"
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr or "", result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, return any captured stderr and -SIGKILL
+          stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+          return stderr_text, -signal.SIGKILL
+      except Exception as e:
+          # Propagate unexpected execution errors
+          raise e
+returncode: 1
+src_execution_summary: |2+
+
+  ```c
+  // atof_ef_l2_klee.c (29 lines total)
+  #include <stdio.h>
+  /*
+  TOY:
+  */
+  #include <string.h> 
+  #include <math.h>
+  #include "utils.h"
+  #include "a_tester.h"
+
+  // {"s":{"length": 3}}
+  int logic_bomb(char* symvar) {
+      float i = atof(symvar);
+      if(i - 7 == 0){
+          // Unexecuted code (lines 14-15) removed. Its line cov: 2/2 (100%)
+      }else{
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 24-25) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [atof_ef_l2_klee.c] enter main 1
+  [atof_ef_l2_klee.c] enter main 3
+  [atof_ef_l2_klee.c] enter logic_bomb 1
+  [atof_ef_l2_klee.c] enter logic_bomb 2
+  Logic bomb triggered
+execution_summary: |2+
+
+  ```c
+  // atof_ef_l2_klee.c (29 lines total)
+  #include <stdio.h>
+  /*
+  TOY:
+  */
+  #include <string.h> 
+  #include <math.h>
+  #include "utils.h"
+  #include "a_tester.h"
+
+  // {"s":{"length": 3}}
+  int logic_bomb(char* symvar) {
+      float i = atof(symvar);
+      if(i - 7 == 0){
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+      }else{
+          // Unexecuted code (lines 17-18) removed. Its line cov: 2/2 (100%)
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 24-25) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [atof_ef_l2_klee.c] enter main 1
+  [atof_ef_l2_klee.c] enter main 3
+  [atof_ef_l2_klee.c] enter logic_bomb 1
+  [atof_ef_l2_klee.c] enter logic_bomb 3
+  Path without the bomb

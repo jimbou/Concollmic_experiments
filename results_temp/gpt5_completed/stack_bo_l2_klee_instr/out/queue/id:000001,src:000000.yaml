@@ -1,0 +1,209 @@
+id: 1
+src_id: 0
+create_time: '2025-11-17 21:51:34.348'
+time_taken: 165
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: false
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.77414000
+    call_cnt: 3
+    latency: 82.94s
+    input_tokens: 17059
+    output_tokens: 7216
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.77414000
+      call_cnt: 3
+      latency: 82.94s
+      input_tokens: 17059
+      output_tokens: 7216
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10602000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.20254000
+      call_cnt: 1
+      latency: 19.76s
+      input_tokens: 5301
+      output_tokens: 1449
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.42436000
+      call_cnt: 1
+      latency: 51.71s
+      input_tokens: 5780
+      output_tokens: 5080
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.04122000
+      call_cnt: 1
+      latency: 11.46s
+      input_tokens: 5978
+      output_tokens: 687
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+target_branch: if (buf < 0) -> true in stack_bo_l2_klee.c:logic_bomb
+target_file_lines: stack_bo_l2_klee.c:17-17
+target_lines_content: '        return trigger();'
+justification: This branch has 0% historical coverage and guards the call to trigger(),
+  which prints "Logic bomb triggered" and returns a distinct code path. Exercising
+  it would cover the core "logic bomb" behavior. Although the condition itself is
+  odd, the guarded path is the intended alternate behavior and is currently untested.
+  Reaching it will expand coverage beyond the default path that prints "Path without
+  the bomb".
+target_path_constraint: |-
+  Inputs and environment constraints to reach the branch `if (buf < 0)` -> true in logic_bomb:
+
+  1) Program invocation (command-line):
+  - The program must be executed with exactly one non-empty string argument (in addition to argv[0]), so that argc >= 2 holds and main forwards argv[1] to logic_bomb. The harness already supplies a single argument string; do not alter the number of arguments.
+
+  2) Argument length and content to cause unsafe copy and memory corruption:
+  - The function logic_bomb copies the entire argument string (including the trailing NUL terminator) into a fixed-size stack buffer of 8 bytes via an unbounded string copy. Therefore, to alter stack data such that the subsequent comparison `if (buf < 0)` evaluates to true, the provided argument must:
+    a. Be an ASCII/bytes string with length strictly greater than 8 bytes (so that `strcpy` writes past the 8-byte buffer), causing a stack overflow that overwrites adjacent stack memory including saved frame data and/or local variable slots involved in evaluating `buf < 0`.
+    b. Not contain NUL bytes prior to the intended overflow region, because `strcpy` stops at the first NUL byte. In other words, the string must be composed solely of non-NUL bytes up to and beyond the 8th byte to ensure overflow occurs.
+
+  3) Architectural/ABI assumptions and objective of corruption:
+  - On typical C ABIs, the local array `char buf[8]` resides on the stack; overflowing it can corrupt nearby stack-resident data used when evaluating the expression `if (buf < 0)`. The goal is to corrupt the value read in that comparison so that the condition becomes true. Therefore the overflow must place bytes such that, when the compiler interprets `buf` (decayed to a pointer) in the comparison, a sign or value is read as negative. Concretely:
+    - Ensure the overflow writes at least one additional byte beyond the 8-byte buffer so that the left-hand operand used in the comparison acquires a most-significant bit set (>= 0x80 in the relevant signed interpretation), causing the comparison to evaluate as true.
+
+  4) Encoding and constraints for portability of the overflow payload:
+  - Use only standard printable non-NUL bytes (e.g., 0x01–0xFF excluding 0x00) to prevent early termination of `strcpy`.
+  - Ensure total argument length is sufficient to overwrite at least one pointer-sized or integer-sized slot beyond the buffer (commonly 8–16 bytes of payload on 64-bit, potentially more on 32-bit), continuing until a NUL terminator ends the string.
+
+  5) Environment conditions:
+  - No special environment variables, files, or permissions are required. The program must be allowed to execute normally with default stack protections. Note: If stack protections such as stack canaries, NX, or FORTIFY are enabled, the process may abort before reaching the comparison. For this path, assume the build lacks terminating protections or that the overflow does not trip them (e.g., no canary or it remains consistent).
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code:
+returncode:
+src_execution_summary: |2+
+
+  ```c
+  // stack_bo_l2_klee.c (32 lines total)
+  #include <stdio.h>
+  #include <string.h> 
+  #include "utils.h"
+  #include "a_tester.h"
+
+  int trigger(){
+      // Unexecuted code (lines 7-8) removed. Its line cov: 0/2 (0%)
+  }
+
+  // {"symvar":{"length": 128}}
+  int logic_bomb(char* symvar) {
+      char buf[8];
+      strcpy(buf, symvar);
+
+      if(buf < 0) {
+          // Unexecuted code (line 17) removed. Its line cov: 0/1 (0%)
+      }
+
+      fprintf(stderr, "Path without the bomb\n");
+      return 0;
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 26-27) removed. Its line cov: 0/2 (0%)
+      }
+
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace:
+execution_summary:
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [stack_bo_l2_klee.c] enter main 1
+  [stack_bo_l2_klee.c] enter main 3
+  [stack_bo_l2_klee.c] enter logic_bomb 1
+  [stack_bo_l2_klee.c] enter logic_bomb 3
+  Path without the bomb

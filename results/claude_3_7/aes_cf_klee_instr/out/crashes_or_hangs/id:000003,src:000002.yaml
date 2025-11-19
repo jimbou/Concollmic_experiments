@@ -1,0 +1,320 @@
+id: 3
+src_id: 2
+create_time: '2025-11-17 19:05:25.396'
+time_taken: 696
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 2
+is_satisfiable: true
+is_crash: true
+is_hang: false
+usage: |
+  TOTAL:
+    model: claude-3-7-sonnet-latest
+    cost: $0.68245500
+    call_cnt: 7
+    latency: 56.25s
+    input_tokens: 41363
+    output_tokens: 2067
+    cache_read_tokens: 41336
+    cache_write_tokens: 8540
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.57331500
+      call_cnt: 5
+      latency: 41.66s
+      input_tokens: 35457
+      output_tokens: 1382
+      cache_read_tokens: 35437
+      cache_write_tokens: 7562
+    INITIAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.08499000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: claude-3-7-sonnet-latest
+      cost: $0.19756500
+      call_cnt: 2
+      latency: 12.69s
+      input_tokens: 12679
+      output_tokens: 245
+      cache_read_tokens: 12672
+      cache_write_tokens: 2791
+    think:
+      model: claude-3-7-sonnet-latest
+      cost: $0.14596500
+      call_cnt: 1
+      latency: 14.13s
+      input_tokens: 5668
+      output_tokens: 637
+      cache_read_tokens: 5663
+      cache_write_tokens: 2985
+    select_target_branch:
+      model: claude-3-7-sonnet-latest
+      cost: $0.13711500
+      call_cnt: 1
+      latency: 7.16s
+      input_tokens: 8457
+      output_tokens: 244
+      cache_read_tokens: 8454
+      cache_write_tokens: 846
+    generate_path_constraint:
+      model: claude-3-7-sonnet-latest
+      cost: $0.00768000
+      call_cnt: 1
+      latency: 7.68s
+      input_tokens: 8653
+      output_tokens: 256
+      cache_read_tokens: 8648
+      cache_write_tokens: 940
+  SOLVE:
+    TOTAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.10914000
+      call_cnt: 2
+      latency: 14.60s
+      input_tokens: 5906
+      output_tokens: 685
+      cache_read_tokens: 5899
+      cache_write_tokens: 978
+    INITIAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.03963000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: claude-3-7-sonnet-latest
+      cost: $0.05931000
+      call_cnt: 1
+      latency: 7.43s
+      input_tokens: 2642
+      output_tokens: 345
+      cache_read_tokens: 2639
+      cache_write_tokens: 621
+    provide_solution:
+      model: claude-3-7-sonnet-latest
+      cost: $0.01020000
+      call_cnt: 1
+      latency: 7.16s
+      input_tokens: 3264
+      output_tokens: 340
+      cache_read_tokens: 3260
+      cache_write_tokens: 357
+  EXECUTE:
+    TOTAL: {}
+target_branch: '`if (argc < 2)` -> true in `main`'
+target_file_lines: aes_cf_klee.c:67-68
+target_lines_content: |2-
+          fprintf(stderr, "Usage: %s <input-string>\n", argv[0]);
+          return 2;
+justification: "This branch has 0% historical coverage (line cov: 0/2) and represents
+  an important error handling path in the program. It checks whether the program was
+  invoked with the required command-line argument. Exploring this branch would improve
+  the overall code coverage by exercising the error handling logic when insufficient
+  arguments are provided. This is a high-priority branch because it's directly related
+  to input validation, which is critical for security and robustness."
+target_path_constraint: |-
+  To reach the branch `if (argc < 2)` -> true in `main`, the program must be executed with fewer than 2 command-line arguments.
+
+  In the context of the execution environment:
+
+  1. The program must be invoked with no command-line arguments after the program name.
+     - This means `argc` must be 1, which represents just the program name itself with no additional arguments.
+
+  2. The subprocess.run call in the test harness must be modified to not pass any arguments after the program name.
+     - Currently, the harness executes: `./temp_executable {arg}` where arg is a 32-character hex string.
+     - To reach the target branch, it should execute just: `./temp_executable` with no arguments.
+
+  This constraint is simple but fundamental: the program must be executed without any command-line arguments to trigger the argument validation check in the main function.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          # Execute the program without any arguments to make argc == 1
+          # This will cause the condition (argc < 2) to evaluate to true
+          result = subprocess.run(
+              ["./temp_executable"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 2
+src_execution_summary: |2+
+
+  ```c
+  // aes_cf_klee.c (73 lines total)
+  #include <stdio.h>
+  /*
+  TOY:
+  * Solution: 2b7e151628aed2a6abf7158809cf4f3c
+  */
+  #include <inttypes.h>
+  #include "aes.h"
+  #include "utils.h"
+
+  void aes_print(uint8_t* str) {
+      // Unexecuted code (lines 11-14) removed. Its line cov: 0/4 (0%)
+  }
+
+  #include "a_tester.h"
+
+  // {"s":{"length": 32}}
+  int logic_bomb(char* s) {
+      if(strlen(s) != 32){
+          // Unexecuted code (lines 22-24) removed. Its line cov: 3/3 (100%)
+      }
+
+      uint8_t key[16];
+
+      sscanf(s,
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8,
+          &key[0],&key[1],
+          &key[2],&key[3],
+          &key[4],&key[5],
+          &key[6],&key[7],
+          &key[8],&key[9],
+          &key[10],&key[11],
+          &key[12],&key[13],
+          &key[14],&key[15]);
+
+      //aes_print(key);
+
+      uint8_t decodetext[16];
+      uint8_t ciphertext[] = {0x3a, 0xd7, 0x7b, 0xb4, 0x0d, 0x7a, 0x36, 0x60, 0xa8, 0x9e, 0xca, 0xf3, 0x24, 0x66, 0xef, 0x97};
+      uint8_t plaintext[] = {0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96, 0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a};
+
+      AES128_ECB_decrypt(ciphertext, key, decodetext);
+
+      //aes_print(decodetext);
+      if(0 == memcmp((char*) plaintext, (char*) decodetext, 16)){
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+      }else{
+          // Unexecuted code (lines 60-61) removed. Its line cov: 2/2 (100%)
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 67-68) removed. Its line cov: 0/2 (0%)
+      }
+
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info: |
+  Crash reason: Segmentation fault
+  Stderr:
+  Usage: ./temp_executable <input-string>
+execution_trace: |
+  [aes_cf_klee.c] enter main 1
+  [aes_cf_klee.c] enter main 2
+  Usage: ./temp_executable <input-string>
+execution_summary: |2+
+
+  ```c
+  // aes_cf_klee.c (73 lines total)
+  #include <stdio.h>
+  /*
+  TOY:
+  * Solution: 2b7e151628aed2a6abf7158809cf4f3c
+  */
+  #include <inttypes.h>
+  #include "aes.h"
+  #include "utils.h"
+
+  void aes_print(uint8_t* str) {
+      // Unexecuted code (lines 11-14) removed. Its line cov: 0/4 (0%)
+  }
+
+  #include "a_tester.h"
+
+  // {"s":{"length": 32}}
+  int logic_bomb(char* s) {
+      // Unexecuted code (lines 21-62) removed. Its line cov: 36/36 (100%)
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          fprintf(stderr, "Usage: %s <input-string>\n", argv[0]);
+          return 2;
+      }
+
+      // Unexecuted code (lines 71-72) removed. Its line cov: 2/2 (100%)
+  }
+  ```
+
+src_exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Use the AES-128 key that will decrypt the ciphertext to the expected plaintext
+      # This is the NIST SP 800-38A ECB-AES128 test vector key
+      arg = "2b7e151628aed2a6abf7158809cf4f3c"
+
+      try:
+          result = subprocess.run(
+              [f"./temp_executable {arg}"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [aes_cf_klee.c] enter main 1
+  [aes_cf_klee.c] enter main 3
+  [aes_cf_klee.c] enter logic_bomb 1
+  [aes_cf_klee.c] enter logic_bomb 3
+  [aes_cf_klee.c] enter logic_bomb 4
+  Logic bomb triggered

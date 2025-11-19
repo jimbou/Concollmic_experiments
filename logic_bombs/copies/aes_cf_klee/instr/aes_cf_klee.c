@@ -1,7 +1,6 @@
 #include <stdio.h>
 /*
 TOY:
-* Solution: 2b7e151628aed2a6abf7158809cf4f3c
 */
 #include <inttypes.h>
 #include "aes.h"

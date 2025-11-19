@@ -1,0 +1,327 @@
+id: 1
+src_id: 0
+create_time: '2025-11-17 21:15:13.783'
+time_taken: 138
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 2
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.74276000
+    call_cnt: 3
+    latency: 98.66s
+    input_tokens: 13864
+    output_tokens: 7758
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.54528000
+      call_cnt: 2
+      latency: 75.67s
+      input_tokens: 10920
+      output_tokens: 5448
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10648000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.41306000
+      call_cnt: 1
+      latency: 68.30s
+      input_tokens: 5324
+      output_tokens: 5019
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.02574000
+      call_cnt: 1
+      latency: 7.37s
+      input_tokens: 5596
+      output_tokens: 429
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.19748000
+      call_cnt: 1
+      latency: 22.99s
+      input_tokens: 2944
+      output_tokens: 2310
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05888000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.13860000
+      call_cnt: 1
+      latency: 22.99s
+      input_tokens: 2944
+      output_tokens: 2310
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (array[symvar % 10] == 7) -> false in malloc_sm_l1_klee.c:logic_bomb
+target_file_lines: malloc_sm_l1_klee.c:22-23
+target_lines_content: |2-
+      fprintf(stderr, "Path without the bomb\n");
+      return 0;
+justification: "This branch’s false path was not taken in the current execution: the
+  program received \"AAAA\", which makes s[0] = 'A' (65), symvar = 65 - 48 = 17, and
+  symvar % 10 = 7, so the true path executed and the function returned early. The
+  lines immediately after the if (reported as unexecuted lines 22-23 with 0/2 coverage)
+  were skipped. Exercising the false path will cover these lines and demonstrate the
+  program’s normal, non-bomb behavior, improving overall coverage for this file. Historical
+  coverage annotation shows 0% for lines 22-23, indicating this path has not been
+  covered."
+target_path_constraint: |-
+  Input and environment constraints to force the branch `if (array[symvar % 10] == 7)` to evaluate to FALSE in logic_bomb:
+
+  1) Command invocation format
+  - The harness will execute a single program "./temp_executable" with exactly one string argument. Do not alter the number of arguments.
+  - The program must receive one ASCII string argument s, with length at least 1 (the code only reads s[0]).
+
+  2) Encoding and character domain for s[0]
+  - s[0] is interpreted as an ASCII character whose decimal code is used to compute symvar = (ASCII_code(s[0]) - 48).
+  - Therefore, select s[0] so that (ASCII_code(s[0]) - 48) % 10 != 7.
+  - Equivalently: ASCII_code(s[0]) % 10 != 5.
+
+  3) No other environmental requirements
+  - Memory allocation of a fixed-size int array succeeds under normal environments; no special permissions or files are needed.
+
+  Rationale linking to program path:
+  - The array is initialized as array[k] = k for k in 0..9, so array[i] == i for any i in {0..9}.
+  - The condition checks if array[symvar % 10] == 7, which is equivalent to checking if (symvar % 10) == 7.
+  - To force FALSE, ensure (symvar % 10) != 7, i.e., (ASCII_code(s[0]) - 48) % 10 != 7.
+
+  Chronological execution order summary:
+  - Program starts and reads argv[1] as s.
+  - Compute symvar = ASCII_code(s[0]) - 48.
+  - Compute idx = symvar % 10.
+  - Require idx != 7 to ensure branch is false and the lines after the if-statement execute.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import subprocess
+      import signal
+
+      # Choose s such that ASCII_code(s[0]) % 10 != 5. For 'B' (ASCII 66), 66 % 10 = 6,
+      # so (66 - 48) % 10 = 8, which is != 7. This forces the branch to evaluate to FALSE.
+      # Keep the same invocation style (shell=True, single string with program and one arg).
+      cmd = "./temp_executable B"
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr if isinstance(e.stderr, str) else "", -signal.SIGKILL
+      except Exception as e:
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // malloc_sm_l1_klee.c (34 lines total)
+  #include <stdio.h>
+  #include<stdio.h>
+  #include<stdlib.h>
+  #include"utils.h"
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0] - 48;
+      int *array = (int *) malloc(sizeof(int) * 10);
+      int k = 0;
+
+      for (k=0; k<10; k++){
+          array[k] = k;
+      }
+
+      if(array[symvar % 10] == 7){
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+      }
+
+      // Unexecuted code (lines 22-23) removed. Its line cov: 0/2 (0%)
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 28-29) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [malloc_sm_l1_klee.c] enter main 1
+  [malloc_sm_l1_klee.c] enter main 3
+  [malloc_sm_l1_klee.c] enter logic_bomb 1
+  [malloc_sm_l1_klee.c] enter logic_bomb 2
+  [malloc_sm_l1_klee.c] enter logic_bomb 2
+  [malloc_sm_l1_klee.c] enter logic_bomb 2
+  [malloc_sm_l1_klee.c] enter logic_bomb 2
+  [malloc_sm_l1_klee.c] enter logic_bomb 2
+  [malloc_sm_l1_klee.c] enter logic_bomb 2
+  [malloc_sm_l1_klee.c] enter logic_bomb 2
+  [malloc_sm_l1_klee.c] enter logic_bomb 2
+  [malloc_sm_l1_klee.c] enter logic_bomb 2
+  [malloc_sm_l1_klee.c] enter logic_bomb 2
+  [malloc_sm_l1_klee.c] enter logic_bomb 4
+  Path without the bomb
+execution_summary: |2+
+
+  ```c
+  // malloc_sm_l1_klee.c (34 lines total)
+  #include <stdio.h>
+  #include<stdio.h>
+  #include<stdlib.h>
+  #include"utils.h"
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0] - 48;
+      int *array = (int *) malloc(sizeof(int) * 10);
+      int k = 0;
+
+      for (k=0; k<10; k++){
+          array[k] = k;
+      }
+
+      if(array[symvar % 10] == 7){
+          // Unexecuted code (lines 18-19) removed. Its line cov: 2/2 (100%)
+      }
+
+      fprintf(stderr, "Path without the bomb\n");
+      return 0;
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 28-29) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [malloc_sm_l1_klee.c] enter main 1
+  [malloc_sm_l1_klee.c] enter main 3
+  [malloc_sm_l1_klee.c] enter logic_bomb 1
+  [malloc_sm_l1_klee.c] enter logic_bomb 2
+  [malloc_sm_l1_klee.c] enter logic_bomb 2
+  [malloc_sm_l1_klee.c] enter logic_bomb 2
+  [malloc_sm_l1_klee.c] enter logic_bomb 2
+  [malloc_sm_l1_klee.c] enter logic_bomb 2
+  [malloc_sm_l1_klee.c] enter logic_bomb 2
+  [malloc_sm_l1_klee.c] enter logic_bomb 2
+  [malloc_sm_l1_klee.c] enter logic_bomb 2
+  [malloc_sm_l1_klee.c] enter logic_bomb 2
+  [malloc_sm_l1_klee.c] enter logic_bomb 2
+  [malloc_sm_l1_klee.c] enter logic_bomb 3
+  Logic bomb triggered

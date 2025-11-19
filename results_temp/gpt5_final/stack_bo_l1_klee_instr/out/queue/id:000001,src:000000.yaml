@@ -1,0 +1,213 @@
+id: 1
+src_id: 0
+create_time: '2025-11-17 21:47:49.978'
+time_taken: 119
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: false
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.49104000
+    call_cnt: 2
+    latency: 56.34s
+    input_tokens: 10779
+    output_tokens: 4591
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.49104000
+      call_cnt: 2
+      latency: 56.34s
+      input_tokens: 10779
+      output_tokens: 4591
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10560000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.33156000
+      call_cnt: 1
+      latency: 44.77s
+      input_tokens: 5280
+      output_tokens: 3693
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.05388000
+      call_cnt: 1
+      latency: 11.56s
+      input_tokens: 5499
+      output_tokens: 898
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+target_branch: if (flag == 1) -> true in stack_bo_l1_klee.c:logic_bomb
+target_file_lines: stack_bo_l1_klee.c:14-15
+target_lines_content: |2-
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+justification: 'This branch is completely untested (0% coverage for lines 14-15) and
+  represents the core alternative behavior of the program: taking the overflow-triggered
+  path. Exercising it will validate the program’s handling of a stack buffer overflow
+  on the user-supplied argument and significantly improve behavioral coverage beyond
+  the current "Path without the bomb" flow. It is reachable by crafting the single
+  string argument so that copying it into the 8-byte buffer overflows and flips the
+  adjacent integer control variable to 1.'
+target_path_constraint: |-
+  Chronological, self-contained constraints to reach the branch where the program prints the bomb path (flag == 1):
+
+  1. Program invocation format:
+     - The harness invokes a single executable with exactly one string argument. Do not change the number of arguments; provide exactly one positional argument string.
+     - The argument must be delivered as argv[1] to the program’s main function.
+
+  2. Argument encoding and transmission:
+     - The argument is a byte string interpreted as C char* with no explicit length bound beyond process limits. It is copied using strcpy, which stops at the first NUL byte (0x00).
+     - Therefore, the argument must not contain any NUL byte before the bytes intended to overflow the stack; otherwise, copying will stop early.
+     - Encoding: ASCII or any single-byte encoding is acceptable as long as bytes are transmitted unchanged; avoid multi-byte sequences that embed 0x00.
+
+  3. Stack layout and overflow requirement:
+     - Inside logic_bomb, there is an 8-byte buffer located on the stack: buf[8]. Immediately adjacent (at a higher address in typical x86/x86_64 System V ABI with common compiler settings) is a 4-byte integer variable named flag, initialized to 0.
+     - The function uses strcpy(buf, argv1). strcpy does not check bounds and will copy until it encounters a NUL terminator.
+     - To reach the target branch, the copied bytes must exceed 8 bytes, so that the copy continues past buf and overwrites the next stack slot containing the integer flag.
+
+  4. Precise overwrite constraints on the argument bytes:
+     - Let A[0..k] be the bytes of the argument, terminated by a single trailing NUL (implicit from process argument storage).
+     - Required length: k >= 9, i.e., at least 9 non-NUL bytes before the first NUL, to ensure copying writes beyond buf[8]. Prefer at least 12 non-NUL bytes to fully cover the size of flag (commonly 4 bytes), but the key constraint is that the byte at the offset corresponding to the first byte of flag must be written.
+     - Memory layout assumption (common on GCC/Clang with no stack reordering): buf occupies 8 bytes at offsets 0..7 relative to the destination pointer; flag follows at offsets 8..11. To set flag == 1, the 4 bytes written to offsets 8..11 must encode the integer value 1 in the platform’s native endianness.
+       - On little-endian platforms (typical): write bytes 0x01 0x00 0x00 0x00 at argument positions 8..11 (counting from 0 at the first byte copied into buf), followed by a NUL terminator after position 11.
+       - On big-endian platforms: write bytes 0x00 0x00 0x00 0x01 at positions 8..11, followed by a NUL.
+     - The first eight bytes (positions 0..7) can be any non-NUL values; they simply fill buf.
+
+  5. Termination constraint:
+     - Ensure the argument includes a NUL terminator immediately after the bytes used to set flag, so strcpy stops after overwriting exactly those bytes. In practice, command-line arguments are NUL-terminated by the OS; thus, ensure there are no embedded NULs before the desired stopping point.
+
+  6. Environmental constraints:
+     - No files are read; only argv[1] matters.
+     - Do not set environment variables that alter stack protection (e.g., disabling stack canaries) unless necessary; the target assumes the binary is compiled without defenses that abort execution on overflow. If stack canaries or FORTIFY are present, the overflow might trigger a crash before reaching the branch; therefore, compile/run context should have standard unsafe strcpy semantics without immediate termination.
+
+  Satisfying these constraints will cause strcpy to overflow buf and overwrite the integer flag with the value 1, making the condition (flag == 1) true and executing the previously untested branch body.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code:
+returncode:
+src_execution_summary: |2+
+
+  ```c
+  // stack_bo_l1_klee.c (30 lines total)
+  #include <stdio.h>
+  #include <string.h> 
+  #include "utils.h"
+  #include "a_tester.h"
+
+
+  // {"symvar":{"length": 64}}
+  int logic_bomb(char* symvar) {
+      int flag = 0;
+      char buf[8];
+      strcpy(buf, symvar);
+
+      if(flag == 1){
+          // Unexecuted code (lines 14-15) removed. Its line cov: 0/2 (0%)
+      }
+
+      fprintf(stderr, "Path without the bomb\n");
+      return 0;
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 24-25) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace:
+execution_summary:
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [stack_bo_l1_klee.c] enter main 1
+  [stack_bo_l1_klee.c] enter main 3
+  [stack_bo_l1_klee.c] enter logic_bomb 1
+  [stack_bo_l1_klee.c] enter logic_bomb 3
+  Path without the bomb

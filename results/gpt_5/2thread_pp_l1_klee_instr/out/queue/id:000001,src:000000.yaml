@@ -1,0 +1,364 @@
+id: 1
+src_id: 0
+create_time: '2025-11-17 20:44:33.109'
+time_taken: 172
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.94754000
+    call_cnt: 3
+    latency: 125.71s
+    input_tokens: 15028
+    output_tokens: 10783
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.65836000
+      call_cnt: 2
+      latency: 81.22s
+      input_tokens: 11198
+      output_tokens: 7240
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10964000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.47108000
+      call_cnt: 1
+      latency: 66.78s
+      input_tokens: 5482
+      output_tokens: 5946
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.07764000
+      call_cnt: 1
+      latency: 14.43s
+      input_tokens: 5716
+      output_tokens: 1294
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.28918000
+      call_cnt: 1
+      latency: 44.49s
+      input_tokens: 3830
+      output_tokens: 3543
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.07660000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.21258000
+      call_cnt: 1
+      latency: 44.49s
+      input_tokens: 3830
+      output_tokens: 3543
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (i == 50) -> true in 2thread_pp_l1_klee.c:logic_bomb
+target_file_lines: 2thread_pp_l1_klee.c:31-32
+target_lines_content: |2-
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+justification: This branch has 0% historical coverage and represents the core "logic
+  bomb" condition. Reaching it will exercise previously unseen behavior guarded by
+  the equality check and cover lines 31-32, which are currently untested. Although
+  the program is multithreaded and the final value depends on scheduling, the branch
+  can be reached by constraining the command-line argument’s first byte and the thread
+  interleaving so that the shared integer (derived from the first byte minus 48) transforms
+  to 50. This is the most impactful uncovered branch in the file.
+target_path_constraint: |
+  Chronological, external-input and environment constraints to reach: if (i == 50) is true in logic_bomb.
+
+  1) Process invocation (command-line setup)
+  - The program must be executed with exactly one additional string argument beyond the program name, since main requires argc >= 2 and reads argv[1]. The harness already passes a single argument string to the binary. No changes to the number of arguments are needed, but the content of argv[1] must be constrained as below.
+
+  2) Argument format and encoding
+  - argv[1] must be at least 1 byte long.
+  - Treat argv[1] as an ASCII-encoded byte string. The program uses s[0] - 48 (where 48 is the ASCII code for '0'), so only the first byte of argv[1] influences the branch.
+  - Define b0 as the integer value of the first byte of argv[1]. Then symvar = b0 - 48.
+
+  3) Target value relation under multithreaded transformation
+  - The function ThreadProp applies two concurrent transformations on the shared integer symvar: one increments the value by 1 (Inc), the other squares the value (Mult). After both threads complete, the final value observed (out) is whatever the last operation to write completes with, because both operations write to the same memory location without synchronization.
+  - Therefore, i (the value returned) can be either (symvar + 1), (symvar * symvar), or potentially a race-dependent combination if one thread reads after the other writes. The possible final values, given arbitrary thread scheduling without atomicity, are in the set {symvar + 1, symvar * symvar, (symvar + 1) * (symvar + 1) if Mult reads the already incremented value, symvar * symvar + 1 if Inc reads the already squared value}. This comes from the possible read-modify-write interleavings:
+    a) Inc reads symvar, writes symvar+1; Mult reads original symvar, writes symvar*symvar -> final could be symvar*symvar if Mult writes last.
+    b) Mult reads symvar, writes symvar*symvar; Inc reads original symvar, writes symvar+1 -> final could be symvar+1 if Inc writes last.
+    c) Inc runs first, Mult reads the incremented value -> final could be (symvar+1)*(symvar+1) if Mult writes last; or symvar+1 if Inc writes last.
+    d) Mult runs first, Inc reads the squared value -> final could be symvar*symvar+1 if Inc writes last; or symvar*symvar if Mult writes last.
+
+  4) Equality target: i == 50
+  - Constrain symvar and scheduling so that one of the possible final values equals 50. This yields the following input-level numeric constraints on symvar (derived from b0) to make 50 reachable without relying on undefined behavior:
+    A) symvar + 1 = 50  -> symvar = 49.
+    B) symvar * symvar = 50 -> no integer symvar satisfies this (since 7^2=49, 8^2=64).
+    C) (symvar + 1) * (symvar + 1) = 50 -> no integer solution.
+    D) symvar*symvar + 1 = 50 -> symvar*symvar = 49 -> symvar = 7 or symvar = -7.
+  - Since symvar is computed from the first byte b0 via symvar = b0 - 48, valid byte constraints become:
+    A) For case A: b0 = symvar + 48 = 97 (ASCII 'a').
+    D) For case D: b0 = 7 + 48 = 55 (ASCII '7'), or b0 = -7 + 48 = 41 (')'). Negative symvar is allowed if b0 < 48.
+
+  5) Environment and scheduling constraints (to realize the desired final write)
+  - To make case A effective (i becomes 50): require that the increment thread (Inc) writes last. That is, Mult must either write earlier or read an earlier value such that its final write does not overwrite Inc’s final write. Specifically:
+    • Case A scheduling: ensure Inc’s write of symvar+1 happens after Mult’s final write, or Mult does not run, but since both threads join, Mult runs; thus require the scheduler to let Inc perform its write last.
+  - To make case D effective (i becomes 50): require that Inc reads the squared value and then writes squared+1 last (i = symvar*symvar + 1). That is, Mult must write first to produce symvar*symvar, and Inc must read that result and then write last.
+  - Expressed abstractly as environment constraints:
+    • Case A: Final write order = Inc after Mult.
+    • Case D: Final write order = Inc after Mult, with Inc’s read occurring after Mult’s write.
+
+  6) Summary of external constraints on argv[1].
+  - argv[1][0] (first byte) must satisfy one of:
+    • 97 (character 'a'), combined with the environment scheduling constraint that Inc performs the last write.
+    • 55 (character '7'), combined with the environment scheduling constraint that Mult writes before Inc, and Inc’s read occurs after Mult’s write, and Inc is the last writer.
+    • 41 (character ')'), with the same scheduling constraint as the previous bullet (to realize symvar = -7, then square to 49, then Inc writes 50).
+  - No constraints are needed on subsequent bytes of argv[1]; they are ignored by the program.
+  - The argument may be longer than one byte; only the first byte matters. The encoding must be ASCII-compatible so that byte values correspond as specified.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import os
+      import signal
+      import subprocess
+
+      # We choose argv[1] = "7" so that symvar = 7 (since symvar = b0 - 48),
+      # making i = symvar*symvar + 1 = 50 reachable under an interleaving where
+      # Mult writes first and Inc writes last after reading the squared value.
+      arg = "7"
+
+      try:
+          # Preserve the original harness structure: invoke the same binary with one string argument via shell
+          cmd = f"./temp_executable {arg}"
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          return result.stderr or "", result.returncode
+      except subprocess.TimeoutExpired as e:
+          return (e.stderr if isinstance(e.stderr, str) else ""), -signal.SIGKILL
+      except Exception as e:
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // 2thread_pp_l1_klee.c (49 lines total)
+  #include <stdio.h>
+  #include <pthread.h>
+  #include <time.h>
+  #include <unistd.h>
+  #include "a_tester.h"
+
+  void* Inc(void* i){
+      ++ *((int*) i);
+  }
+
+  void* Mult(void* i){
+      *((int*) i) =  *((int*) i) * *((int*) i);
+  }
+
+  int ThreadProp(int in){
+      pthread_t tid[2];
+      int rc1 = pthread_create(&tid[0], NULL, Inc, (void *) &in); 
+      int rc2 = pthread_create(&tid[1], NULL, Mult, (void *) &in); 
+      rc1 = pthread_join(tid[0], NULL); 
+      rc2 = pthread_join(tid[1], NULL); 
+      int out = in;
+      return out;
+  }
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0] - 48;
+      int i=ThreadProp(symvar);
+
+      if(i == 50){
+          // Unexecuted code (lines 31-32) removed. Its line cov: 0/2 (0%)
+      }
+
+      fprintf(stderr, "Path without the bomb\n");
+      return 0;
+  }
+
+
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 43-44) removed. Its line cov: 0/2 (0%)
+      }
+
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [2thread_pp_l1_klee.c] enter main 1
+  [2thread_pp_l1_klee.c] enter main 3
+  [2thread_pp_l1_klee.c] enter logic_bomb 1
+  [2thread_pp_l1_klee.c] enter ThreadProp 1
+  [2thread_pp_l1_klee.c] enter Inc 1
+  [2thread_pp_l1_klee.c] enter Mult 1
+  [2thread_pp_l1_klee.c] enter logic_bomb 3
+  Path without the bomb
+execution_summary: |2+
+
+  ```c
+  // 2thread_pp_l1_klee.c (49 lines total)
+  #include <stdio.h>
+  #include <pthread.h>
+  #include <time.h>
+  #include <unistd.h>
+  #include "a_tester.h"
+
+  void* Inc(void* i){
+      ++ *((int*) i);
+  }
+
+  void* Mult(void* i){
+      *((int*) i) =  *((int*) i) * *((int*) i);
+  }
+
+  int ThreadProp(int in){
+      pthread_t tid[2];
+      int rc1 = pthread_create(&tid[0], NULL, Inc, (void *) &in); 
+      int rc2 = pthread_create(&tid[1], NULL, Mult, (void *) &in); 
+      rc1 = pthread_join(tid[0], NULL); 
+      rc2 = pthread_join(tid[1], NULL); 
+      int out = in;
+      return out;
+  }
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0] - 48;
+      int i=ThreadProp(symvar);
+
+      if(i == 50){
+          // Unexecuted code (lines 31-32) removed. Its line cov: 0/2 (0%)
+      }
+
+      fprintf(stderr, "Path without the bomb\n");
+      return 0;
+  }
+
+
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 43-44) removed. Its line cov: 0/2 (0%)
+      }
+
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [2thread_pp_l1_klee.c] enter main 1
+  [2thread_pp_l1_klee.c] enter main 3
+  [2thread_pp_l1_klee.c] enter logic_bomb 1
+  [2thread_pp_l1_klee.c] enter ThreadProp 1
+  [2thread_pp_l1_klee.c] enter Inc 1
+  [2thread_pp_l1_klee.c] enter Mult 1
+  [2thread_pp_l1_klee.c] enter logic_bomb 3
+  Path without the bomb

@@ -1,0 +1,370 @@
+id: 1
+src_id: 0
+create_time: '2025-11-17 21:12:22.475'
+time_taken: 253
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $1.25602000
+    call_cnt: 3
+    latency: 222.53s
+    input_tokens: 14390
+    output_tokens: 16137
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.99670000
+      call_cnt: 2
+      latency: 182.64s
+      input_tokens: 10949
+      output_tokens: 12962
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10672000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.40932000
+      call_cnt: 1
+      latency: 69.91s
+      input_tokens: 5336
+      output_tokens: 4951
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.48066000
+      call_cnt: 1
+      latency: 112.73s
+      input_tokens: 5613
+      output_tokens: 8011
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.25932000
+      call_cnt: 1
+      latency: 39.89s
+      input_tokens: 3441
+      output_tokens: 3175
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.06882000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.19050000
+      call_cnt: 1
+      latency: 39.89s
+      input_tokens: 3441
+      output_tokens: 3175
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (array[symvar] < 0 || array[symvar] > 10) -> true in heapoutofbound_sm_l2_klee.c:logic_bomb
+target_file_lines: heapoutofbound_sm_l2_klee.c:18-19
+target_lines_content: |2-
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+justification: This branch has 0% historical coverage and represents the core divergent
+  behavior (“bomb” path). Reaching it will exercise previously unseen behavior including
+  out-of-bounds indexing and error-handling code (currently never executed). The current
+  harness always provides the fixed argument "AAAA", which yields an out-of-range
+  index (17). Although the initial run did not enter the branch, we can still reach
+  it by controlling the process environment (allocator behavior/memory contents) so
+  that the out-of-bounds read produces a value < 0 or > 10. This selection maximizes
+  coverage under the existing harness without changing its command-line inputs.
+target_path_constraint: |-
+  Constraints to reach: if (array[index] < 0 || array[index] > 10) evaluates true inside logic_bomb, where index is derived from the first character of the sole command-line argument.
+
+  Chronological, self-contained constraints at input/environment level:
+
+  1) Command-line invocation (fixed by harness):
+  - Exactly one non-empty string argument must be passed to the program, and its first byte must be the ASCII character 'A' (0x41). The provided harness already enforces this by invoking the program with one argument "AAAA". This ensures the program computes index = ord('A') - 48 = 65 - 48 = 17 and subsequently performs a 32-bit signed read from an out-of-bounds position relative to a freshly malloc’d int array of length 10.
+
+  2) Heap allocator and sanitizer environment (ensure OOB read does not abort and yields an out-of-range value):
+  - The process MUST NOT enable runtime checks that terminate on out-of-bounds heap reads. Concretely:
+    - Do not preload AddressSanitizer/UndefinedBehaviorSanitizer or similar interception libraries; if present, configure them not to abort on OOB reads.
+    - For glibc, ensure malloc checking is disabled: MALLOC_CHECK_ unset or set to 0 and GLIBC_TUNABLES either unset or with glibc.malloc.check=0.
+
+  - Configure the heap allocator so that bytes read from the out-of-bounds position form a 32-bit signed integer strictly outside the closed interval [0, 10]. Any of the following standard allocator configurations satisfies this requirement deterministically:
+    a) glibc malloc perturbation:
+       - Set environment variable MALLOC_PERTURB_ to a value v where 11 ≤ v ≤ 255.
+       - Effect: Newly allocated heap regions are filled with the single byte v in untouched/padding areas. The 32-bit signed integer read from four consecutive bytes of value v has numeric value:
+         • negative if v ≥ 128; or
+         • strictly greater than 10 if 11 ≤ v ≤ 127.
+       - This guarantees the out-of-bounds 4-byte read yields a value < 0 or > 10.
+
+    b) jemalloc junk filling (if jemalloc is available):
+       - Ensure the process uses jemalloc via LD_PRELOAD or system default and set MALLOC_CONF to include junk:true and abort:false.
+       - Effect: Unused/untouched allocation bytes are filled with 0xA5, so any 32-bit read from such bytes becomes 0xA5A5A5A5, which is a negative signed 32-bit integer. The condition (< 0 || > 10) is thereby satisfied.
+
+    c) tcmalloc junk filling (if tcmalloc is available):
+       - Enable memory scribbling so that free/unused bytes are filled with a constant nonzero value b where b ≥ 11. The resulting 32-bit integer composed of repeated byte b will be either negative (if b ≥ 128) or > 10 (if 11 ≤ b ≤ 127).
+
+  3) Platform/data representation constraints:
+  - The platform must represent int as a 32-bit two’s-complement type and read memory in byte order consistently across four adjacent bytes (both little- and big-endian satisfy the inequality outcome when all four bytes are the same value). This is the common configuration on mainstream 32/64-bit systems.
+
+  4) Implicit file/system conditions (standard, but required):
+  - The executable file must exist and be executable in the current working directory.
+  - The process must have sufficient memory and permission to perform a small heap allocation (~40 bytes) and write to stderr.
+
+  Satisfaction summary:
+  - With the fixed argument 'AAAA' (index 17), and an allocator environment that fills untouched heap bytes with a constant byte v where v ∈ {11..255}, the out-of-bounds 32-bit read will evaluate to a signed value either < 0 or > 10, making the targeted condition true and entering the previously unexecuted branch.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import os
+      import signal
+      import subprocess
+
+      # Prepare environment to satisfy allocator/sanitizer constraints
+      env = os.environ.copy()
+
+      # 1) Ensure no preloaded sanitizers/interposition libs that would abort on OOB reads
+      for var in ("LD_PRELOAD", "DYLD_INSERT_LIBRARIES"):
+          if var in env:
+              env.pop(var, None)
+
+      # 2) Disable malloc checking that could turn OOB into aborts
+      env["MALLOC_CHECK_"] = "0"
+
+      # 3) Ensure glibc malloc check is disabled via GLIBC_TUNABLES
+      cur_tun = env.get("GLIBC_TUNABLES", "")
+      if cur_tun:
+          parts = [p for p in cur_tun.split(":") if not p.startswith("glibc.malloc.check=") and p]
+          parts.insert(0, "glibc.malloc.check=0")
+          env["GLIBC_TUNABLES"] = ":".join(parts)
+      else:
+          env["GLIBC_TUNABLES"] = "glibc.malloc.check=0"
+
+      # 4) Deterministically fill untouched heap bytes with a constant v in [11..255]
+      #    Using 255 (0xFF) guarantees a negative 32-bit value when read
+      env["MALLOC_PERTURB_"] = "255"
+
+      # 5) Make sanitizers (if present) non-fatal
+      #    These are safe no-ops if the process isn't using the respective sanitizers
+      env["ASAN_OPTIONS"] = "abort_on_error=0:halt_on_error=0:allocator_may_return_null=1:detect_leaks=0"
+      env["UBSAN_OPTIONS"] = "halt_on_error=0:print_stacktrace=0"
+      # If jemalloc is used by the system, request junk filling and non-aborting behavior
+      env.setdefault("MALLOC_CONF", "abort:false,junk:true")
+
+      try:
+          # Keep the original harness structure: run ./temp_executable with fixed arg "AAAA"
+          # We use shell=True to mirror the original execution information exactly.
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+              env=env,
+          )
+          return result.stderr or "", result.returncode
+      except subprocess.TimeoutExpired as e:
+          return (e.stderr if isinstance(e.stderr, str) else ""), -getattr(signal, "SIGKILL", 9)
+      except Exception as e:
+          # Surface unexpected harness errors to the caller
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // heapoutofbound_sm_l2_klee.c (34 lines total)
+  #include <stdio.h>
+  #include<stdio.h>
+  #include<stdlib.h>
+  #include"utils.h"
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0] - 48;
+      int *array = (int *) malloc(sizeof(int) * 10);
+      int k = 0;
+
+      for (k=0; k<10; k++){
+          array[k] = k;
+      }
+
+      if(array[symvar]<0 || array[symvar]>10){
+          // Unexecuted code (lines 18-19) removed. Its line cov: 0/2 (0%)
+      }
+
+      fprintf(stderr, "Path without the bomb\n");
+      return 0;
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 28-29) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [heapoutofbound_sm_l2_klee.c] enter main 1
+  [heapoutofbound_sm_l2_klee.c] enter main 3
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 1
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 2
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 2
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 2
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 2
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 2
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 2
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 2
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 2
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 2
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 2
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 4
+  Path without the bomb
+execution_summary: |2+
+
+  ```c
+  // heapoutofbound_sm_l2_klee.c (34 lines total)
+  #include <stdio.h>
+  #include<stdio.h>
+  #include<stdlib.h>
+  #include"utils.h"
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0] - 48;
+      int *array = (int *) malloc(sizeof(int) * 10);
+      int k = 0;
+
+      for (k=0; k<10; k++){
+          array[k] = k;
+      }
+
+      if(array[symvar]<0 || array[symvar]>10){
+          // Unexecuted code (lines 18-19) removed. Its line cov: 0/2 (0%)
+      }
+
+      fprintf(stderr, "Path without the bomb\n");
+      return 0;
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 28-29) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [heapoutofbound_sm_l2_klee.c] enter main 1
+  [heapoutofbound_sm_l2_klee.c] enter main 3
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 1
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 2
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 2
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 2
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 2
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 2
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 2
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 2
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 2
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 2
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 2
+  [heapoutofbound_sm_l2_klee.c] enter logic_bomb 4
+  Path without the bomb

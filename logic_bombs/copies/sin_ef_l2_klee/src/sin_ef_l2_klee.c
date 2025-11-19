@@ -1,7 +1,6 @@
 #include <stdio.h>
 /*
-TOY:
-Solution: 30
+TOY
 */
 #include <string.h> 
 #include <math.h>

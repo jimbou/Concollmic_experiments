@@ -1,0 +1,297 @@
+id: 1
+src_id: 0
+create_time: '2025-11-18 21:04:57.333'
+time_taken: 85
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 2
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.62150000
+    call_cnt: 3
+    latency: 59.77s
+    input_tokens: 13750
+    output_tokens: 5775
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.48780000
+      call_cnt: 2
+      latency: 46.82s
+      input_tokens: 10815
+      output_tokens: 4525
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10602000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.35766000
+      call_cnt: 1
+      latency: 41.09s
+      input_tokens: 5301
+      output_tokens: 4123
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.02412000
+      call_cnt: 1
+      latency: 5.73s
+      input_tokens: 5514
+      output_tokens: 402
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.13370000
+      call_cnt: 1
+      latency: 12.96s
+      input_tokens: 2935
+      output_tokens: 1250
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05870000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.07500000
+      call_cnt: 1
+      latency: 12.96s
+      input_tokens: 2935
+      output_tokens: 1250
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (pow(s[0] - 48, 2) == 49) -> true in pow_ef_l2_klee.c:logic_bomb
+target_file_lines: pow_ef_l2_klee.c:14-15
+target_lines_content: |2-
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+justification: This is the core logic branch of the program and currently has 0% historical
+  coverage (lines 14-15). Reaching the true side will exercise the logic bomb behavior
+  that was completely untested in the current suite. It is reachable purely through
+  the first command-line argument’s first byte, so it fits the existing harness model
+  of a single string argument.
+target_path_constraint: |-
+  Chronological, external-input constraints to reach the target branch (true side of pow(s[0] - 48, 2) == 49):
+
+  1. Program invocation (command-line):
+     - The program must be executed with at least one command-line argument beyond the executable name.
+     - The first argument (argv[1]) must be a non-empty byte string.
+
+  2. Argument length requirement:
+     - The argument must have length ≥ 1 because only the first byte is used in the branch condition.
+
+  3. First-byte numeric mapping:
+     - Let b be the integer value of the first byte of argv[1] when interpreted as an unsigned 8-bit value (0–255).
+     - The program computes symvar = b − 48. The branch requires pow(symvar, 2) == 49.
+
+  4. Mathematical constraint on the first byte:
+     - pow(symvar, 2) == 49 implies symvar ∈ {7, −7}.
+     - Therefore b − 48 ∈ {7, −7}.
+     - Hence b ∈ {55, 41}.
+
+  5. Encoding/representation requirement:
+     - Provide the first byte exactly as the value b above (no transformation). If using ASCII/UTF-8 text, ensure that the first character of the argument is the single-byte codepoint with value b.
+     - Remaining bytes (if any) are unconstrained and can be arbitrary.
+
+  6. Environment/IO constraints:
+     - No files or environment variables are required; only the process argument must satisfy the above properties.
+
+  These conditions ensure the program reaches logic_bomb and takes the true branch guarded by pow(s[0] - 48, 2) == 49.
+selected_cnt: 1
+successful_generation_cnt: 1
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # We satisfy pow(s[0] - 48, 2) == 49 by setting the first byte to 55 ('7').
+      # Keep the same invocation style (shell=True) and executable path as in the original harness.
+      cmd = "./temp_executable 7"
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr if isinstance(e.stderr, str) else "", -signal.SIGKILL
+      except Exception as e:
+          raise e
+returncode: 1
+src_execution_summary: |2+
+
+  ```c
+  // pow_ef_l2_klee.c (30 lines total)
+  #include <stdio.h>
+  /*
+  TOY:
+  */
+  #include <string.h> 
+  #include <math.h>
+  #include "utils.h"
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0] - 48;
+      if(pow(symvar, 2) == 49){
+          // Unexecuted code (lines 14-15) removed. Its line cov: 0/2 (0%)
+      }else{
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+  }
+
+  int main(int argc, char **argv) {
+      fprintf(stderr, "\n");
+      if (argc < 2) {
+          // Unexecuted code (lines 25-26) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [pow_ef_l2_klee.c] enter main 3
+  [pow_ef_l2_klee.c] enter logic_bomb 1
+  [pow_ef_l2_klee.c] enter logic_bomb 2
+  Logic bomb triggered
+execution_summary: |2+
+
+  ```c
+  // pow_ef_l2_klee.c (30 lines total)
+  #include <stdio.h>
+  /*
+  TOY:
+  */
+  #include <string.h> 
+  #include <math.h>
+  #include "utils.h"
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0] - 48;
+      if(pow(symvar, 2) == 49){
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+      }else{
+          // Unexecuted code (lines 17-18) removed. Its line cov: 2/2 (100%)
+      }
+  }
+
+  int main(int argc, char **argv) {
+      fprintf(stderr, "\n");
+      if (argc < 2) {
+          // Unexecuted code (lines 25-26) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [pow_ef_l2_klee.c] enter main 3
+  [pow_ef_l2_klee.c] enter logic_bomb 1
+  [pow_ef_l2_klee.c] enter logic_bomb 3
+  Path without the bomb

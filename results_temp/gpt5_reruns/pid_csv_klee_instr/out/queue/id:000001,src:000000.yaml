@@ -1,0 +1,329 @@
+id: 1
+src_id: 0
+create_time: '2025-11-17 21:32:06.415'
+time_taken: 195
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 2
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.75846000
+    call_cnt: 3
+    latency: 132.10s
+    input_tokens: 14001
+    output_tokens: 7974
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.37766000
+      call_cnt: 2
+      latency: 51.75s
+      input_tokens: 10792
+      output_tokens: 2697
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10578000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.23108000
+      call_cnt: 1
+      latency: 41.52s
+      input_tokens: 5289
+      output_tokens: 2017
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.04080000
+      call_cnt: 1
+      latency: 10.23s
+      input_tokens: 5503
+      output_tokens: 680
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.38080000
+      call_cnt: 1
+      latency: 80.34s
+      input_tokens: 3209
+      output_tokens: 5277
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.06418000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.31662000
+      call_cnt: 1
+      latency: 80.34s
+      input_tokens: 3209
+      output_tokens: 5277
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (pid % 78 == (s[0] - 48)) -> true in pid_csv_klee.c:logic_bomb
+target_file_lines: pid_csv_klee.c:15-16
+target_lines_content: |2-
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+justification: This is the core branching condition of the program and currently has
+  0% historical coverage for its true arm (lines 15-16). Reaching this branch will
+  explore the intended “bomb” path, which has never been executed. Other uncovered
+  branches (e.g., argc < 2) are unreachable with the fixed harness that always passes
+  one argument. Therefore, this branch provides the highest feasible coverage gain
+  given the harness constraints.
+target_path_constraint: |
+  Chronological, input-and-environment level constraints to reach the branch `pid % 78 == (s[0] - 48)` as TRUE in pid_csv_klee.c:logic_bomb:
+
+  1) Process launch and argument count:
+  - The program must be invoked with at least one command-line argument.
+  - Given the harness, the program is executed as a shell command `./temp_executable AAAA`. This satisfies the minimum argument requirement and provides a single argument string "AAAA" to the binary.
+
+  2) Argument format and length:
+  - The program reads the first argument (argv[1]) as a string s.
+  - s must have length ≥ 1 because s[0] is accessed. The harness supplies a 4-character ASCII string, which meets this requirement.
+  - The character encoding must be standard ASCII/UTF-8 such that the first byte maps directly to the ASCII value used by the code. The code subtracts 48 (ASCII code for '0'), so s[0] should be a single-byte ASCII digit character '0'..'9' to yield an integer in 0..9.
+
+  3) Environment constraint on process ID (PID):
+  - Let current process ID be pid = getpid(). This is determined by the operating system at runtime and cannot be directly set via normal input. The branch requires: pid % 78 == (ord(s[0]) - 48).
+  - Therefore, the first character of s must be chosen so that its digit value equals pid modulo 78. Formally: s[0] ∈ {'0','1','2','3','4','5','6','7','8','9'} and (ord(s[0]) - 48) == (getpid() mod 78).
+
+  4) Combined path condition:
+  - All preceding constraints must hold simultaneously such that the evaluation of `pid % 78 == symvar` is true, where symvar = s[0] - 48.
+  - No other inputs or environment variables are checked.
+
+  5) Negative constraints (to avoid alternative path):
+  - Ensure s[0] is a digit; if s[0] is a non-digit, (s[0] - 48) yields a value outside 0..9, which may still be compared but is unlikely to equal pid%78 except coincidentally. To deterministically reach the true branch, constrain s[0] to a digit and to the specific value equal to pid%78.
+
+  SMT-style formulation (supplementary):
+  - Constants: 78 ∈ ℤ.
+  - Variables: pid ∈ ℤ, c ∈ [0,255] (first byte of s), len ∈ ℕ.
+  - Constraints:
+    (i) len ≥ 1
+    (ii) c ∈ {48,49,50,51,52,53,54,55,56,57}
+    (iii) pid = getpid()
+    (iv) (pid mod 78) = (c - 48)
+  - The remaining bytes of s are unconstrained.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import subprocess
+      import signal
+      import shutil
+
+      # Goal: ensure pid % 78 == (s[0] - 48) holds true.
+      # Strategy: run the target in a fresh PID namespace so the program's getpid() == 1,
+      # then pass "1" as the first argument. This deterministically satisfies 1 % 78 == 1.
+
+      cmds: list[str] = []
+      unshare_path = shutil.which("unshare")
+      if unshare_path:
+          # Preferred: user+pid namespace (unprivileged), fork, and mount a fresh /proc
+          cmds.append(f"{unshare_path} -Urpf --mount-proc ./temp_executable 1")
+          # Fallbacks in case certain flags are unsupported
+          cmds.append(f"{unshare_path} -pf --mount-proc ./temp_executable 1")
+          cmds.append(f"{unshare_path} -p -f ./temp_executable 1")
+      # Last resort (may not deterministically satisfy the constraint if namespaces are unavailable)
+      cmds.append("./temp_executable 1")
+
+      last_stderr = ""
+      last_rc = -1
+
+      for cmd in cmds:
+          try:
+              result = subprocess.run(
+                  cmd,
+                  shell=True,
+                  capture_output=True,
+                  encoding="utf-8",
+                  errors="replace",
+                  timeout=timeout,
+              )
+              # If unshare failed to start due to permissions, try the next command.
+              if ("unshare" in cmd) and (result.returncode != 0) and (result.stderr and "unshare" in result.stderr.lower()):
+                  last_stderr, last_rc = result.stderr or "", result.returncode
+                  continue
+              return result.stderr or "", result.returncode
+          except subprocess.TimeoutExpired as e:
+              return (e.stderr if isinstance(e.stderr, str) else ""), -signal.SIGKILL
+          except Exception as e:
+              # Propagate unexpected errors to signal harness issues
+              raise e
+
+      # If all attempts failed, return the last observed stderr and return code
+      return last_stderr, last_rc
+returncode: 1
+src_execution_summary: |2+
+
+  ```c
+  // pid_csv_klee.c (31 lines total)
+  #include <stdio.h>
+  #define _GNU_SOURCE
+  #include <stdio.h>
+  #include <stdlib.h>
+  #include <unistd.h>
+
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+     int symvar = s[0] - 48;
+     int pid = (int) getpid();
+
+     if(pid%78 == symvar){
+          // Unexecuted code (lines 15-16) removed. Its line cov: 0/2 (0%)
+     } else {
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 25-26) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [pid_csv_klee.c] enter main 1
+  [pid_csv_klee.c] enter main 3
+  [pid_csv_klee.c] enter logic_bomb 1
+  [pid_csv_klee.c] enter logic_bomb 2
+  Logic bomb triggered
+execution_summary: |2+
+
+  ```c
+  // pid_csv_klee.c (31 lines total)
+  #include <stdio.h>
+  #define _GNU_SOURCE
+  #include <stdio.h>
+  #include <stdlib.h>
+  #include <unistd.h>
+
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+     int symvar = s[0] - 48;
+     int pid = (int) getpid();
+
+     if(pid%78 == symvar){
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+     } else {
+          // Unexecuted code (lines 18-19) removed. Its line cov: 2/2 (100%)
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 25-26) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [pid_csv_klee.c] enter main 1
+  [pid_csv_klee.c] enter main 3
+  [pid_csv_klee.c] enter logic_bomb 1
+  [pid_csv_klee.c] enter logic_bomb 3
+  Path without the bomb

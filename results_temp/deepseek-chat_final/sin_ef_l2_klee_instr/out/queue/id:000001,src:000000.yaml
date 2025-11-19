@@ -1,0 +1,327 @@
+id: 1
+src_id: 0
+create_time: '2025-11-14 17:44:02.352'
+time_taken: 87
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 2
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: deepseek-chat
+    cost: $0.02932860
+    call_cnt: 6
+    latency: 66.19s
+    input_tokens: 29470
+    output_tokens: 1967
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: deepseek-chat
+      cost: $0.01701060
+      call_cnt: 3
+      latency: 31.30s
+      input_tokens: 18140
+      output_tokens: 802
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: deepseek-chat
+      cost: $0.00471900
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: deepseek-chat
+      cost: $0.00599543
+      call_cnt: 1
+      latency: 14.21s
+      input_tokens: 5720
+      output_tokens: 376
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: deepseek-chat
+      cost: $0.00562807
+      call_cnt: 1
+      latency: 7.57s
+      input_tokens: 6105
+      output_tokens: 164
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: deepseek-chat
+      cost: $0.00066810
+      call_cnt: 1
+      latency: 9.52s
+      input_tokens: 6315
+      output_tokens: 262
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: deepseek-chat
+      cost: $0.01231800
+      call_cnt: 3
+      latency: 34.90s
+      input_tokens: 11330
+      output_tokens: 1165
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: deepseek-chat
+      cost: $0.00245850
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: deepseek-chat
+      cost: $0.00381255
+      call_cnt: 1
+      latency: 12.50s
+      input_tokens: 2980
+      output_tokens: 399
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    execute_python:
+      model: deepseek-chat
+      cost: $0.00503205
+      call_cnt: 1
+      latency: 11.05s
+      input_tokens: 3388
+      output_tokens: 368
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: deepseek-chat
+      cost: $0.00101490
+      call_cnt: 1
+      latency: 11.34s
+      input_tokens: 4962
+      output_tokens: 398
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if(v > 0.5) -> true in sin_ef_l2_klee.c:logic_bomb
+target_file_lines: sin_ef_l2_klee.c:20-21
+target_lines_content: |2-
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+justification: This branch has 0% historical coverage and contains the core logic
+  bomb functionality that wasn't executed in the current trace. The else branch (which
+  was executed) only prints "Path without the bomb" and returns 0, while the true
+  branch likely contains the actual bomb logic. This is the highest priority branch
+  as it represents the main program behavior that needs to be tested.
+target_path_constraint: |-
+  1. Command-Line Arguments: The program must be executed with at least one argument: `argc >= 2`
+
+  2. Input String Format: The first command-line argument must be a non-empty string: `strlen(argv[1]) >= 1`
+
+  3. Mathematical Constraint: The sine function must evaluate to a value greater than 0.5:
+     - Let `c` be the ASCII value of the first character of the input string
+     - The constraint is: `sin(c * π / 30) > 0.5`
+     - This requires finding a character `c` such that when multiplied by π/30 and passed to the sine function, the result exceeds 0.5
+
+  4. Character Range: Since `c` is an ASCII character value, it must be in the range: `0 <= c <= 127` (for standard ASCII) or potentially up to 255 for extended ASCII
+
+  Note: The program uses the first character of the input string only, so the rest of the string content is irrelevant for reaching this branch.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Use 'B' as the first character (ASCII 66) which satisfies sin(66π/30) > 0.5
+      # The rest of the string can be anything, but let's keep it simple
+      arg = "B"  # This satisfies all constraints:
+      # - argc >= 2 (program name + one argument)
+      # - strlen(argv[1]) >= 1 (non-empty string)
+      # - sin(ASCII('B') * π/30) = sin(66π/30) ≈ 0.5878 > 0.5
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable", arg],  # Fixed: pass as separate arguments, not as single string
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 1
+src_execution_summary: |2+
+
+  ```c
+  // sin_ef_l2_klee.c (36 lines total)
+  #include <stdio.h>
+  /*
+  TOY:
+  Solution: 30
+  */
+  #include <string.h> 
+  #include <math.h>
+  #include "utils.h"
+
+  #define PI 3.14159265358979323846264338327
+
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0];
+      float v = sin(symvar*PI/30);
+
+      if(v > 0.5){
+          // Unexecuted code (lines 20-21) removed. Its line cov: 0/2 (0%)
+      }else{
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 30-31) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [sin_ef_l2_klee.c] enter main 1
+  [sin_ef_l2_klee.c] enter main 3
+  [sin_ef_l2_klee.c] enter logic_bomb 1
+  [sin_ef_l2_klee.c] enter logic_bomb 2
+  Logic bomb triggered
+execution_summary: |2+
+
+  ```c
+  // sin_ef_l2_klee.c (36 lines total)
+  #include <stdio.h>
+  /*
+  TOY:
+  Solution: 30
+  */
+  #include <string.h> 
+  #include <math.h>
+  #include "utils.h"
+
+  #define PI 3.14159265358979323846264338327
+
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0];
+      float v = sin(symvar*PI/30);
+
+      if(v > 0.5){
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+      }else{
+          // Unexecuted code (lines 23-24) removed. Its line cov: 2/2 (100%)
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 30-31) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [sin_ef_l2_klee.c] enter main 1
+  [sin_ef_l2_klee.c] enter main 3
+  [sin_ef_l2_klee.c] enter logic_bomb 1
+  [sin_ef_l2_klee.c] enter logic_bomb 3
+  Path without the bomb

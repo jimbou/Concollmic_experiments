@@ -1,0 +1,285 @@
+id: 3
+src_id: 2
+create_time: '2025-11-17 21:01:02.398'
+time_taken: 557
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $1.26936000
+    call_cnt: 4
+    latency: 178.97s
+    input_tokens: 19452
+    output_tokens: 14672
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.80792000
+      call_cnt: 3
+      latency: 103.34s
+      input_tokens: 16408
+      output_tokens: 7996
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10172000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.17858000
+      call_cnt: 1
+      latency: 11.69s
+      input_tokens: 5086
+      output_tokens: 1130
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.48394000
+      call_cnt: 1
+      latency: 79.25s
+      input_tokens: 5539
+      output_tokens: 6138
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.04368000
+      call_cnt: 1
+      latency: 12.40s
+      input_tokens: 5783
+      output_tokens: 728
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.46144000
+      call_cnt: 1
+      latency: 75.62s
+      input_tokens: 3044
+      output_tokens: 6676
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.06088000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.40056000
+      call_cnt: 1
+      latency: 75.62s
+      input_tokens: 3044
+      output_tokens: 6676
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: 'In logic_bomb(char* s): nested branch where (a != 0.1) -> true and
+  then (a - b == 0) -> true'
+target_file_lines: float1_fp_l1_klee.c:14-15
+target_lines_content: |2-
+              fprintf(stderr, "Logic bomb triggered\n");
+              return 1;
+justification: This nested branch triggers the program’s distinctive behavior (prints
+  "Logic bomb triggered" and returns 1). It was not executed in the current run because
+  the harness provided no arguments and exited early in main. While historical coverage
+  indicates these lines have been covered, there are no uncovered/low-coverage alternatives
+  visible in this file, and exercising this path will explore a completely different
+  behavior than the current trace (which only executed the argc<2 usage path). Reaching
+  this branch ensures logic involving floating-point comparisons is exercised.
+target_path_constraint: |-
+  Chronological, input-level constraints to reach logic_bomb’s nested branch (a != 0.1) -> true and (a - b == 0) -> true:
+
+  1) Command invocation and argument count:
+     - The executable must be invoked with exactly one user-supplied positional argument after the program name, so that argc == 2 and argv[1] exists.
+     - No additional arguments or options may be present.
+
+  2) Argument encoding and length:
+     - argv[1] must be a byte string representing an input string; ASCII is acceptable.
+     - The program accesses s[0] only, and a comment indicates {"s":{"length": 4}}; to avoid undefined behavior and match expectations, ensure the input string length is at least 4 bytes (not counting any terminating null added by the execution environment). Additional bytes are allowed.
+
+  3) First-byte numeric constraint to drive floating-point path:
+     - The program computes symvar = (s[0] - 48), a = symvar / 70.0, and sets b = 0.1.
+     - We must satisfy simultaneously:
+       (i) a != 0.1
+       (ii) a - b == 0  (where b == 0.1)
+     - Combining (ii) with b == 0.1 gives a == 0.1, which contradicts (i). Therefore, these two conditions can only be both true if floating-point representation/rounding causes (a != 0.1) to be true while (a - 0.1) == 0 evaluates true due to exact binary representation alignment of a with b at the subtraction step.
+     - To achieve this, impose the following precise constraint on s[0]:
+       • Let x := s[0] be the unsigned byte value of the first character.
+       • Define symvar := x - 48.
+       • Define a := symvar / 70.0 in IEEE-754 single-precision evaluation (as in C float), and b := 0.1f (single-precision constant).
+       • Require that a, when stored as float, is not bitwise equal to the float representation of 0.1f (so a != 0.1 is true under C float comparison).
+       • Additionally require that subtracting b from a in float arithmetic yields exactly +0.0f, i.e., (a - b) == 0 under C float comparison.
+     - These constraints imply s[0] must be a byte such that (x - 48)/70.0f is a float very close to 0.1f: equal after subtraction but not equal under direct comparison due to precision/rounding asymmetry.
+
+  4) Byte-domain bounds to keep symvar well-defined:
+     - s[0] must be a valid ASCII digit or nearby byte so that (x - 48) is a small integer; any byte 0..255 is allowed, but choose values that do not cause undefined behavior. No additional characters affect the path, as only s[0] is read.
+
+  5) Environment assumptions:
+     - No special files or environment variables are required.
+     - Standard IEEE-754 single-precision float semantics must apply (typical C float on mainstream platforms).
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+      import shlex
+
+      # We need exactly one positional argument with length >= 4, and first byte '7'
+      # so that: x = '7' -> 55, symvar = 55 - 48 = 7, a = 7 / 70.0f == 0.1f
+      # This makes (a - b) == 0 where b = 0.1f, while (a != 0.1) is true when
+      # the comparison uses the double literal 0.1.
+      arg = "7abc"  # ASCII, length 4, first byte 0x37 ('7')
+
+      # Build the command: executable plus exactly one argument
+      cmd = f"./temp_executable {shlex.quote(arg)}"
+
+      try:
+          result = subprocess.run(
+              cmd,
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr if isinstance(e.stderr, str) else "", -signal.SIGKILL
+      except Exception as e:
+          # Surface unexpected execution issues to the harness
+          raise e
+returncode: 1
+src_execution_summary: |2+
+
+  ```c
+  // float1_fp_l1_klee.c (31 lines total)
+  #include <stdio.h>
+  #include<stdio.h>
+  #include <stdlib.h>
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      // Unexecuted code (lines 8-10) removed. Its line cov: 3/3 (100%)
+
+      if(a != 0.1){
+          // Unexecuted code (lines 13-16) removed. Its line cov: 4/4 (100%)
+      }
+
+      // Unexecuted code (lines 19-20) removed. Its line cov: 2/2 (100%)
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          fprintf(stderr, "Usage: %s <input-string>\n", argv[0]);
+          return 2;
+      }
+      char *s = argv[1];
+
+      // Unexecuted code (line 30) removed. Its line cov: 1/1 (100%)
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [float1_fp_l1_klee.c] enter main 1
+  [float1_fp_l1_klee.c] enter main 3
+  [float1_fp_l1_klee.c] enter logic_bomb 1
+  [float1_fp_l1_klee.c] enter logic_bomb 2
+  [float1_fp_l1_klee.c] enter logic_bomb 3
+  Logic bomb triggered
+execution_summary: |2+
+
+  ```c
+  // float1_fp_l1_klee.c (31 lines total)
+  #include <stdio.h>
+  #include<stdio.h>
+  #include <stdlib.h>
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0] - 48;
+      float a = symvar/70.0;
+      float b = 0.1;
+
+      if(a != 0.1){
+          if(a - b == 0) {
+              fprintf(stderr, "Logic bomb triggered\n");
+              return 1;
+          }
+      }
+
+      // Unexecuted code (lines 19-20) removed. Its line cov: 2/2 (100%)
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 25-26) removed. Its line cov: 2/2 (100%)
+      }
+      char *s = argv[1];
+
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # To satisfy: main: if (argc < 2) -> true
+      # We must invoke the executable with no user-supplied positional arguments,
+      # so that argc == 1 (only argv[0] is present). Since a shell is used, the
+      # command string must contain only the program path with no extra tokens.
+      cmd = "./temp_executable"
+
+      try:
+          result = subprocess.run(
+              [cmd],                # single-token command string
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,           # same structure as original harness
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr if isinstance(e.stderr, str) else "", -signal.SIGKILL
+      except Exception as e:
+          # Surface unexpected execution issues to the harness
+          raise e
+src_execution_trace: |
+  [float1_fp_l1_klee.c] enter main 1
+  [float1_fp_l1_klee.c] enter main 2
+  Usage: ./temp_executable <input-string>

@@ -1,0 +1,198 @@
+id: 2
+src_id: 1
+create_time: '2025-11-17 22:01:03.816'
+time_taken: 490
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: false
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $1.71226000
+    call_cnt: 4
+    latency: 240.64s
+    input_tokens: 22529
+    output_tokens: 21028
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $1.71226000
+      call_cnt: 4
+      latency: 240.64s
+      input_tokens: 22529
+      output_tokens: 21028
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10218000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.20788000
+      call_cnt: 1
+      latency: 27.97s
+      input_tokens: 5109
+      output_tokens: 1580
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.52318000
+      call_cnt: 1
+      latency: 102.30s
+      input_tokens: 5654
+      output_tokens: 6762
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    non_tool:
+      model: gpt-5
+      cost: $0.60938000
+      call_cnt: 1
+      latency: 51.20s
+      input_tokens: 5873
+      output_tokens: 8192
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.26964000
+      call_cnt: 1
+      latency: 59.18s
+      input_tokens: 5893
+      output_tokens: 4494
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+target_branch: if (flag == 1) -> true in stacknocrash_bo_l1_klee.c:logic_bomb
+target_file_lines: stacknocrash_bo_l1_klee.c:20-21
+target_lines_content: |2-
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+justification: 'This branch (lines 20-21) has 0% historical coverage and represents
+  the core security-relevant behavior: the program prints "Logic bomb triggered" and
+  returns 1 only if the internal control value becomes 1, which is reachable via the
+  unchecked copy into an 8-byte stack buffer. Exercising this path covers the vulnerable
+  logic and a previously unseen outcome, substantially improving coverage compared
+  to re-exercising already-covered "Path without the bomb" paths.'
+target_path_constraint: |-
+  Chronological, self-contained constraints to reach: if (flag == 1) -> true in logic_bomb
+
+  1) Program invocation (arguments must be present and parsed as intended)
+  - The program must be invoked with at least one command-line argument beyond the executable name, so that the first user-controlled argument is available as argv[1].
+  - Ensure argv[1] is passed as a single token (no spaces, tabs, or shell metacharacters that would split it). Treat argv[1] as a contiguous byte string in the OS process table.
+
+  2) Length guard must be satisfied to avoid early return
+  - The byte length of argv[1] (number of non-NUL bytes before the implicit terminating NUL) must be <= 9 to pass the check `strlen(argv[1]) > 9` -> false.
+  - To enable a controlled overflow past an 8-byte buffer, the length must be exactly 9 bytes (non-NUL), so that the copy writes 9 data bytes plus the terminating NUL, totaling 10 bytes.
+
+  3) Copy semantics and overflow into adjacent control field
+  - The program copies argv[1] into an 8-byte stack buffer using a NUL-terminated copy. With a 9-byte argument, the write will overflow the buffer by 2 bytes (1 data byte and then the terminating NUL). To make the subsequent control check succeed, this overflow must set the 4-byte integer control field located immediately adjacent to the buffer (on the stack) to the value 1.
+  - Environmental/architecture assumptions required for determinism:
+    a) The platform uses 32-bit `int` (common on x86/x86_64 ABIs).
+    b) The platform is little-endian (least significant byte stored at the lowest address).
+    c) The 4-byte control integer is immediately contiguous after the 8-byte buffer in the overflow direction (typical local layout for this code under common compiler settings; no stack protectors or reordering that would insert padding/guards between them).
+  - Under these assumptions, enforce the following byte-level constraint on argv[1]:
+    • Bytes 0..7: any non-NUL values (content unrestricted).
+    • Byte 8 (the 9th byte): 0x01. This byte becomes the least significant byte of the adjacent 4-byte integer when overflow occurs, setting it from 0 to 1.
+    • The terminating NUL written by the copy immediately after byte 8 provides 0x00 for the next byte of that integer. The remaining two most significant bytes of that integer must remain 0x00 (unchanged from initialization) to ensure the final integer value is exactly 1.
+
+  4) Encoding/content constraints
+  - argv[1] must contain no embedded NUL (0x00) prior to the 9th byte; otherwise, the copy would stop earlier and not overflow.
+  - Avoid spaces or shell-special characters so argv[1] is not split or altered by the shell; use bytes in the visible ASCII range or any non-whitespace bytes. The 9th byte must be exactly 0x01 (control-A) at the byte level; higher-level encodings must preserve this raw byte value.
+
+  Effect of the constraints
+  - Satisfying the above causes the 8-byte buffer copy to overflow into the adjacent 4-byte control field and set its value to 1. This makes the subsequent condition `flag == 1` evaluate to true, reaching the target branch and executing the lines that print "Logic bomb triggered" and return 1.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code:
+returncode:
+src_execution_summary: |2+
+
+  ```c
+  // stacknocrash_bo_l1_klee.c (37 lines total)
+  #include <stdio.h>
+  #include <string.h> 
+  #include "utils.h"
+  #include "a_tester.h"
+
+
+  // {"symvar":{"length": 64}}
+  int logic_bomb(char* symvar) {
+      int flag = 0;
+      char buf[8];
+
+      if(strlen(symvar) > 9) {
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+
+      // Unexecuted code (line 17) removed. Its line cov: 1/1 (100%)
+
+      if(flag == 1) {
+          // Unexecuted code (lines 20-21) removed. Its line cov: 0/2 (0%)
+      }
+
+      // Unexecuted code (lines 24-25) removed. Its line cov: 2/2 (100%)
+  }
+
+  int main(int argc, char **argv) {
+      fprintf(stderr, "\n");
+      if (argc < 2) {
+          // Unexecuted code (lines 31-32) removed. Its line cov: 0/2 (0%)
+      }
+
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace:
+execution_summary:
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Concrete input satisfying strlen(argv[1]) > 9: 10 non-NUL bytes
+      # No spaces to ensure it's passed as a single token by the shell
+      cmd = "./temp_executable AAAAAAAAAA"  # 10 'A's
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          return result.stderr or "", result.returncode
+      except subprocess.TimeoutExpired as e:
+          stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+          return stderr_text, -signal.SIGKILL
+      except Exception as e:
+          # Propagate unexpected execution errors
+          raise e
+src_execution_trace: |2
+
+  [stacknocrash_bo_l1_klee.c] enter main 3
+  [stacknocrash_bo_l1_klee.c] enter logic_bomb 1
+  [stacknocrash_bo_l1_klee.c] enter logic_bomb 2
+  Path without the bomb

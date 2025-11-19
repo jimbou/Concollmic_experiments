@@ -1,0 +1,346 @@
+id: 1
+src_id: 0
+create_time: '2025-11-14 16:58:24.268'
+time_taken: 109
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 2
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: deepseek-chat
+    cost: $0.02916735
+    call_cnt: 6
+    latency: 61.12s
+    input_tokens: 31126
+    output_tokens: 1368
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: deepseek-chat
+      cost: $0.02241442
+      call_cnt: 4
+      latency: 35.85s
+      input_tokens: 24823
+      output_tokens: 759
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: deepseek-chat
+      cost: $0.00479985
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: deepseek-chat
+      cost: $0.00589402
+      call_cnt: 1
+      latency: 15.00s
+      input_tokens: 5818
+      output_tokens: 322
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: deepseek-chat
+      cost: $0.00531743
+      call_cnt: 1
+      latency: 3.75s
+      input_tokens: 6149
+      output_tokens: 37
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: deepseek-chat
+      cost: $0.00576562
+      call_cnt: 1
+      latency: 6.45s
+      input_tokens: 6331
+      output_tokens: 150
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: deepseek-chat
+      cost: $0.00063750
+      call_cnt: 1
+      latency: 10.65s
+      input_tokens: 6525
+      output_tokens: 250
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: deepseek-chat
+      cost: $0.00675292
+      call_cnt: 2
+      latency: 25.27s
+      input_tokens: 6303
+      output_tokens: 609
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: deepseek-chat
+      cost: $0.00245025
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: deepseek-chat
+      cost: $0.00365243
+      call_cnt: 1
+      latency: 14.52s
+      input_tokens: 2970
+      output_tokens: 354
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: deepseek-chat
+      cost: $0.00065025
+      call_cnt: 1
+      latency: 10.75s
+      input_tokens: 3333
+      output_tokens: 255
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if(j == 7) -> true in file_cp_l1_klee.c:logic_bomb
+target_file_lines: file_cp_l1_klee.c:32-33
+target_lines_content: |2-
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+justification: This is the core logic bomb condition that has 0% historical coverage.
+  When triggered, it prints 'Logic bomb triggered' and returns 1, representing the
+  main program behavior that hasn't been tested. This branch is critical for achieving
+  complete coverage of the program's intended functionality.
+target_path_constraint: |-
+  1. Command-Line Arguments: The program must be executed with exactly one argument (argv[1] must exist). The test harness already provides this correctly.
+
+  2. Input String Constraint: The first character of the input string must be the digit '7' (ASCII value 55). Specifically:
+     - The input string must have at least 1 character
+     - The first character (s[0]) must be '7' (ASCII 55)
+     - This ensures that symvar = s[0] - 48 = 55 - 48 = 7
+
+  3. File System Constraints: The program must be able to:
+     - Create and write to a file named "tmp.covpro" in the current working directory
+     - Read from the same file "tmp.covpro" immediately after writing
+     - Delete the file after reading
+
+  4. Mathematical Constraint: The value written to and read from the file must equal 7, which is achieved when the first character of the input string is '7'.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable", "7"],  # Changed argument from "AAAA" to "7" to satisfy the constraint
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 1
+src_execution_summary: |2+
+
+  ```c
+  // file_cp_l1_klee.c (48 lines total)
+  #include <stdio.h>
+  /*
+  TOY:
+  Result:
+  Triton: Pin is out of memory: MmapChecked
+
+  */
+  #include <string.h> 
+  #include "utils.h"
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0] - 48;
+      int j;
+      char file[] = "tmp.covpro";
+      FILE *fp = fopen(file, "ab+");
+      if(fp == NULL)
+      {
+          // Unexecuted code (lines 20-21) removed. Its line cov: 0/2 (0%)
+      }
+      fprintf(fp,"%d",symvar);
+      fclose(fp);
+
+      fp = fopen("tmp.covpro", "r");
+      fscanf(fp,"%d",&j);
+      fclose(fp);
+      remove(file);
+
+      if(j == 7){
+          // Unexecuted code (lines 32-33) removed. Its line cov: 0/2 (0%)
+      } else{
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+  }
+
+  int main(int argc, char **argv) {
+      fprintf(stderr, "\n");
+      if (argc < 2) {
+          // Unexecuted code (lines 43-44) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [file_cp_l1_klee.c] enter main 3
+  [file_cp_l1_klee.c] enter logic_bomb 1
+  [file_cp_l1_klee.c] enter logic_bomb 3
+  [file_cp_l1_klee.c] enter logic_bomb 4
+  [file_cp_l1_klee.c] enter logic_bomb 5
+  Logic bomb triggered
+execution_summary: |2+
+
+  ```c
+  // file_cp_l1_klee.c (48 lines total)
+  #include <stdio.h>
+  /*
+  TOY:
+  Result:
+  Triton: Pin is out of memory: MmapChecked
+
+  */
+  #include <string.h> 
+  #include "utils.h"
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0] - 48;
+      int j;
+      char file[] = "tmp.covpro";
+      FILE *fp = fopen(file, "ab+");
+      if(fp == NULL)
+      {
+          // Unexecuted code (lines 20-21) removed. Its line cov: 0/2 (0%)
+      }
+      fprintf(fp,"%d",symvar);
+      fclose(fp);
+
+      fp = fopen("tmp.covpro", "r");
+      fscanf(fp,"%d",&j);
+      fclose(fp);
+      remove(file);
+
+      if(j == 7){
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+      } else{
+          // Unexecuted code (lines 35-36) removed. Its line cov: 2/2 (100%)
+      }
+  }
+
+  int main(int argc, char **argv) {
+      fprintf(stderr, "\n");
+      if (argc < 2) {
+          // Unexecuted code (lines 43-44) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [file_cp_l1_klee.c] enter main 3
+  [file_cp_l1_klee.c] enter logic_bomb 1
+  [file_cp_l1_klee.c] enter logic_bomb 3
+  [file_cp_l1_klee.c] enter logic_bomb 4
+  [file_cp_l1_klee.c] enter logic_bomb 6
+  Path without the bomb

@@ -1,0 +1,269 @@
+id: 2
+src_id: 1
+create_time: '2025-11-18 21:20:55.384'
+time_taken: 219
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.61696000
+    call_cnt: 3
+    latency: 65.70s
+    input_tokens: 12995
+    output_tokens: 5951
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.48582000
+      call_cnt: 2
+      latency: 53.55s
+      input_tokens: 10365
+      output_tokens: 4642
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10126000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.36332000
+      call_cnt: 1
+      latency: 47.52s
+      input_tokens: 5063
+      output_tokens: 4288
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.02124000
+      call_cnt: 1
+      latency: 6.03s
+      input_tokens: 5302
+      output_tokens: 354
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.13114000
+      call_cnt: 1
+      latency: 12.15s
+      input_tokens: 2630
+      output_tokens: 1309
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05260000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.07854000
+      call_cnt: 1
+      latency: 12.15s
+      input_tokens: 2630
+      output_tokens: 1309
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (x == 197) -> false in printint_int_l1_klee.c:logic_bomb
+target_file_lines: printint_int_l1_klee.c:19-20
+target_lines_content: |2-
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+justification: The else-direction of the condition in logic_bomb was not executed
+  in the current trace, as indicated by the removed block with historical coverage
+  100%. While the input-validation branch in main (if (argc < 2) -> true) has 0% historical
+  coverage, it is unreachable with the current harness because the harness always
+  supplies one argument, making argc >= 2. Therefore, to improve path diversity within
+  the constraints of the existing harness, we select the else path of logic_bomb.
+  This will exercise alternate program behavior without triggering the logic bomb
+  message and expand dynamic coverage for this run.
+target_path_constraint: |-
+  Chronological constraints to reach: if (x == 197) -> false in logic_bomb
+
+  1) Process invocation (command-line):
+  - The program must be launched with exactly one positional argument besides the program name, so that argc >= 2 and argv[1] exists. The harness already invokes the binary with one argument, satisfying this requirement.
+
+  2) Argument encoding and length:
+  - argv[1] must be a non-empty UTF-8 string (or ASCII is sufficient) so that indexing s[0] is valid.
+
+  3) Computation mapping:
+  - The program reads the first byte of argv[1] (call it b0), interprets it as an unsigned char, then computes symvar = (int)b0 - 48.
+  - It then computes x = symvar + 190 = (int)b0 - 48 + 190 = (int)b0 + 142.
+
+  4) Target branch condition (to take the else-branch):
+  - Require x != 197, i.e., (int)b0 + 142 != 197.
+  - Equivalently, (int)b0 != 55.
+
+  5) Safety/robustness constraints (avoid undefined behavior):
+  - argv[1] must have length >= 1 so that s[0] is accessible.
+  - No additional constraints on later characters; only the first byte matters.
+
+  Any input meeting (1), (2), (4), and (5) will ensure the condition x == 197 is false and the program will execute the else branch.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import subprocess
+      import signal
+
+      # Concrete input satisfying the target path constraint:
+      # Choose argv[1] whose first byte b0 != 55 ('7'). Pick '8' (ASCII 56).
+      # This makes x = (int)b0 + 142 = 56 + 142 = 198, so x != 197 and the else-branch is taken.
+      # Keep the same invocation style as the original harness (shell=True with a command string).
+      cmd = "./temp_executable 8"
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          return result.stderr if result.stderr is not None else "", result.returncode
+      except subprocess.TimeoutExpired as e:
+          stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+          return stderr_text, -signal.SIGKILL
+      except Exception as e:
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // printint_int_l1_klee.c (32 lines total)
+  #include <stdio.h>
+  /*
+  TOY:
+  */
+  #include <string.h> 
+  #include "utils.h"
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0] - 48;
+      int x = symvar + 190;
+      printf("x = %d\n", x);
+
+      if(x == 197){
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+      }else{
+          // Unexecuted code (lines 19-20) removed. Its line cov: 2/2 (100%)
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 26-27) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [printint_int_l1_klee.c] enter main 1
+  [printint_int_l1_klee.c] enter main 3
+  [printint_int_l1_klee.c] enter logic_bomb 1
+  [printint_int_l1_klee.c] enter logic_bomb 3
+  Path without the bomb
+execution_summary: |2+
+
+  ```c
+  // printint_int_l1_klee.c (32 lines total)
+  #include <stdio.h>
+  /*
+  TOY:
+  */
+  #include <string.h> 
+  #include "utils.h"
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0] - 48;
+      int x = symvar + 190;
+      printf("x = %d\n", x);
+
+      if(x == 197){
+          // Unexecuted code (lines 16-17) removed. Its line cov: 2/2 (100%)
+      }else{
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 26-27) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import subprocess
+      import signal
+
+      # Concrete input satisfying the target path constraint:
+      # argv[1] starts with ASCII 55 ('7'), and the program receives exactly one argument.
+      # Using the same invocation style (shell=True with a command string) as the original harness.
+      cmd = "./temp_executable 7"
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          return result.stderr if result.stderr is not None else "", result.returncode
+      except subprocess.TimeoutExpired as e:
+          stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+          return stderr_text, -signal.SIGKILL
+      except Exception as e:
+          raise e
+src_execution_trace: |
+  [printint_int_l1_klee.c] enter main 1
+  [printint_int_l1_klee.c] enter main 3
+  [printint_int_l1_klee.c] enter logic_bomb 1
+  [printint_int_l1_klee.c] enter logic_bomb 2
+  Logic bomb triggered

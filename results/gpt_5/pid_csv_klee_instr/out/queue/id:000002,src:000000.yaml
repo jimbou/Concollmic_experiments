@@ -1,0 +1,286 @@
+id: 2
+src_id: 0
+create_time: '2025-11-17 21:35:12.790'
+time_taken: 497
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: true
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $1.47956000
+    call_cnt: 4
+    latency: 220.72s
+    input_tokens: 16762
+    output_tokens: 19072
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.38894000
+      call_cnt: 2
+      latency: 29.68s
+      input_tokens: 10834
+      output_tokens: 2871
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10578000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.25736000
+      call_cnt: 1
+      latency: 23.86s
+      input_tokens: 5289
+      output_tokens: 2441
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.02580000
+      call_cnt: 1
+      latency: 5.82s
+      input_tokens: 5545
+      output_tokens: 430
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $1.09062000
+      call_cnt: 2
+      latency: 191.04s
+      input_tokens: 5928
+      output_tokens: 16201
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05908000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    non_tool:
+      model: gpt-5
+      cost: $0.55100000
+      call_cnt: 1
+      latency: 119.47s
+      input_tokens: 2954
+      output_tokens: 8192
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.48054000
+      call_cnt: 1
+      latency: 71.57s
+      input_tokens: 2974
+      output_tokens: 8009
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (pid % 78 == (argv[1][0] - 48)) -> true in pid_csv_klee.c:logic_bomb
+target_file_lines: pid_csv_klee.c:15-16
+target_lines_content: |2-
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+justification: The only branch with zero historical coverage is `if (argc < 2)` in
+  main, but the fixed harness always supplies one argument and cannot be modified,
+  making that branch unreachable under the current setup. The `pid % 78 == symvar`
+  branch in logic_bomb was not taken in the current execution and is the only reachable
+  alternative path with the existing harness. Selecting it enables exploration of
+  the “bomb” path guarded by the PID-dependent condition, diversifying execution and
+  exercising environment-sensitive behavior, despite its body having historical coverage.
+  This is the most feasible target to reach given the fixed input and harness constraints.
+target_path_constraint: |-
+  Chronological, external-input constraints to reach: if (pid % 78 == (argv[1][0] - 48)) evaluates to true in logic_bomb.
+
+  1. Process launch and argument count:
+  - The program must be executed with exactly one required user argument present, as the harness already does: argv[1] exists and is a non-empty string. No changes to the number of arguments are needed.
+
+  2. Argument content (first character constraint):
+  - Let s be the string passed as the single command-line argument.
+  - Its first byte (s[0]) must be an ASCII digit character '0' through '9'. This ensures that (s[0] - 48) is a valid integer between 0 and 9.
+  - Define symvar := numeric_value_of_first_digit(s) ∈ {0,1,2,3,4,5,6,7,8,9}.
+
+  3. Process ID relation constraint:
+  - Let pid be the decimal process identifier of the running process at the time logic_bomb() is called.
+  - The following arithmetic relation must hold: pid mod 78 = symvar.
+
+  4. Remaining argument bytes:
+  - No constraints on subsequent bytes; they may be arbitrary printable characters. The string must remain valid under the platform’s default encoding (UTF-8 is acceptable) and be NUL-terminated as required by C strings.
+
+  5. Environment/system constraints enabling PID control (if applicable):
+  - To satisfy pid mod 78 = symvar, the testing environment must permit controlling or selecting the process ID modulo 78 (e.g., by scheduling or isolating execution so the spawned process PID achieves the desired residue class). There are no additional filesystem or I/O requirements.
+
+  These constraints are sufficient for any solver/test-generation system that can choose the first argument’s leading digit and influence (directly or indirectly) the process PID residue to reach the true branch.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import subprocess
+      import signal
+
+      # We dynamically select the argument so that the target program's PID modulo 78
+      # equals the first digit of the argument. We achieve this by repeatedly spawning
+      # a subshell (each with a new PID) until its PID % 78 <= 9, then exec the program
+      # from that subshell so the exec'd program inherits the same PID.
+      # The argument will be "<digit>X" ensuring the first byte is an ASCII digit.
+      #
+      # Outline of the shell logic:
+      # while true:
+      #   run a subshell:
+      #     r=$(( $$ % 78 ))
+      #     if r <= 9: exec ./temp_executable "${r}X"
+      #     else: exit 1
+      #   capture subshell exit code into rc
+      #   if rc != 1: exit rc (program ran and finished), else loop again
+
+      cmd = """
+  while :; do
+    /bin/sh -c 'r=$(( $$ % 78 )); if [ $r -le 9 ]; then exec ./temp_executable "${r}X"; else exit 1; fi'
+    rc=$?
+    if [ "$rc" -ne 1 ]; then exit "$rc"; fi
+  done
+  """
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          return result.stderr or "", result.returncode
+      except subprocess.TimeoutExpired as e:
+          return (e.stderr if isinstance(e.stderr, str) else ""), -signal.SIGKILL
+      except Exception as e:
+          raise e
+returncode: -9
+src_execution_summary: |2+
+
+  ```c
+  // pid_csv_klee.c (31 lines total)
+  #include <stdio.h>
+  #define _GNU_SOURCE
+  #include <stdio.h>
+  #include <stdlib.h>
+  #include <unistd.h>
+
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+     int symvar = s[0] - 48;
+     int pid = (int) getpid();
+
+     if(pid%78 == symvar){
+          // Unexecuted code (lines 15-16) removed. Its line cov: 2/2 (100%)
+     } else {
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 25-26) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace: ''
+execution_summary: ''
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [pid_csv_klee.c] enter main 1
+  [pid_csv_klee.c] enter main 3
+  [pid_csv_klee.c] enter logic_bomb 1
+  [pid_csv_klee.c] enter logic_bomb 3
+  Path without the bomb

@@ -1,0 +1,299 @@
+id: 1
+src_id: 0
+create_time: '2025-11-17 21:29:18.361'
+time_taken: 140
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.69688000
+    call_cnt: 3
+    latency: 80.75s
+    input_tokens: 14108
+    output_tokens: 6912
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.44370000
+      call_cnt: 2
+      latency: 45.89s
+      input_tokens: 10824
+      output_tokens: 3787
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10556000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.29164000
+      call_cnt: 1
+      latency: 31.87s
+      input_tokens: 5278
+      output_tokens: 3012
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.04650000
+      call_cnt: 1
+      latency: 14.03s
+      input_tokens: 5546
+      output_tokens: 775
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.25318000
+      call_cnt: 1
+      latency: 34.86s
+      input_tokens: 3284
+      output_tokens: 3125
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.06568000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.18750000
+      call_cnt: 1
+      latency: 34.86s
+      input_tokens: 3284
+      output_tokens: 3125
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (254748364 * (s[0] - 48) < 0 && (s[0] - 48) > 0) -> true in multiplyint_to_l1_klee.c:logic_bomb
+target_file_lines: multiplyint_to_l1_klee.c:8-9
+target_lines_content: |2-
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+justification: 'This is the core “bomb-triggering” branch and currently has zero historical
+  coverage (lines 8-9: 0/2, 0%). Reaching it exercises arithmetic overflow/edge behavior
+  and diverges from the executed path, which only hit the else branch printing “Path
+  without the bomb.” Given the harness supplies a single string argument, guiding
+  the first byte so that the multiplication under 32-bit signed wraparound becomes
+  negative while the derived integer is positive will cover previously unseen behavior.'
+target_path_constraint: |-
+  Environment and invocation constraints (chronological):
+
+  1) Program invocation via harness:
+  - The harness will execute the binary as a shell command string: "./temp_executable AAAA".
+  - Therefore, the process receives argc == 2 and argv[1] is the ASCII string passed by the harness.
+  - No changes to the executable path or arg count are permitted by the harness.
+
+  2) Argument presence/format constraints (to reach logic_bomb):
+  - A single command-line argument must be present (sourced from the harness); main enforces argc >= 2 before passing argv[1] to logic_bomb.
+  - The argument is treated as a byte string s. The function uses only s[0].
+
+  3) Character-to-integer mapping used by the program:
+  - The program computes symvar = s[0] - 48, where 48 is the ASCII code of character '0'.
+  - Thus, symvar is the integer value of the first byte minus 48. For example, if s[0] is the ASCII digit '0'..'9', then symvar is 0..9. Non-digit bytes yield other integers (can be negative or >9).
+
+  4) Target branch boolean condition to satisfy (two conjuncts):
+  - Conjunct A (positivity): symvar > 0. This requires s[0] be a byte value strictly greater than 48 (ASCII '0').
+  - Conjunct B (signed-32-bit overflow-induced negativity): (254,748,364 * symvar) < 0 when the multiplication is performed in 32-bit signed arithmetic with wraparound on overflow. This must be interpreted in two’s-complement 32-bit semantics as used by typical C int on the target build, so the product is truncated to 32 bits and then compared as signed.
+
+  5) Formalized constraint under 32-bit signed wraparound semantics:
+  - Let symvar = (unsigned char)s[0] - 48, interpreted as an int in C after usual integer promotions.
+  - Require: symvar ∈ Z, symvar > 0.
+  - Let P = ( (254748364 * symvar) modulo 2^32 ). Interpret P as a signed 32-bit integer in range [-2^31, 2^31 - 1] via two’s complement.
+  - Require: P < 0.
+
+  6) Constraints on the remainder of the string:
+  - The remaining bytes s[1], s[2], s[3], if present, are ignored by the branch condition and may be arbitrary; there are no NUL-termination requirements stated in the code, but typical argv strings are NUL-terminated. No other bytes influence the branch.
+
+  7) Encoding and byte-level specification for the first byte:
+  - Let b0 be the first byte value of argv[1] (0..255). Then symvar = b0 - 48 using integer arithmetic on promoted b0.
+  - Final combined constraint: b0 ∈ {49..255} such that when computing P = ((254,748,364 * (b0 - 48)) mod 2^32) and interpreting P as signed 32-bit, P is negative.
+
+  Notes:
+  - Do not assume defined behavior beyond 32-bit two’s-complement wraparound for int; this is the intended interpretation to make the guarded condition satisfiable while keeping symvar > 0.
+  - No file I/O or environment variables participate; only argv[1][0] matters.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # We choose argv[1] such that:
+      # - b0 = '9' (ASCII 57), so symvar = 57 - 48 = 9 > 0
+      # - P = (254,748,364 * 9) = 2,292,735,276, which is in [2^31, 2^32),
+      #   thus its 32-bit two's-complement interpretation is negative.
+      # Hence, use the single argument "9".
+      cmd = "./temp_executable 9"
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, return captured stderr (if any) and -SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # Propagate unexpected execution failures
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // multiplyint_to_l1_klee.c (23 lines total)
+  #include <stdio.h>
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0] - 48;
+      if (254748364 * symvar < 0 && symvar > 0){
+          // Unexecuted code (lines 8-9) removed. Its line cov: 0/2 (0%)
+      } else {
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 18-19) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [multiplyint_to_l1_klee.c] enter main 1
+  [multiplyint_to_l1_klee.c] enter main 3
+  [multiplyint_to_l1_klee.c] enter logic_bomb 1
+  [multiplyint_to_l1_klee.c] enter logic_bomb 3
+  Path without the bomb
+execution_summary: |2+
+
+  ```c
+  // multiplyint_to_l1_klee.c (23 lines total)
+  #include <stdio.h>
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0] - 48;
+      if (254748364 * symvar < 0 && symvar > 0){
+          // Unexecuted code (lines 8-9) removed. Its line cov: 0/2 (0%)
+      } else {
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 18-19) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [multiplyint_to_l1_klee.c] enter main 1
+  [multiplyint_to_l1_klee.c] enter main 3
+  [multiplyint_to_l1_klee.c] enter logic_bomb 1
+  [multiplyint_to_l1_klee.c] enter logic_bomb 3
+  Path without the bomb

@@ -10,10 +10,10 @@
 int logic_bomb(char* s) {
     fprintf(stderr, "[jmp_sj_l1_klee.c] enter logic_bomb 1\n");
     int symvar = s[0] - 48;
-    if (symvar%6 != 1 || symvar < 10|| symvar > 40 || symvar == 19)
-    {
+    if (!(symvar%6 != 1 || symvar < 10|| symvar > 40 || symvar == 19)){
+        // printf("Adjusting symvar from %d to 78\n", symvar);
         fprintf(stderr, "[jmp_sj_l1_klee.c] enter logic_bomb 2\n");
-        symvar = 13;
+        symvar = 29;
         // fprintf(stderr, "[jmp_sj_l1_klee.c] exit logic_bomb 2\n");
     }
     long long addr = &&flag_0 + symvar;

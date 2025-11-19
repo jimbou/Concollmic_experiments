@@ -1,0 +1,247 @@
+id: 2
+src_id: 0
+create_time: '2025-11-18 22:04:52.439'
+time_taken: 171
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 2
+is_satisfiable: true
+is_crash: true
+is_hang: false
+usage: |
+  TOTAL:
+    model: deepseek-chat
+    cost: $0.01146510
+    call_cnt: 3
+    latency: 47.92s
+    input_tokens: 10018
+    output_tokens: 1255
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SUMMARIZE:
+    TOTAL: {}
+  SOLVE:
+    TOTAL:
+      model: deepseek-chat
+      cost: $0.01146510
+      call_cnt: 3
+      latency: 47.92s
+      input_tokens: 10018
+      output_tokens: 1255
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: deepseek-chat
+      cost: $0.00235538
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: deepseek-chat
+      cost: $0.00817897
+      call_cnt: 2
+      latency: 34.01s
+      input_tokens: 6255
+      output_tokens: 890
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: deepseek-chat
+      cost: $0.00093075
+      call_cnt: 1
+      latency: 13.92s
+      input_tokens: 3763
+      output_tokens: 365
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (argc < 2) -> true in function main
+target_file_lines: pow_ef_l2_klee.c:25-26
+target_lines_content: |2-
+          fprintf(stderr, "Usage: %s <input-string>\n", argv[0]);
+          return 2;
+justification: This branch has 0% historical coverage and represents the error handling
+  path for insufficient command-line arguments. While it's less critical than the
+  main logic bomb branch, testing error handling paths is important for comprehensive
+  test coverage. This branch would exercise the program's behavior when no arguments
+  are provided.
+target_path_constraint: |-
+  1. Command-Line Argument Count: The program must be executed with fewer than 2 command-line arguments (including the program name): argc < 2
+
+  2. This means the program must be called with either:
+     - No arguments at all: argc == 1 (only the program name)
+     - Or with insufficient arguments for the program's expected input
+
+  3. The program expects at least one argument after the program name, so providing fewer than that will trigger this error path
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          # Modified to execute without arguments to satisfy argc < 2 constraint
+          # Original: "./temp_executable AAAA" (argc = 2)
+          # Modified: "./temp_executable" (argc = 1)
+          result = subprocess.run(
+              ["./temp_executable"],  # Removed the argument to satisfy argc < 2
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 2
+src_execution_summary: |2+
+
+  ```c
+  // pow_ef_l2_klee.c (30 lines total)
+  #include <stdio.h>
+  /*
+  TOY:
+  */
+  #include <string.h> 
+  #include <math.h>
+  #include "utils.h"
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0] - 48;
+      if(pow(symvar, 2) == 49){
+          // Unexecuted code (lines 14-15) removed. Its line cov: 0/2 (0%)
+      }else{
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+  }
+
+  int main(int argc, char **argv) {
+      fprintf(stderr, "\n");
+      if (argc < 2) {
+          // Unexecuted code (lines 25-26) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info: |
+  Crash reason: Segmentation fault
+  Stderr:
+  Usage: ./temp_executable <input-string>
+execution_trace: |2
+
+  [pow_ef_l2_klee.c] enter main 2
+  Usage: ./temp_executable <input-string>
+execution_summary: |2+
+
+  ```c
+  // pow_ef_l2_klee.c (30 lines total)
+  #include <stdio.h>
+  /*
+  TOY:
+  */
+  #include <string.h> 
+  #include <math.h>
+  #include "utils.h"
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      // Unexecuted code (lines 12-19) removed. Its line cov: 8/8 (100%)
+  }
+
+  int main(int argc, char **argv) {
+      fprintf(stderr, "\n");
+      if (argc < 2) {
+          fprintf(stderr, "Usage: %s <input-string>\n", argv[0]);
+          return 2;
+      }
+      // Unexecuted code (lines 28-29) removed. Its line cov: 2/2 (100%)
+  }
+  ```
+
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [pow_ef_l2_klee.c] enter main 3
+  [pow_ef_l2_klee.c] enter logic_bomb 1
+  [pow_ef_l2_klee.c] enter logic_bomb 3
+  Path without the bomb

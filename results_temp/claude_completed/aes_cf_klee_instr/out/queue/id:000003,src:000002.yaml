@@ -1,0 +1,365 @@
+id: 3
+src_id: 2
+create_time: '2025-11-18 23:04:07.211'
+time_taken: 652
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: claude-3-7-sonnet-latest
+    cost: $0.78559500
+    call_cnt: 8
+    latency: 73.37s
+    input_tokens: 47003
+    output_tokens: 2685
+    cache_read_tokens: 46973
+    cache_write_tokens: 8404
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.68014500
+      call_cnt: 6
+      latency: 53.67s
+      input_tokens: 41717
+      output_tokens: 1813
+      cache_read_tokens: 41695
+      cache_write_tokens: 6092
+    INITIAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.08499000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: claude-3-7-sonnet-latest
+      cost: $0.31795500
+      call_cnt: 3
+      latency: 17.40s
+      input_tokens: 18348
+      output_tokens: 366
+      cache_read_tokens: 18336
+      cache_write_tokens: 4074
+    think:
+      model: claude-3-7-sonnet-latest
+      cost: $0.13029000
+      call_cnt: 1
+      latency: 13.99s
+      input_tokens: 7783
+      output_tokens: 531
+      cache_read_tokens: 7780
+      cache_write_tokens: 179
+    select_target_branch:
+      model: claude-3-7-sonnet-latest
+      cost: $0.12963000
+      call_cnt: 1
+      latency: 8.70s
+      input_tokens: 7624
+      output_tokens: 340
+      cache_read_tokens: 7620
+      cache_write_tokens: 882
+    generate_path_constraint:
+      model: claude-3-7-sonnet-latest
+      cost: $0.01728000
+      call_cnt: 1
+      latency: 13.58s
+      input_tokens: 7962
+      output_tokens: 576
+      cache_read_tokens: 7959
+      cache_write_tokens: 957
+  SOLVE:
+    TOTAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.10545000
+      call_cnt: 2
+      latency: 19.70s
+      input_tokens: 5286
+      output_tokens: 872
+      cache_read_tokens: 5278
+      cache_write_tokens: 2312
+    INITIAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.03963000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: claude-3-7-sonnet-latest
+      cost: $0.05055000
+      call_cnt: 1
+      latency: 9.89s
+      input_tokens: 2642
+      output_tokens: 363
+      cache_read_tokens: 2639
+      cache_write_tokens: 969
+    provide_solution:
+      model: claude-3-7-sonnet-latest
+      cost: $0.01527000
+      call_cnt: 1
+      latency: 9.81s
+      input_tokens: 2644
+      output_tokens: 509
+      cache_read_tokens: 2639
+      cache_write_tokens: 1343
+  EXECUTE:
+    TOTAL: {}
+target_branch: if(0 == memcmp((char*) plaintext, (char*) decodetext, 16)) -> false
+  in aes_cf_klee.c:logic_bomb
+target_file_lines: aes_cf_klee.c:59-60
+target_lines_content: |2-
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+justification: |-
+  This branch represents the case where the AES decryption result does not match the expected plaintext, causing the logic bomb not to trigger. Currently, the execution trace shows that the program successfully decrypted the ciphertext to match the plaintext, triggering the logic bomb. 
+
+  The branch has 100% historical coverage (lines 59-60), but exploring the negative case is valuable because:
+  1. It helps understand how the program behaves with incorrect AES keys
+  2. It exercises a different execution path through the core functionality
+  3. It provides insight into the security aspects of the program by exploring key validation
+
+  Since this branch is central to the program's core functionality (AES decryption validation), exploring it would provide valuable insights into the program's behavior with different inputs.
+target_path_constraint: |-
+  To reach the branch where `if(0 == memcmp((char*) plaintext, (char*) decodetext, 16))` evaluates to false in the `logic_bomb` function, we need the following constraints:
+
+  1. The command-line argument must be present: `argc >= 2`
+
+  2. The input string must have a length of exactly 32 characters: `strlen(argv[1]) == 32`
+
+  3. The input string must be a valid hexadecimal string that can be parsed into 16 bytes using the `sscanf` format string:
+     - Each pair of characters in the input must be a valid hexadecimal byte representation (00-FF)
+
+  4. The key derived from the input string must decrypt the ciphertext to a value that differs from the expected plaintext:
+     - Given ciphertext = [0x3a, 0xd7, 0x7b, 0xb4, 0x0d, 0x7a, 0x36, 0x60, 0xa8, 0x9e, 0xca, 0xf3, 0x24, 0x66, 0xef, 0x97]
+     - Expected plaintext = [0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96, 0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a]
+     - The AES-128-ECB decryption of the ciphertext using the provided key must NOT equal the expected plaintext
+     - Formally: AES128_ECB_decrypt(ciphertext, key_from_input) ≠ plaintext
+
+  In essence, we need a 32-character hexadecimal string that represents a 16-byte AES key which, when used to decrypt the given ciphertext, produces a result different from the expected plaintext. Any key other than the one currently being used (2B7E151628AED2A6ABF7158809CF4F3C) should satisfy this constraint.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          # Use a different key than the original: 2B7E151628AED2A6ABF7158809CF4F3D
+          # Just changed the last character from 'C' to 'D'
+          # This is still a valid 32-character hex string (16 bytes in hex format)
+          # But will decrypt to a different plaintext
+          result = subprocess.run(
+              ["./temp_executable", "2B7E151628AED2A6ABF7158809CF4F3D"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=False,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // aes_cf_klee.c (72 lines total)
+  #include <stdio.h>
+  /*
+  TOY:
+  */
+  #include <inttypes.h>
+  #include "aes.h"
+  #include "utils.h"
+
+  void aes_print(uint8_t* str) {
+      // Unexecuted code (lines 10-13) removed. Its line cov: 0/4 (0%)
+  }
+
+  #include "a_tester.h"
+
+  // {"s":{"length": 32}}
+  int logic_bomb(char* s) {
+      if(strlen(s) != 32){
+          // Unexecuted code (lines 21-23) removed. Its line cov: 3/3 (100%)
+      }
+
+      uint8_t key[16];
+
+      sscanf(s,
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8,
+          &key[0],&key[1],
+          &key[2],&key[3],
+          &key[4],&key[5],
+          &key[6],&key[7],
+          &key[8],&key[9],
+          &key[10],&key[11],
+          &key[12],&key[13],
+          &key[14],&key[15]);
+
+      //aes_print(key);
+
+      uint8_t decodetext[16];
+      uint8_t ciphertext[] = {0x3a, 0xd7, 0x7b, 0xb4, 0x0d, 0x7a, 0x36, 0x60, 0xa8, 0x9e, 0xca, 0xf3, 0x24, 0x66, 0xef, 0x97};
+      uint8_t plaintext[] = {0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96, 0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a};
+
+      AES128_ECB_decrypt(ciphertext, key, decodetext);
+
+      //aes_print(decodetext);
+      if(0 == memcmp((char*) plaintext, (char*) decodetext, 16)){
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+      }else{
+          // Unexecuted code (lines 59-60) removed. Its line cov: 2/2 (100%)
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 66-67) removed. Its line cov: 0/2 (0%)
+      }
+
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [aes_cf_klee.c] enter main 1
+  [aes_cf_klee.c] enter main 3
+  [aes_cf_klee.c] enter logic_bomb 1
+  [aes_cf_klee.c] enter logic_bomb 3
+  [aes_cf_klee.c] enter logic_bomb 5
+  Path without the bomb
+execution_summary: |2+
+
+  ```c
+  // aes_cf_klee.c (72 lines total)
+  #include <stdio.h>
+  /*
+  TOY:
+  */
+  #include <inttypes.h>
+  #include "aes.h"
+  #include "utils.h"
+
+  void aes_print(uint8_t* str) {
+      // Unexecuted code (lines 10-13) removed. Its line cov: 0/4 (0%)
+  }
+
+  #include "a_tester.h"
+
+  // {"s":{"length": 32}}
+  int logic_bomb(char* s) {
+      if(strlen(s) != 32){
+          // Unexecuted code (lines 21-23) removed. Its line cov: 3/3 (100%)
+      }
+
+      uint8_t key[16];
+
+      sscanf(s,
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8,
+          &key[0],&key[1],
+          &key[2],&key[3],
+          &key[4],&key[5],
+          &key[6],&key[7],
+          &key[8],&key[9],
+          &key[10],&key[11],
+          &key[12],&key[13],
+          &key[14],&key[15]);
+
+      //aes_print(key);
+
+      uint8_t decodetext[16];
+      uint8_t ciphertext[] = {0x3a, 0xd7, 0x7b, 0xb4, 0x0d, 0x7a, 0x36, 0x60, 0xa8, 0x9e, 0xca, 0xf3, 0x24, 0x66, 0xef, 0x97};
+      uint8_t plaintext[] = {0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96, 0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a};
+
+      AES128_ECB_decrypt(ciphertext, key, decodetext);
+
+      //aes_print(decodetext);
+      if(0 == memcmp((char*) plaintext, (char*) decodetext, 16)){
+          // Unexecuted code (lines 56-57) removed. Its line cov: 2/2 (100%)
+      }else{
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 66-67) removed. Its line cov: 0/2 (0%)
+      }
+
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          # Use the key we identified: 2B7E151628AED2A6ABF7158809CF4F3C
+          # This is the AES-128 key that will decrypt the ciphertext to the expected plaintext
+          # The key is 32 characters long (16 bytes in hex format)
+          result = subprocess.run(
+              ["./temp_executable", "2B7E151628AED2A6ABF7158809CF4F3C"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=False,  # Changed to False to avoid shell parsing issues
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [aes_cf_klee.c] enter main 1
+  [aes_cf_klee.c] enter main 3
+  [aes_cf_klee.c] enter logic_bomb 1
+  [aes_cf_klee.c] enter logic_bomb 3
+  [aes_cf_klee.c] enter logic_bomb 4
+  Logic bomb triggered

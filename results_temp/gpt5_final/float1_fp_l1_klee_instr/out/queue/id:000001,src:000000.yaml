@@ -1,0 +1,312 @@
+id: 1
+src_id: 0
+create_time: '2025-11-17 20:55:36.870'
+time_taken: 189
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 2
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.90704000
+    call_cnt: 3
+    latency: 146.34s
+    input_tokens: 14185
+    output_tokens: 10389
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.67766000
+      call_cnt: 2
+      latency: 112.40s
+      input_tokens: 10831
+      output_tokens: 7684
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10610000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.52020000
+      call_cnt: 1
+      latency: 98.89s
+      input_tokens: 5305
+      output_tokens: 6828
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.05136000
+      call_cnt: 1
+      latency: 13.51s
+      input_tokens: 5526
+      output_tokens: 856
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.22938000
+      call_cnt: 1
+      latency: 33.94s
+      input_tokens: 3354
+      output_tokens: 2705
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.06708000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.16230000
+      call_cnt: 1
+      latency: 33.94s
+      input_tokens: 3354
+      output_tokens: 2705
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (a - b == 0) -> true in float1_fp_l1_klee.c:logic_bomb
+target_file_lines: float1_fp_l1_klee.c:14-15
+target_lines_content: |2-
+              fprintf(stderr, "Logic bomb triggered\n");
+              return 1;
+justification: This nested branch guards the program’s core “bomb” behavior and currently
+  has 0% historical coverage (Unexecuted code lines 14-15). Exercising it will definitively
+  increase coverage beyond the already-taken outer branch (a != 0.1). The branch is
+  reachable by controlling the first byte of the single command-line string argument
+  so that the computed float a equals b at float precision, which causes (a - b) to
+  be exactly 0 after usual promotions.
+target_path_constraint: |-
+  Program interface and invocation:
+  - The program is executed as a native binary named temp_executable and receives exactly one command-line argument: a string s of length 4 bytes (no spaces required because the harness wraps it as a single shell argument). Only s[0] (the first byte) influences the path.
+
+  Environmental and invocation constraints:
+  1) Argument count: The process must be started with at least one argument beyond argv[0] (the program name). The harness already supplies one argument, so no additional constraints are needed here.
+
+  Input string structure and encoding:
+  2) The single argument s is a sequence of 4 bytes. Treat s as ASCII bytes; only the first byte is used. Let c denote the numeric value of the first byte, i.e., c = s[0] interpreted as unsigned char.
+
+  Semantic mapping performed by the program:
+  - The program computes an integer symvar = c - 48, then computes a = symvar / 70.0 as a 32-bit IEEE-754 float, and sets b = 0.1 (float).
+
+  Path constraints to reach the target branch (a - b == 0):
+  3) Ensure the outer guard a != 0.1 evaluates to true to enter the nested condition. Given float rounding, require that the float value of a differs from the float value of 0.1. This is automatically satisfied by any c that does not make a exactly the same float as 0.1; see (4) for the precise condition we need.
+  4) Make (a - b) equal to 0 in float arithmetic. Since both a and b are float, this is equivalent to requiring a and b to have exactly identical float representations. Therefore require that a equals b as a 32-bit IEEE-754 float.
+     - Given a = (c - 48) / 70.0f, b = 0.1f, the constraint is: float32((c - 48) / 70.0) == float32(0.1).
+     - Here float32(x) means x rounded to the nearest-even representable 32-bit IEEE-754 float.
+
+  Domain restrictions for c:
+  5) c is a byte: 0 <= c <= 255. Additionally, the observed harness uses the literal string "AAAA" (0x41 0x41 0x41 0x41), but to explore new paths you must allow c to vary arbitrarily within [0,255]. The remaining three bytes of s may be any values and do not affect control flow.
+
+  SMT-LIB compatible formulation (if needed):
+  - Declare an 8-bit bitvector C for the first byte, promote to an integer I = bv2nat(C), define SYMVAR = I - 48, and define A = fp.roundToIntegral(RNE, (to_fp 8 24) (SYMVAR / 70.0)) is not appropriate; instead directly:
+     (declare-const C (_ BitVec 8))
+     (define-fun I () Int (bv2nat C))
+     (define-fun SYMVAR () Int (- I 48))
+     (define-fun A () Float32 (fp.from_real RNE (/ (to_real SYMVAR) 70.0)))
+     (define-fun B () Float32 (fp.from_real RNE 0.1))
+     (assert (= A B))
+     (Optional) To ensure the outer guard a != 0.1 is satisfied in source-level semantics, equality on float here suffices; subtraction equals zero follows from equality under IEEE-754.
+
+  Summary of requirements for test generation:
+  - Provide any 4-byte command-line string s where the first byte value c satisfies: the 32-bit float of (c - 48)/70 equals the 32-bit float representation of 0.1. Other bytes unrestricted.
+selected_cnt: 1
+successful_generation_cnt: 1
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Chosen concrete argument:
+      # s = "7AAA" so that the first byte c = ord('7') = 55
+      # Then symvar = 55 - 48 = 7 and a = 7 / 70.0f = 0.1f,
+      # which satisfies float32((c - 48) / 70.0) == float32(0.1).
+      cmd = "./temp_executable 7AAA"
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr if isinstance(e.stderr, str) else "", -signal.SIGKILL
+      except Exception as e:
+          # Surface unexpected execution issues to the harness
+          raise e
+returncode: 1
+src_execution_summary: |2+
+
+  ```c
+  // float1_fp_l1_klee.c (31 lines total)
+  #include <stdio.h>
+  #include<stdio.h>
+  #include <stdlib.h>
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0] - 48;
+      float a = symvar/70.0;
+      float b = 0.1;
+
+      if(a != 0.1){
+          if(a - b == 0) {
+              // Unexecuted code (lines 14-15) removed. Its line cov: 0/2 (0%)
+          }
+      }
+
+      fprintf(stderr, "Path without the bomb\n");
+      return 0;
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 25-26) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [float1_fp_l1_klee.c] enter main 1
+  [float1_fp_l1_klee.c] enter main 3
+  [float1_fp_l1_klee.c] enter logic_bomb 1
+  [float1_fp_l1_klee.c] enter logic_bomb 2
+  [float1_fp_l1_klee.c] enter logic_bomb 3
+  Logic bomb triggered
+execution_summary: |2+
+
+  ```c
+  // float1_fp_l1_klee.c (31 lines total)
+  #include <stdio.h>
+  #include<stdio.h>
+  #include <stdlib.h>
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0] - 48;
+      float a = symvar/70.0;
+      float b = 0.1;
+
+      if(a != 0.1){
+          if(a - b == 0) {
+              fprintf(stderr, "Logic bomb triggered\n");
+              return 1;
+          }
+      }
+
+      // Unexecuted code (lines 19-20) removed. Its line cov: 2/2 (100%)
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 25-26) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [float1_fp_l1_klee.c] enter main 1
+  [float1_fp_l1_klee.c] enter main 3
+  [float1_fp_l1_klee.c] enter logic_bomb 1
+  [float1_fp_l1_klee.c] enter logic_bomb 2
+  [float1_fp_l1_klee.c] enter logic_bomb 4
+  Path without the bomb

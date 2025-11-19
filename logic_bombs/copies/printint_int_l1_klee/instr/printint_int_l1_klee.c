@@ -1,7 +1,6 @@
 #include <stdio.h>
 /*
 TOY:
-Solution: 7
 */
 #include <string.h> 
 #include "utils.h"

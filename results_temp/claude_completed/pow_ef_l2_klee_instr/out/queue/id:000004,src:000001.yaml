@@ -1,0 +1,265 @@
+id: 4
+src_id: 1
+create_time: '2025-11-18 23:26:08.151'
+time_taken: 236
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: claude-3-7-sonnet-latest
+    cost: $0.30121500
+    call_cnt: 4
+    latency: 46.46s
+    input_tokens: 16621
+    output_tokens: 1730
+    cache_read_tokens: 16604
+    cache_write_tokens: 3772
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.19297500
+      call_cnt: 2
+      latency: 27.67s
+      input_tokens: 11335
+      output_tokens: 765
+      cache_read_tokens: 11326
+      cache_write_tokens: 1838
+    INITIAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.08499000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: claude-3-7-sonnet-latest
+      cost: $0.09559500
+      call_cnt: 1
+      latency: 13.45s
+      input_tokens: 5666
+      output_tokens: 352
+      cache_read_tokens: 5663
+      cache_write_tokens: 713
+    generate_path_constraint:
+      model: claude-3-7-sonnet-latest
+      cost: $0.01239000
+      call_cnt: 1
+      latency: 14.22s
+      input_tokens: 5669
+      output_tokens: 413
+      cache_read_tokens: 5663
+      cache_write_tokens: 1125
+  SOLVE:
+    TOTAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.10824000
+      call_cnt: 2
+      latency: 18.79s
+      input_tokens: 5286
+      output_tokens: 965
+      cache_read_tokens: 5278
+      cache_write_tokens: 1934
+    INITIAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.03963000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: claude-3-7-sonnet-latest
+      cost: $0.05418000
+      call_cnt: 1
+      latency: 9.89s
+      input_tokens: 2642
+      output_tokens: 484
+      cache_read_tokens: 2639
+      cache_write_tokens: 719
+    provide_solution:
+      model: claude-3-7-sonnet-latest
+      cost: $0.01443000
+      call_cnt: 1
+      latency: 8.90s
+      input_tokens: 2644
+      output_tokens: 481
+      cache_read_tokens: 2639
+      cache_write_tokens: 1215
+  EXECUTE:
+    TOTAL: {}
+target_branch: if(pow(symvar, 2) == 49) -> false in pow_ef_l2_klee.c:logic_bomb
+target_file_lines: pow_ef_l2_klee.c:17-18
+target_lines_content: |2-
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+justification: This branch represents the else path of the main condition in the logic_bomb
+  function. Although it has 100% historical coverage according to the comment, it
+  wasn't executed in the current trace. Exploring this branch would help us understand
+  the program's behavior when the condition is not met. This is the most important
+  branch to explore first as it's the core logic of the program and would provide
+  a complete picture of the program's behavior.
+target_path_constraint: |-
+  To reach the target branch where `if(pow(symvar, 2) == 49)` evaluates to false in the logic_bomb function, the following constraints must be satisfied:
+
+  1. The program must be executed with at least one command-line argument (argc >= 2) to avoid the error check in main().
+
+  2. The first character of the input string (argv[1][0]) must be converted to an integer value (by subtracting 48) such that when squared, the result is NOT equal to 49.
+
+     Mathematically: pow(argv[1][0] - 48, 2) != 49
+
+     Since we're dealing with ASCII characters, and the code converts the first character to an integer by subtracting 48 (ASCII for '0'), this means:
+     - If argv[1][0] is '7' (ASCII 55), then symvar = 7, and pow(7, 2) = 49, which would NOT satisfy our constraint
+     - If argv[1][0] is any other digit or character, then pow(symvar, 2) != 49, which WOULD satisfy our constraint
+
+  3. Therefore, the first character of the command-line argument must NOT be '7'.
+
+  In summary, the constraint is:
+  - argc >= 2 (at least one command-line argument)
+  - argv[1][0] != '7' (first character of the argument is not '7')
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          # Changed the argument from "7AAA" to "8AAA" to satisfy the constraint
+          # The first character '8' makes symvar = 8, and pow(8, 2) == 64, which is not equal to 49
+          result = subprocess.run(
+              ["./temp_executable 8AAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // pow_ef_l2_klee.c (30 lines total)
+  #include <stdio.h>
+  /*
+  TOY:
+  */
+  #include <string.h> 
+  #include <math.h>
+  #include "utils.h"
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0] - 48;
+      if(pow(symvar, 2) == 49){
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+      }else{
+          // Unexecuted code (lines 17-18) removed. Its line cov: 2/2 (100%)
+      }
+  }
+
+  int main(int argc, char **argv) {
+      fprintf(stderr, "\n");
+      if (argc < 2) {
+          // Unexecuted code (lines 25-26) removed. Its line cov: 2/2 (100%)
+      }
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [pow_ef_l2_klee.c] enter main 3
+  [pow_ef_l2_klee.c] enter logic_bomb 1
+  [pow_ef_l2_klee.c] enter logic_bomb 3
+  Path without the bomb
+execution_summary: |2+
+
+  ```c
+  // pow_ef_l2_klee.c (30 lines total)
+  #include <stdio.h>
+  /*
+  TOY:
+  */
+  #include <string.h> 
+  #include <math.h>
+  #include "utils.h"
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0] - 48;
+      if(pow(symvar, 2) == 49){
+          // Unexecuted code (lines 14-15) removed. Its line cov: 2/2 (100%)
+      }else{
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+  }
+
+  int main(int argc, char **argv) {
+      fprintf(stderr, "\n");
+      if (argc < 2) {
+          // Unexecuted code (lines 25-26) removed. Its line cov: 2/2 (100%)
+      }
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          # Changed the argument from "AAAA" to "7AAA" to satisfy the constraint
+          # The first character '7' makes symvar = 7, and pow(7, 2) == 49
+          result = subprocess.run(
+              ["./temp_executable 7AAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [pow_ef_l2_klee.c] enter main 3
+  [pow_ef_l2_klee.c] enter logic_bomb 1
+  [pow_ef_l2_klee.c] enter logic_bomb 2
+  Logic bomb triggered

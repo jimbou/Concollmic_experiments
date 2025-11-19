@@ -1,0 +1,352 @@
+id: 1
+src_id: 0
+create_time: '2025-11-14 22:08:04.474'
+time_taken: 171
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 4
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: claude-3-7-sonnet-latest
+    cost: $0.72855000
+    call_cnt: 8
+    latency: 80.74s
+    input_tokens: 43696
+    output_tokens: 2437
+    cache_read_tokens: 43671
+    cache_write_tokens: 9657
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.64758000
+      call_cnt: 6
+      latency: 59.09s
+      input_tokens: 40376
+      output_tokens: 1398
+      cache_read_tokens: 40358
+      cache_write_tokens: 5362
+    INITIAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.08499000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: claude-3-7-sonnet-latest
+      cost: $0.31416000
+      call_cnt: 3
+      latency: 22.62s
+      input_tokens: 18641
+      output_tokens: 262
+      cache_read_tokens: 18631
+      cache_write_tokens: 2814
+    think:
+      model: claude-3-7-sonnet-latest
+      cost: $0.11809500
+      call_cnt: 1
+      latency: 19.60s
+      input_tokens: 7445
+      output_tokens: 586
+      cache_read_tokens: 7443
+      cache_write_tokens: 144
+    select_target_branch:
+      model: claude-3-7-sonnet-latest
+      cost: $0.12169500
+      call_cnt: 1
+      latency: 7.77s
+      input_tokens: 6701
+      output_tokens: 262
+      cache_read_tokens: 6697
+      cache_write_tokens: 1487
+    generate_path_constraint:
+      model: claude-3-7-sonnet-latest
+      cost: $0.00864000
+      call_cnt: 1
+      latency: 9.11s
+      input_tokens: 7589
+      output_tokens: 288
+      cache_read_tokens: 7587
+      cache_write_tokens: 917
+  SOLVE:
+    TOTAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.08097000
+      call_cnt: 2
+      latency: 21.65s
+      input_tokens: 3320
+      output_tokens: 1039
+      cache_read_tokens: 3313
+      cache_write_tokens: 4295
+    INITIAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.04974000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: claude-3-7-sonnet-latest
+      cost: $0.01443000
+      call_cnt: 1
+      latency: 11.73s
+      input_tokens: 3316
+      output_tokens: 479
+      cache_read_tokens: 3313
+      cache_write_tokens: 245
+    provide_solution:
+      model: claude-3-7-sonnet-latest
+      cost: $0.01680000
+      call_cnt: 1
+      latency: 9.93s
+      input_tokens: 4
+      output_tokens: 560
+      cache_read_tokens: 0
+      cache_write_tokens: 4050
+  EXECUTE:
+    TOTAL: {}
+target_branch: if(fd != -1) -> true in file_posix_csv_klee.c:logic_bomb
+target_file_lines: file_posix_csv_klee.c:12-13
+target_lines_content: |2-
+          trigger = 1;
+          close(fd);
+justification: "This branch has 0% historical coverage (line cov: 0/2) and is critical
+  to the program's functionality. The branch is triggered when a file can be successfully
+  opened with the provided string as a file path. This is the key condition that sets
+  the `trigger` variable to 1, which would then enable the execution of another uncovered
+  branch. Exploring this branch would significantly improve code coverage by potentially
+  allowing us to reach multiple uncovered code blocks, including the logic bomb trigger
+  code."
+target_path_constraint: |-
+  To reach the target branch `if(fd != -1) -> true` in the `logic_bomb` function, the following constraints must be satisfied:
+
+  1. The program must be executed with at least one command-line argument (argc >= 2) to pass the check in main().
+
+  2. The first command-line argument (argv[1]) must be a string that represents a valid file path.
+
+  3. The file at this path must:
+     - Exist in the filesystem
+     - Be accessible with read permissions (O_RDONLY)
+     - Not be a directory or special file that cannot be opened with open()
+
+  In practical terms, this means:
+  - The string passed as argv[1] must be a path to an existing, readable file
+  - The process executing the program must have sufficient permissions to read the file
+  - The file system must be accessible (e.g., if it's a network mount, the network must be available)
+
+  The open() system call will return a non-negative file descriptor if successful, making fd != -1 evaluate to true.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+      import tempfile
+      import os
+
+      # Create a temporary file that will exist when the program runs
+      with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+          # Write some content to the file (not required, but ensures it's not empty)
+          temp_file.write(b"This is a test file")
+          temp_file_path = temp_file.name
+
+      try:
+          # Execute the program with the temporary file path as the argument
+          # Note: We're keeping the same shell=True structure but replacing "AAAA" with our file path
+          cmd = f"./temp_executable {temp_file_path}"
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          
+          # Clean up the temporary file
+          try:
+              os.unlink(temp_file_path)
+          except:
+              pass  # Ignore cleanup errors
+              
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          # Clean up the temporary file
+          try:
+              os.unlink(temp_file_path)
+          except:
+              pass  # Ignore cleanup errors
+              
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # Clean up the temporary file
+          try:
+              os.unlink(temp_file_path)
+          except:
+              pass  # Ignore cleanup errors
+              
+          # ensure to raise the error if run failed
+          raise e
+returncode: 1
+src_execution_summary: |2+
+
+  ```c
+  // file_posix_csv_klee.c (33 lines total)
+  #include <stdio.h>
+  #include <string.h> 
+  #include "utils.h"
+
+  #include "a_tester.h"
+
+  // {"s":{"length": 16}}
+  int logic_bomb(char* s) {
+      int trigger = 0;
+      int fd = open(s, O_RDONLY);
+      if(fd != -1) {
+          // Unexecuted code (lines 12-13) removed. Its line cov: 0/2 (0%)
+      }
+
+      if(trigger) {
+          // Unexecuted code (lines 17-18) removed. Its line cov: 0/2 (0%)
+      } else {
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+  }
+
+  int main(int argc, char **argv) {
+      fprintf(stderr, "\n");
+      if (argc < 2) {
+          // Unexecuted code (lines 28-29) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [file_posix_csv_klee.c] enter main 3
+  [file_posix_csv_klee.c] enter logic_bomb 1
+  [file_posix_csv_klee.c] enter logic_bomb 2
+  [file_posix_csv_klee.c] enter logic_bomb 3
+  Logic bomb triggered
+execution_summary: |2+
+
+  ```c
+  // file_posix_csv_klee.c (33 lines total)
+  #include <stdio.h>
+  #include <string.h> 
+  #include "utils.h"
+
+  #include "a_tester.h"
+
+  // {"s":{"length": 16}}
+  int logic_bomb(char* s) {
+      int trigger = 0;
+      int fd = open(s, O_RDONLY);
+      if(fd != -1) {
+          trigger = 1;
+          close(fd);
+      }
+
+      if(trigger) {
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+      } else {
+          // Unexecuted code (lines 20-21) removed. Its line cov: 2/2 (100%)
+      }
+  }
+
+  int main(int argc, char **argv) {
+      fprintf(stderr, "\n");
+      if (argc < 2) {
+          // Unexecuted code (lines 28-29) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [file_posix_csv_klee.c] enter main 3
+  [file_posix_csv_klee.c] enter logic_bomb 1
+  [file_posix_csv_klee.c] enter logic_bomb 4
+  Path without the bomb

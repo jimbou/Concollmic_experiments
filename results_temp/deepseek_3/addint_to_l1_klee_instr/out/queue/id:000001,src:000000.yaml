@@ -1,0 +1,300 @@
+id: 1
+src_id: 0
+create_time: '2025-11-18 21:36:09.775'
+time_taken: 89
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: deepseek-chat
+    cost: $0.02443185
+    call_cnt: 5
+    latency: 65.56s
+    input_tokens: 24570
+    output_tokens: 1632
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: deepseek-chat
+      cost: $0.01723327
+      call_cnt: 3
+      latency: 40.23s
+      input_tokens: 18039
+      output_tokens: 922
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: deepseek-chat
+      cost: $0.00468765
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: deepseek-chat
+      cost: $0.00595058
+      call_cnt: 1
+      latency: 17.53s
+      input_tokens: 5682
+      output_tokens: 372
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: deepseek-chat
+      cost: $0.00565155
+      call_cnt: 1
+      latency: 8.90s
+      input_tokens: 6063
+      output_tokens: 180
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: deepseek-chat
+      cost: $0.00094350
+      call_cnt: 1
+      latency: 13.80s
+      input_tokens: 6294
+      output_tokens: 370
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: deepseek-chat
+      cost: $0.00719858
+      call_cnt: 2
+      latency: 25.33s
+      input_tokens: 6531
+      output_tokens: 710
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: deepseek-chat
+      cost: $0.00254348
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: deepseek-chat
+      cost: $0.00375240
+      call_cnt: 1
+      latency: 12.39s
+      input_tokens: 3083
+      output_tokens: 356
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: deepseek-chat
+      cost: $0.00090270
+      call_cnt: 1
+      latency: 12.94s
+      input_tokens: 3448
+      output_tokens: 354
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (symvar + 2147483640 < 0 && symvar > 0) -> true in function logic_bomb()
+target_file_lines: addint_to_l1_klee.c:9-10
+target_lines_content: |2-
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+justification: This branch has 0% historical coverage and contains the core logic
+  bomb functionality. The condition involves integer overflow detection (symvar +
+  2147483640 < 0 when symvar > 0), which is a complex and interesting edge case. This
+  branch would reveal the program's intended 'bomb' behavior that hasn't been triggered
+  by existing tests.
+target_path_constraint: |-
+  1. Command-Line Arguments: The program must be executed with exactly one command-line argument (argv[1] must exist). This requires argc >= 2.
+
+  2. Argument Format: The first command-line argument must be a string with at least one character. The first character of this string (s[0]) must satisfy the following mathematical conditions:
+     - s[0] must be a digit character (ASCII values 48-57) or other character that when converted to integer via (s[0] - 48) produces a positive value
+     - The integer value symvar = (s[0] - 48) must be greater than 0
+     - The sum symvar + 2147483640 must result in integer overflow and produce a negative value
+
+  3. Mathematical Constraint: Specifically, symvar must satisfy:
+     - symvar > 0
+     - symvar + 2147483640 < 0 (which requires integer overflow)
+     
+     For 32-bit signed integers, this occurs when symvar > 7 (since 2147483640 + 8 = 2147483648, which overflows to -2147483648 for 32-bit signed integers).
+
+  4. Character Constraint: Therefore, the first character of the input string must be a digit character where:
+     - s[0] - 48 > 7 (i.e., s[0] > '7' in ASCII, meaning '8' or '9')
+     - s[0] must be a valid ASCII digit character ('0'-'9')
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # The constraint requires the first character to be '8' or '9'
+      # Using '8' as the first character to satisfy: symvar = '8' - 48 = 8 > 7
+      # 2147483640 + 8 = 2147483648 > 2147483647 (overflow to negative)
+      arg = "8AAA"  # First character is '8', rest can be anything
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable", arg],  # Pass as separate arguments, not as a single string
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // addint_to_l1_klee.c (26 lines total)
+  #include <stdio.h>
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0] - 48;
+
+      if (symvar + 2147483640 < 0 && symvar > 0){
+          // Unexecuted code (lines 9-10) removed. Its line cov: 0/2 (0%)
+      }
+      else {
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 20-21) removed. Its line cov: 0/2 (0%)
+      }
+
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [addint_to_l1_klee.c] enter main 1
+  [addint_to_l1_klee.c] enter main 3
+  [addint_to_l1_klee.c] enter logic_bomb 1
+  [addint_to_l1_klee.c] enter logic_bomb 3
+  Path without the bomb
+execution_summary: |2+
+
+  ```c
+  // addint_to_l1_klee.c (26 lines total)
+  #include <stdio.h>
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0] - 48;
+
+      if (symvar + 2147483640 < 0 && symvar > 0){
+          // Unexecuted code (lines 9-10) removed. Its line cov: 0/2 (0%)
+      }
+      else {
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 20-21) removed. Its line cov: 0/2 (0%)
+      }
+
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [addint_to_l1_klee.c] enter main 1
+  [addint_to_l1_klee.c] enter main 3
+  [addint_to_l1_klee.c] enter logic_bomb 1
+  [addint_to_l1_klee.c] enter logic_bomb 3
+  Path without the bomb

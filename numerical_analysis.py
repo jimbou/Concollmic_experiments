@@ -2,8 +2,7 @@
 import json
 from pathlib import Path
 
-INPUT_JSON = "/home/jim/ConcoLLMic/results_coverage_deepseek.json"
-OUTPUT_JSON = "/home/jim/ConcoLLMic/results_coverage_deepseek_numeric.json"
+
 
 # Scoring rules
 POINTS = {
@@ -14,6 +13,13 @@ POINTS = {
 }
 
 def main():
+    #read input JSON and output summary JSON paths from command line
+    import sys
+    if len(sys.argv) != 3:
+        print("Usage: score_coverage.py <INPUT_JSON> <OUTPUT_JSON>")
+        sys.exit(1)
+    INPUT_JSON = sys.argv[1]
+    OUTPUT_JSON = sys.argv[2]
     data = json.loads(Path(INPUT_JSON).read_text())
 
     total_items = len(data)

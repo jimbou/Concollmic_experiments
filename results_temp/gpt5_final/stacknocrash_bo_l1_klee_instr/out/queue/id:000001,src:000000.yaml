@@ -1,0 +1,312 @@
+id: 1
+src_id: 0
+create_time: '2025-11-17 21:54:40.310'
+time_taken: 127
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 2
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.64062000
+    call_cnt: 3
+    latency: 88.12s
+    input_tokens: 14028
+    output_tokens: 6001
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.47202000
+      call_cnt: 2
+      latency: 67.69s
+      input_tokens: 10908
+      output_tokens: 4231
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10672000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.32984000
+      call_cnt: 1
+      latency: 58.99s
+      input_tokens: 5336
+      output_tokens: 3640
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03546000
+      call_cnt: 1
+      latency: 8.70s
+      input_tokens: 5572
+      output_tokens: 591
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.16860000
+      call_cnt: 1
+      latency: 20.43s
+      input_tokens: 3120
+      output_tokens: 1770
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.06240000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.10620000
+      call_cnt: 1
+      latency: 20.43s
+      input_tokens: 3120
+      output_tokens: 1770
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (strlen(symvar) > 9) -> true in stacknocrash_bo_l1_klee.c:logic_bomb
+target_file_lines: stacknocrash_bo_l1_klee.c:13-14
+target_lines_content: |2-
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+justification: 'This branch has zero historical coverage (lines 13-14: 0/2, 0%). It
+  guards the primary size-based condition on the input string and is guaranteed to
+  lead to a distinct path compared to the current run (which uses a 4-byte argument).
+  Reaching it will exercise code before a potentially dangerous copy into a fixed-size
+  stack buffer, uncovering behavior central to this program’s logic and likely revealing
+  additional issues. It is reachable via the current harness by varying the single
+  command-line argument’s length.'
+target_path_constraint: |-
+  Chronological constraints to reach branch `strlen(symvar) > 9` (true) in logic_bomb:
+
+  1) Process invocation and argument count
+  - The program must be executed with exactly one additional command-line argument besides the executable name: argc >= 2.
+  - The harness invokes: `./temp_executable <ARG>`. Ensure `<ARG>` is provided and parsed as `argv[1]` by the program.
+
+  2) Argument form and encoding
+  - The single argument must be a byte string representing a C-style string: a contiguous sequence of non-null bytes followed by an implicit terminating null byte inserted by the shell/runtime.
+  - It must not contain embedded NUL (0x00) bytes, because C `strlen` stops at the first NUL and would shorten the measured length.
+  - Encoding is irrelevant to `strlen`; only byte values matter. Avoid bytes 0x00 prior to the end.
+
+  3) Length constraint for target branch
+  - Let `symvar` be `argv[1]` (the provided argument string). Require: length(symvar) ≥ 10 bytes before the first NUL byte, i.e., `strlen(symvar) > 9`.
+  - More formally: There exists index i ≥ 10 such that for all j in [0, 9], symvar[j] != 0x00, and symvar[10] may be 0x00 (termination occurs at or after index 10). The first NUL must be at position ≥ 10.
+
+  4) Environment and execution mode
+  - The program must be run normally (no special environment variables are required). Standard permissions must allow execution of `./temp_executable`.
+  - If using a shell to invoke the executable, ensure quoting/escaping so that the argument is passed as a single contiguous token and not truncated or split.
+
+  5) Safety consideration relative to later copy
+  - The program copies the argument into a fixed 8-byte stack buffer using `strcpy`. To avoid undefined behavior (buffer overflow) during test generation for this specific branch reachability, one may optionally constrain the argument to be at most 7 bytes. However, to specifically reach `strlen(symvar) > 9`, this optional constraint conflicts with the required length ≥ 10. Therefore, DO NOT add any maximum-length constraint; accept that the copy will overflow after the branch is reached. The solver should focus solely on satisfying `strlen(symvar) > 9`.
+
+  Summary of core satisfiable constraint:
+  - Provide a single command-line argument whose first NUL terminator occurs at or after byte offset 10 (0-indexed), i.e., the argument has at least 10 non-NUL bytes when received by the program.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Concrete input satisfying strlen(argv[1]) > 9: 10 non-NUL bytes
+      # No spaces to ensure it's passed as a single token by the shell
+      cmd = "./temp_executable AAAAAAAAAA"  # 10 'A's
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          return result.stderr or "", result.returncode
+      except subprocess.TimeoutExpired as e:
+          stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+          return stderr_text, -signal.SIGKILL
+      except Exception as e:
+          # Propagate unexpected execution errors
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // stacknocrash_bo_l1_klee.c (37 lines total)
+  #include <stdio.h>
+  #include <string.h> 
+  #include "utils.h"
+  #include "a_tester.h"
+
+
+  // {"symvar":{"length": 64}}
+  int logic_bomb(char* symvar) {
+      int flag = 0;
+      char buf[8];
+
+      if(strlen(symvar) > 9) {
+          // Unexecuted code (lines 13-14) removed. Its line cov: 0/2 (0%)
+      }
+
+      strcpy(buf, symvar);
+
+      if(flag == 1) {
+          // Unexecuted code (lines 20-21) removed. Its line cov: 0/2 (0%)
+      }
+
+      fprintf(stderr, "Path without the bomb\n");
+      return 0;
+  }
+
+  int main(int argc, char **argv) {
+      fprintf(stderr, "\n");
+      if (argc < 2) {
+          // Unexecuted code (lines 31-32) removed. Its line cov: 0/2 (0%)
+      }
+
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [stacknocrash_bo_l1_klee.c] enter main 3
+  [stacknocrash_bo_l1_klee.c] enter logic_bomb 1
+  [stacknocrash_bo_l1_klee.c] enter logic_bomb 2
+  Path without the bomb
+execution_summary: |2+
+
+  ```c
+  // stacknocrash_bo_l1_klee.c (37 lines total)
+  #include <stdio.h>
+  #include <string.h> 
+  #include "utils.h"
+  #include "a_tester.h"
+
+
+  // {"symvar":{"length": 64}}
+  int logic_bomb(char* symvar) {
+      int flag = 0;
+      char buf[8];
+
+      if(strlen(symvar) > 9) {
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+
+      // Unexecuted code (line 17) removed. Its line cov: 1/1 (100%)
+
+      if(flag == 1) {
+          // Unexecuted code (lines 20-21) removed. Its line cov: 0/2 (0%)
+      }
+
+      // Unexecuted code (lines 24-25) removed. Its line cov: 2/2 (100%)
+  }
+
+  int main(int argc, char **argv) {
+      fprintf(stderr, "\n");
+      if (argc < 2) {
+          // Unexecuted code (lines 31-32) removed. Its line cov: 0/2 (0%)
+      }
+
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [stacknocrash_bo_l1_klee.c] enter main 3
+  [stacknocrash_bo_l1_klee.c] enter logic_bomb 1
+  [stacknocrash_bo_l1_klee.c] enter logic_bomb 3
+  [stacknocrash_bo_l1_klee.c] enter logic_bomb 5
+  Path without the bomb

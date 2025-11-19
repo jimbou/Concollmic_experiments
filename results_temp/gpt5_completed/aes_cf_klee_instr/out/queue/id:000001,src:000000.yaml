@@ -1,0 +1,368 @@
+id: 1
+src_id: 0
+create_time: '2025-11-18 20:42:48.886'
+time_taken: 230
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 29
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $1.13094000
+    call_cnt: 4
+    latency: 152.90s
+    input_tokens: 21216
+    output_tokens: 11777
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.96412000
+      call_cnt: 3
+      latency: 132.58s
+      input_tokens: 17831
+      output_tokens: 10125
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10628000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.34404000
+      call_cnt: 1
+      latency: 46.79s
+      input_tokens: 5314
+      output_tokens: 3687
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.46064000
+      call_cnt: 1
+      latency: 58.77s
+      input_tokens: 6141
+      output_tokens: 5552
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.05316000
+      call_cnt: 1
+      latency: 27.02s
+      input_tokens: 6376
+      output_tokens: 886
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.16682000
+      call_cnt: 1
+      latency: 20.32s
+      input_tokens: 3385
+      output_tokens: 1652
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.06770000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.09912000
+      call_cnt: 1
+      latency: 20.32s
+      input_tokens: 3385
+      output_tokens: 1652
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (0 == memcmp((char*) plaintext, (char*) decodetext, 16)) -> true
+  in aes_cf_klee.c:logic_bomb
+target_file_lines: aes_cf_klee.c:56-57
+target_lines_content: |2-
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+justification: 'This branch and its enclosing block (lines 26-61) have 0% historical
+  coverage and represent the core behavior of the program: parsing a 128-bit key from
+  the input string, performing AES-128 ECB decryption, and checking for a specific
+  plaintext match to trigger the logic bomb. Reaching this branch will exercise the
+  untested parsing and cryptographic code paths, significantly increasing coverage
+  beyond the currently exercised early-return path (strlen(s) != 32).'
+target_path_constraint: |-
+  Inputs and environment needed to reach and take the target branch (memcmp(...) == 0) in aes_cf_klee.c:logic_bomb:
+
+  1) Program invocation shape (command-line arguments):
+  - The process must be started with exactly one user-controlled argument (besides argv[0]): a single string s provided as argv[1]. No other arguments affect the path.
+  - The harness already invokes the binary with one argument. Ensure argv[1] is the only additional argument.
+
+  2) Length requirement on argv[1]:
+  - The string s must have length exactly 32 bytes as measured by C strlen (number of bytes before the first NUL byte 0x00). Therefore:
+    - s contains no embedded NUL within the first 32 bytes.
+    - The 33rd byte is the terminating NUL (added by the process environment), not part of s according to strlen.
+
+  3) Character set and format of argv[1] to pass the hex-key parser:
+  - The program parses s using 16 repetitions of the "%2SCNx8" directive. This requires s to consist of 32 hexadecimal digits representing 16 bytes, with no separators and no leading/trailing whitespace affecting scanning. Constraints:
+    - For i in [0..31], s[i] must be an ASCII hex digit: one of '0'..'9', 'a'..'f', or 'A'..'F'.
+    - There must be exactly 32 such hex digits, contiguous, with no spaces or other characters between them.
+    - Case-insensitive: either lowercase or uppercase is accepted.
+    - No prefix like "0x" is allowed anywhere.
+
+  4) Hex-to-byte mapping implied by the scan:
+  - Let key[0..15] be 16 parsed bytes. For each byte index j in [0..15], the pair of characters s[2*j], s[2*j+1] are interpreted as one byte in base 16 (high nibble from s[2*j], low nibble from s[2*j+1]).
+
+  5) AES decryption condition to take the target branch:
+  - The code decrypts a fixed 16-byte ciphertext C using AES-128 in ECB mode with the parsed 16-byte key K, writing a 16-byte buffer P' (decodetext). The constants are:
+    - C = [3a d7 7b b4 0d 7a 36 60 a8 9e ca f3 24 66 ef 97] (bytes in hex).
+    - Target plaintext P = [6b c1 be e2 2e 40 9f 96 e9 3d 7e 11 73 93 17 2a].
+  - Constraint: AES128_ECB_decrypt(C, K) must equal P byte-for-byte. Equivalently, K must be a valid AES-128 key such that AES_Decrypt(C, K) = P.
+  - Equivalently (to avoid reasoning about decryption): K must satisfy AES128_ECB_encrypt(P, K) = C.
+
+  6) Summary of symbolic constraints on argv[1] (s):
+  - Length(s) == 32 (in bytes, no embedded NUL before position 32).
+  - For all i in 0..31, s[i] ∈ {0-9, a-f, A-F}.
+  - Define K by parsing s as 16 bytes in hex, two hex chars per byte, high nibble first.
+  - AES-128 constraint: AES128_ECB_encrypt(P, K) = C with P and C as above. This ensures memcmp(decodetext, plaintext, 16) == 0 evaluates true, reaching the target branch body that prints "Logic bomb triggered" and returns 1.
+
+  7) Environmental constraints:
+  - No special environment variables or files are needed. The program must link to a working AES-128 ECB implementation consistent with the FIPS-197 standard (standard AES).
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Concrete input satisfying all constraints:
+      # 32 hex digits representing the AES-128 key K such that AES-ECB(P, K) = C
+      # NIST AES-128 test key for the given P and C:
+      key_hex = "2b7e151628aed2a6abf7158809cf4f3c"
+
+      # Invoke the original binary with exactly one argument (the hex key)
+      cmd = f"./temp_executable {key_hex}"
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr or "", result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred; return captured stderr if any and a negative SIGKILL code
+          return (e.stderr if isinstance(e.stderr, str) else ""), -signal.SIGKILL
+      except Exception as e:
+          # Propagate unexpected execution errors
+          raise e
+returncode: 1
+src_execution_summary: |2+
+
+  ```c
+  // aes_cf_klee.c (72 lines total)
+  #include <stdio.h>
+  /*
+  TOY:
+  */
+  #include <inttypes.h>
+  #include "aes.h"
+  #include "utils.h"
+
+  void aes_print(uint8_t* str) {
+      // Unexecuted code (lines 10-13) removed. Its line cov: 0/4 (0%)
+  }
+
+  #include "a_tester.h"
+
+  // {"s":{"length": 32}}
+  int logic_bomb(char* s) {
+      if(strlen(s) != 32){
+          //printf("please input the 128-bit keys\n");
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+
+      // Unexecuted code (lines 26-61) removed. Its line cov: 0/31 (0%)
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 66-67) removed. Its line cov: 0/2 (0%)
+      }
+
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [aes_cf_klee.c] enter main 1
+  [aes_cf_klee.c] enter main 3
+  [aes_cf_klee.c] enter logic_bomb 1
+  [aes_cf_klee.c] enter logic_bomb 3
+  [aes_cf_klee.c] enter logic_bomb 4
+  Logic bomb triggered
+execution_summary: |2+
+
+  ```c
+  // aes_cf_klee.c (72 lines total)
+  #include <stdio.h>
+  /*
+  TOY:
+  */
+  #include <inttypes.h>
+  #include "aes.h"
+  #include "utils.h"
+
+  void aes_print(uint8_t* str) {
+      // Unexecuted code (lines 10-13) removed. Its line cov: 0/4 (0%)
+  }
+
+  #include "a_tester.h"
+
+  // {"s":{"length": 32}}
+  int logic_bomb(char* s) {
+      if(strlen(s) != 32){
+          // Unexecuted code (lines 21-23) removed. Its line cov: 3/3 (100%)
+      }
+
+      uint8_t key[16];
+
+      sscanf(s,
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8,
+          &key[0],&key[1],
+          &key[2],&key[3],
+          &key[4],&key[5],
+          &key[6],&key[7],
+          &key[8],&key[9],
+          &key[10],&key[11],
+          &key[12],&key[13],
+          &key[14],&key[15]);
+
+      //aes_print(key);
+
+      uint8_t decodetext[16];
+      uint8_t ciphertext[] = {0x3a, 0xd7, 0x7b, 0xb4, 0x0d, 0x7a, 0x36, 0x60, 0xa8, 0x9e, 0xca, 0xf3, 0x24, 0x66, 0xef, 0x97};
+      uint8_t plaintext[] = {0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96, 0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a};
+
+      AES128_ECB_decrypt(ciphertext, key, decodetext);
+
+      //aes_print(decodetext);
+      if(0 == memcmp((char*) plaintext, (char*) decodetext, 16)){
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+      }else{
+          // Unexecuted code (lines 59-60) removed. Its line cov: 0/2 (0%)
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 66-67) removed. Its line cov: 0/2 (0%)
+      }
+
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [aes_cf_klee.c] enter main 1
+  [aes_cf_klee.c] enter main 3
+  [aes_cf_klee.c] enter logic_bomb 1
+  [aes_cf_klee.c] enter logic_bomb 2
+  Path without the bomb

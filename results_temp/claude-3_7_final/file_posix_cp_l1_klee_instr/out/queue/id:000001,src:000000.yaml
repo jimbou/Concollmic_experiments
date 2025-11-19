@@ -1,0 +1,324 @@
+id: 1
+src_id: 0
+create_time: '2025-11-14 20:03:48.743'
+time_taken: 60
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 2
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: claude-3-7-sonnet-latest
+    cost: $0.34350000
+    call_cnt: 4
+    latency: 43.15s
+    input_tokens: 19104
+    output_tokens: 1898
+    cache_read_tokens: 19089
+    cache_write_tokens: 3049
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.21058500
+      call_cnt: 2
+      latency: 19.90s
+      input_tokens: 12471
+      output_tokens: 784
+      cache_read_tokens: 12463
+      cache_write_tokens: 1575
+    INITIAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.08499000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: claude-3-7-sonnet-latest
+      cost: $0.11350500
+      call_cnt: 1
+      latency: 9.78s
+      input_tokens: 5666
+      output_tokens: 381
+      cache_read_tokens: 5663
+      cache_write_tokens: 1137
+    generate_path_constraint:
+      model: claude-3-7-sonnet-latest
+      cost: $0.01209000
+      call_cnt: 1
+      latency: 10.13s
+      input_tokens: 6805
+      output_tokens: 403
+      cache_read_tokens: 6800
+      cache_write_tokens: 438
+  SOLVE:
+    TOTAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.13291500
+      call_cnt: 2
+      latency: 23.25s
+      input_tokens: 6633
+      output_tokens: 1114
+      cache_read_tokens: 6626
+      cache_write_tokens: 1474
+    INITIAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.04974000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: claude-3-7-sonnet-latest
+      cost: $0.07291500
+      call_cnt: 1
+      latency: 14.15s
+      input_tokens: 3316
+      output_tokens: 772
+      cache_read_tokens: 3313
+      cache_write_tokens: 345
+    provide_solution:
+      model: claude-3-7-sonnet-latest
+      cost: $0.01026000
+      call_cnt: 1
+      latency: 9.10s
+      input_tokens: 3317
+      output_tokens: 342
+      cache_read_tokens: 3313
+      cache_write_tokens: 1129
+  EXECUTE:
+    TOTAL: {}
+target_branch: if(j == 7) -> true in file_posix_cp_l1_klee.c:logic_bomb
+target_file_lines: file_posix_cp_l1_klee.c:24-25
+target_lines_content: |2-
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+justification: "This branch has 0% historical coverage (line cov: 0/2) and represents
+  the main \"logic bomb\" condition in the program. The branch checks if the value
+  read from the file equals 7. When this condition is true, it would execute previously
+  uncovered code. This branch is particularly important as it's the core functionality
+  of the program (the \"bomb\" that the function name suggests). Exploring this path
+  would significantly increase code coverage by revealing what happens when the bomb
+  is triggered."
+target_path_constraint: |-
+  To reach the target branch `if(j == 7) -> true` in the logic_bomb function, the following constraints must be satisfied:
+
+  1. Command-line argument constraint:
+     - The program must be called with at least one command-line argument (argc >= 2)
+     - This ensures we don't hit the error condition in main()
+
+  2. File operation constraints:
+     - The program must have write permissions in the current directory
+     - The file "tmp.covpro" must be creatable or writable
+     - This ensures that the file operations (open, write, read) succeed
+
+  3. Input value constraint:
+     - The first character of the input string (argv[1][0]) must have an ASCII value such that when 48 is subtracted from it, the result is 7
+     - In other words: argv[1][0] - 48 = 7
+     - Therefore: argv[1][0] = 55, which is the ASCII code for the character '7'
+
+  4. File integrity constraint:
+     - The file system must correctly preserve the written value (symvar) so that when read back into variable j, it maintains the value 7
+     - No external process should modify the file between write and read operations
+
+  The key constraint is that the first character of the command-line argument must be '7' to ensure that symvar = 7, which is then written to the file and read back into j, allowing the condition j == 7 to evaluate to true.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          # Modified the argument to start with '7' instead of 'A'
+          # This satisfies the constraint: argv[1][0] - 48 = 7
+          result = subprocess.run(
+              ["./temp_executable", "7AAA"],  # Properly separate executable and arguments
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=False,  # Changed to False to properly pass arguments
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 1
+src_execution_summary: |2+
+
+  ```c
+  // file_posix_cp_l1_klee.c (39 lines total)
+  #include <stdio.h>
+  #include <string.h>
+
+  #include "utils.h"
+  #include "a_tester.h"
+
+  // {"s": {"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0] - 48;
+      int j;
+      char file[] = "tmp.covpro";
+      int fd = open(file, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR);
+      if(fd < 0)
+      {
+          // Unexecuted code (line 15) removed. Its line cov: 0/1 (0%)
+      }
+      write(fd, &symvar, sizeof symvar);
+      close(fd);
+      fd = open(file, O_RDONLY);
+      read(fd, &j, sizeof j);
+      close(fd);
+
+      if(j == 7){
+          // Unexecuted code (lines 24-25) removed. Its line cov: 0/2 (0%)
+      } else{
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 34-35) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [file_posix_cp_l1_klee.c] enter main 1
+  [file_posix_cp_l1_klee.c] enter main 3
+  [file_posix_cp_l1_klee.c] enter logic_bomb 1
+  [file_posix_cp_l1_klee.c] enter logic_bomb 3
+  [file_posix_cp_l1_klee.c] enter logic_bomb 4
+  Logic bomb triggered
+execution_summary: |2+
+
+  ```c
+  // file_posix_cp_l1_klee.c (39 lines total)
+  #include <stdio.h>
+  #include <string.h>
+
+  #include "utils.h"
+  #include "a_tester.h"
+
+  // {"s": {"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0] - 48;
+      int j;
+      char file[] = "tmp.covpro";
+      int fd = open(file, O_CREAT | O_WRONLY | O_TRUNC, S_IRUSR | S_IWUSR);
+      if(fd < 0)
+      {
+          // Unexecuted code (line 15) removed. Its line cov: 0/1 (0%)
+      }
+      write(fd, &symvar, sizeof symvar);
+      close(fd);
+      fd = open(file, O_RDONLY);
+      read(fd, &j, sizeof j);
+      close(fd);
+
+      if(j == 7){
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+      } else{
+          // Unexecuted code (lines 27-28) removed. Its line cov: 2/2 (100%)
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 34-35) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [file_posix_cp_l1_klee.c] enter main 1
+  [file_posix_cp_l1_klee.c] enter main 3
+  [file_posix_cp_l1_klee.c] enter logic_bomb 1
+  [file_posix_cp_l1_klee.c] enter logic_bomb 3
+  [file_posix_cp_l1_klee.c] enter logic_bomb 5
+  Path without the bomb

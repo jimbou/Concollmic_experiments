@@ -1,0 +1,327 @@
+id: 1
+src_id: 0
+create_time: '2025-11-14 17:42:35.925'
+time_taken: 94
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 2
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: deepseek-chat
+    cost: $0.02765745
+    call_cnt: 6
+    latency: 63.36s
+    input_tokens: 28316
+    output_tokens: 1685
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: deepseek-chat
+      cost: $0.01715055
+      call_cnt: 3
+      latency: 32.51s
+      input_tokens: 18118
+      output_tokens: 864
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: deepseek-chat
+      cost: $0.00475943
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: deepseek-chat
+      cost: $0.00571185
+      call_cnt: 1
+      latency: 11.81s
+      input_tokens: 5769
+      output_tokens: 280
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: deepseek-chat
+      cost: $0.00565928
+      call_cnt: 1
+      latency: 6.89s
+      input_tokens: 6058
+      output_tokens: 184
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: deepseek-chat
+      cost: $0.00102000
+      call_cnt: 1
+      latency: 13.82s
+      input_tokens: 6291
+      output_tokens: 400
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: deepseek-chat
+      cost: $0.01050690
+      call_cnt: 3
+      latency: 30.85s
+      input_tokens: 10198
+      output_tokens: 821
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: deepseek-chat
+      cost: $0.00255008
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: deepseek-chat
+      cost: $0.00322913
+      call_cnt: 1
+      latency: 8.52s
+      input_tokens: 3091
+      output_tokens: 199
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    execute_python:
+      model: deepseek-chat
+      cost: $0.00373320
+      call_cnt: 1
+      latency: 9.11s
+      input_tokens: 3299
+      output_tokens: 232
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: deepseek-chat
+      cost: $0.00099450
+      call_cnt: 1
+      latency: 13.23s
+      input_tokens: 3808
+      output_tokens: 390
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if(SHA1_COMP(plaintext,cipher)==0) -> true in sha_cf_klee.c:logic_bomb
+target_file_lines: sha_cf_klee.c:22-23
+target_lines_content: |2-
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+justification: This branch has 0% historical coverage and represents the core logic
+  of the program - the 'bomb' condition that triggers when the SHA1 hash matches the
+  expected cipher values. This is the most critical branch to explore as it would
+  execute the program's main functionality that hasn't been tested yet. The branch
+  protects complex cryptographic logic that could reveal edge cases in the SHA1 implementation.
+target_path_constraint: |-
+  1. Command-Line Argument Format: The program must be executed with exactly one command-line argument that is a string of length 4 (as indicated by the comment "{\"s\":{\"length\": 4}}" in the code). This string should be passed as argv[1].
+
+  2. Input Character Constraint: The first character of the input string (s[0]) must be a digit character (ASCII values 48-57 for '0' to '9') such that when converted to an integer (s[0] - 48), the resulting plaintext value produces a SHA1 hash that matches the pre-defined cipher values:
+     - cipher[0] = 0x902ba3cd
+     - cipher[1] = 0xa1883801  
+     - cipher[2] = 0x594b6e1b
+     - cipher[3] = 0x452790cc
+     - cipher[4] = 0x53948fda
+
+  3. SHA1 Hash Matching: The SHA1 hash of the integer value (plaintext) must exactly equal the concatenated cipher values. This requires finding a specific digit character 'd' where SHA1(d - 48) == 0x902ba3cda1883801594b6e1b452790cc53948fda.
+
+  4. Mathematical Relationship: ∃ digit_char ∈ {'0','1','2','3','4','5','6','7','8','9'} such that SHA1(ASCII(digit_char) - 48) equals the target hash value.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # The first character must be '7' to satisfy the SHA1 hash constraint
+      # The remaining 3 characters can be arbitrary (using 'AAA' for simplicity)
+      input_string = "7AAA"
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable", input_string],  # Pass as separate arguments, not as shell command
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          stderr_text = e.stderr.decode('utf-8', errors='replace') if e.stderr else ""
+          return stderr_text, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 1
+src_execution_summary: |2+
+
+  ```c
+  // sha_cf_klee.c (37 lines total)
+  #include <stdio.h>
+  /*
+  TOY:
+  */
+  #include "sha1.h"
+  #include "utils.h"
+
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0] - 48;
+      int plaintext = symvar;
+      unsigned cipher[5];
+      cipher[0] = 0X902ba3cd;
+      cipher[1] = 0Xa1883801;
+      cipher[2] = 0X594b6e1b;
+      cipher[3] = 0X452790cc;
+      cipher[4] = 0X53948fda;
+
+      if(SHA1_COMP(plaintext,cipher)==0){
+          // Unexecuted code (lines 22-23) removed. Its line cov: 0/2 (0%)
+      }else{
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 32-33) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [sha_cf_klee.c] enter main 1
+  [sha_cf_klee.c] enter main 3
+  [sha_cf_klee.c] enter logic_bomb 1
+  [sha_cf_klee.c] enter logic_bomb 2
+  Logic bomb triggered
+execution_summary: |2+
+
+  ```c
+  // sha_cf_klee.c (37 lines total)
+  #include <stdio.h>
+  /*
+  TOY:
+  */
+  #include "sha1.h"
+  #include "utils.h"
+
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0] - 48;
+      int plaintext = symvar;
+      unsigned cipher[5];
+      cipher[0] = 0X902ba3cd;
+      cipher[1] = 0Xa1883801;
+      cipher[2] = 0X594b6e1b;
+      cipher[3] = 0X452790cc;
+      cipher[4] = 0X53948fda;
+
+      if(SHA1_COMP(plaintext,cipher)==0){
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+      }else{
+          // Unexecuted code (lines 25-26) removed. Its line cov: 2/2 (100%)
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 32-33) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [sha_cf_klee.c] enter main 1
+  [sha_cf_klee.c] enter main 3
+  [sha_cf_klee.c] enter logic_bomb 1
+  [sha_cf_klee.c] enter logic_bomb 3
+  Path without the bomb

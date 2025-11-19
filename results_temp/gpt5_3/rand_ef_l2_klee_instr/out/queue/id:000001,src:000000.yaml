@@ -1,0 +1,309 @@
+id: 1
+src_id: 0
+create_time: '2025-11-18 21:25:40.772'
+time_taken: 202
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.89418000
+    call_cnt: 4
+    latency: 140.53s
+    input_tokens: 17280
+    output_tokens: 9143
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.46358000
+      call_cnt: 2
+      latency: 86.65s
+      input_tokens: 10783
+      output_tokens: 4132
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10584000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.32246000
+      call_cnt: 1
+      latency: 56.55s
+      input_tokens: 5292
+      output_tokens: 3544
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03528000
+      call_cnt: 1
+      latency: 30.10s
+      input_tokens: 5491
+      output_tokens: 588
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.43060000
+      call_cnt: 2
+      latency: 53.88s
+      input_tokens: 6497
+      output_tokens: 5011
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.06230000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    execute_python:
+      model: gpt-5
+      cost: $0.21926000
+      call_cnt: 1
+      latency: 28.32s
+      input_tokens: 3115
+      output_tokens: 2527
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.14904000
+      call_cnt: 1
+      latency: 25.56s
+      input_tokens: 3382
+      output_tokens: 2484
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (r == 77) -> true in rand_ef_l2_klee.c:logic_bomb
+target_file_lines: rand_ef_l2_klee.c:16-17
+target_lines_content: |2-
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+justification: This branch has zero historical coverage (0/2, 0%) and represents the
+  primary divergent behavior (“bomb” path) guarded by a pseudo-random check. Reaching
+  it will exercise previously unseen code and improve coverage in this file. The existing
+  harness already supplies a single 4-byte string argument, so focusing on the RNG-dependent
+  condition is the most impactful uncovered branch reachable via input/environment
+  manipulation.
+target_path_constraint: |-
+  Chronological, input-level constraints to reach the branch where rand()%100 == 77 after srand(s[0]):
+
+  1. Command-line invocation shape:
+     - The program must be executed with exactly one user-controlled string argument (argv[1]) in addition to the program name, so total argc ≥ 2.
+     - The argument must be a string of length exactly 4 bytes, as expected by the harness and annotations (no embedded NUL within the first 4 bytes). Encoding can be arbitrary 8-bit bytes.
+
+  2. Environment and system assumptions:
+     - The C runtime’s rand() and srand() functions must behave deterministically per the standard C library implementation used, with srand(seed) setting the PRNG state solely based on the provided seed byte value s[0]. No other calls to rand() occur before the targeted call.
+     - No environment variables or earlier code alter the PRNG state; the only seed-setting call is srand(s[0]) inside logic_bomb.
+
+  3. Seeding constraint linking argument to PRNG state:
+     - Let seed = the integer value of the first byte of the argument (argv[1][0]) interpreted as unsigned char promoted to int in C.
+     - The PRNG is seeded by srand(seed). Immediately after, the program calls rand() once and computes r = rand() % 100.
+
+  4. Target numeric relation:
+     - Require (rand_after_seed(seed) mod 100) == 77, where rand_after_seed(seed) denotes the first value returned by rand() after seeding with srand(seed) in the runtime’s libc.
+
+  5. Input constraint binding:
+     - Choose the first byte of argv[1] such that it is a seed value seed satisfying the relation in (4). The remaining three bytes of argv[1] are unconstrained aside from being valid non-NUL bytes to maintain a 4-byte length if the program relies on C-string semantics; they do not influence the branch.
+
+  6. Robustness for C-string termination:
+     - Ensure argv[1] contains no NUL (0x00) in the first position; otherwise, the effective seed would be 0. Also ensure the argument is not shorter than 1 byte; the harness provides 4 bytes so this is satisfied. If the program reads until NUL, embedded NULs after the first byte are acceptable for seeding but may truncate the visible argument; they do not affect the PRNG state.
+
+  This specification intentionally leaves the exact mapping from seed to rand() output abstract; the solver or test-generation system must select a seed such that the first rand() value modulo 100 equals 77 under the target libc’s PRNG.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Use a 4-byte argument whose first byte seeds srand() to yield rand()%100 == 77
+      # Based on the standard LCG behavior, seed=49 works (ASCII '1').
+      arg = "1xyz"  # 4 ASCII bytes; first byte '1' (0x31) -> seed=49
+
+      try:
+          result = subprocess.run(
+              [f"./temp_executable {arg}"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          return result.stderr or "", result.returncode
+      except subprocess.TimeoutExpired as e:
+          return (e.stderr if isinstance(e.stderr, str) else ""), -signal.SIGKILL
+      except Exception as e:
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // rand_ef_l2_klee.c (32 lines total)
+  #include <stdio.h>
+  /*
+  TOY:
+  */
+  #include <string.h> 
+  #include "utils.h"
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0];
+      srand(symvar);
+      int r = rand()%100;
+
+      if(r == 77){
+          // Unexecuted code (lines 16-17) removed. Its line cov: 0/2 (0%)
+      }else{
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 26-27) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [rand_ef_l2_klee.c] enter main 1
+  [rand_ef_l2_klee.c] enter main 3
+  [rand_ef_l2_klee.c] enter logic_bomb 1
+  [rand_ef_l2_klee.c] enter logic_bomb 3
+  Path without the bomb
+execution_summary: |2+
+
+  ```c
+  // rand_ef_l2_klee.c (32 lines total)
+  #include <stdio.h>
+  /*
+  TOY:
+  */
+  #include <string.h> 
+  #include "utils.h"
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0];
+      srand(symvar);
+      int r = rand()%100;
+
+      if(r == 77){
+          // Unexecuted code (lines 16-17) removed. Its line cov: 0/2 (0%)
+      }else{
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 26-27) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [rand_ef_l2_klee.c] enter main 1
+  [rand_ef_l2_klee.c] enter main 3
+  [rand_ef_l2_klee.c] enter logic_bomb 1
+  [rand_ef_l2_klee.c] enter logic_bomb 3
+  Path without the bomb

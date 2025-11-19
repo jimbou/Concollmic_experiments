@@ -1,0 +1,327 @@
+id: 2
+src_id: 0
+create_time: '2025-11-17 21:18:36.319'
+time_taken: 337
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $1.01814000
+    call_cnt: 4
+    latency: 143.62s
+    input_tokens: 20214
+    output_tokens: 10231
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.87954000
+      call_cnt: 3
+      latency: 124.21s
+      input_tokens: 17196
+      output_tokens: 8927
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10648000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.36430000
+      call_cnt: 1
+      latency: 48.65s
+      input_tokens: 5324
+      output_tokens: 4135
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.37894000
+      call_cnt: 1
+      latency: 66.25s
+      input_tokens: 5810
+      output_tokens: 4295
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.02982000
+      call_cnt: 1
+      latency: 9.31s
+      input_tokens: 6062
+      output_tokens: 497
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.13860000
+      call_cnt: 1
+      latency: 19.41s
+      input_tokens: 3018
+      output_tokens: 1304
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.06036000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.07824000
+      call_cnt: 1
+      latency: 19.41s
+      input_tokens: 3018
+      output_tokens: 1304
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (array[symvar % 10] == 7) -> false in malloc_sm_l1_klee.c:logic_bomb
+target_file_lines: malloc_sm_l1_klee.c:22-23
+target_lines_content: |2-
+      fprintf(stderr, "Path without the bomb\n");
+      return 0;
+justification: The current execution took the true branch (logic bomb triggered).
+  The only other conditional in this program is argc < 2, whose error path (lines
+  28-29) shows zero historical coverage but is unreachable with the fixed harness
+  that always supplies one argument. Therefore, the most viable branch to diversify
+  behavior and improve path coverage under the existing harness is the false branch
+  of the array-index check, which will exercise the non-bomb path. While lines 22-23
+  show 100% historical coverage, this path was not executed in the current trace and
+  is the only reachable alternative path given the harness constraints.
+target_path_constraint: |-
+  Inputs and environment to reach: if (array[symvar % 10] == 7) evaluates to false inside logic_bomb, thereby taking the non-bomb path.
+
+  Chronological constraints:
+  1) Program invocation (command-line): The test harness invokes the executable with exactly one command-line argument string. Do not alter the harness behavior; it already provides one string argument. Ensure the process environment permits execution (no special env vars required). The program must receive argc >= 2 (satisfies harness).
+
+  2) Argument length and encoding: The program expects an ASCII-compatible byte string of length at least 1 (metadata comment indicates expected length 4, but only s[0] is read). Bytes are interpreted as unsigned 8-bit characters.
+
+  3) First-byte numeric mapping: The program computes symvar = s[0] - 48, where 48 is the ASCII code for character '0'. It then computes index = symvar mod 10. The allocated array is initialized with array[k] = k for k in 0..9, so array[index] equals index. The conditional is array[index] == 7.
+
+  4) Branch-false requirement (non-bomb path): Require that array[index] != 7, i.e., (symvar mod 10) != 7. In terms of the first byte b = s[0] (0..255), let symvar = b - 48. Then the constraint is ((b - 48) mod 10) != 7.
+
+  5) Safety/domain constraints to avoid undefined behavior:
+     - The index used is (b - 48) mod 10, which always yields a value in 0..9 for any byte b, so there is no out-of-bounds risk regardless of b. No other constraints on remaining bytes are needed.
+     - The program reads no further input from the argument; characters s[1..] do not affect the branch.
+
+  Summary of required constraints on the command-line argument:
+  - Provide a non-empty string argument (at least 1 byte).
+  - Let b be the numeric value of the first byte (0..255). Enforce ((b - 48) mod 10) != 7. No constraints on the remaining bytes.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # We choose the argument "0000" so that for the first byte b=48, (b-48) % 10 = 0 != 7,
+      # ensuring the branch array[index] == 7 evaluates to false (non-bomb path).
+      try:
+          result = subprocess.run(
+              ["./temp_executable 0000"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // malloc_sm_l1_klee.c (34 lines total)
+  #include <stdio.h>
+  #include<stdio.h>
+  #include<stdlib.h>
+  #include"utils.h"
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0] - 48;
+      int *array = (int *) malloc(sizeof(int) * 10);
+      int k = 0;
+
+      for (k=0; k<10; k++){
+          array[k] = k;
+      }
+
+      if(array[symvar % 10] == 7){
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+      }
+
+      // Unexecuted code (lines 22-23) removed. Its line cov: 2/2 (100%)
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 28-29) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [malloc_sm_l1_klee.c] enter main 1
+  [malloc_sm_l1_klee.c] enter main 3
+  [malloc_sm_l1_klee.c] enter logic_bomb 1
+  [malloc_sm_l1_klee.c] enter logic_bomb 2
+  [malloc_sm_l1_klee.c] enter logic_bomb 2
+  [malloc_sm_l1_klee.c] enter logic_bomb 2
+  [malloc_sm_l1_klee.c] enter logic_bomb 2
+  [malloc_sm_l1_klee.c] enter logic_bomb 2
+  [malloc_sm_l1_klee.c] enter logic_bomb 2
+  [malloc_sm_l1_klee.c] enter logic_bomb 2
+  [malloc_sm_l1_klee.c] enter logic_bomb 2
+  [malloc_sm_l1_klee.c] enter logic_bomb 2
+  [malloc_sm_l1_klee.c] enter logic_bomb 2
+  [malloc_sm_l1_klee.c] enter logic_bomb 4
+  Path without the bomb
+execution_summary: |2+
+
+  ```c
+  // malloc_sm_l1_klee.c (34 lines total)
+  #include <stdio.h>
+  #include<stdio.h>
+  #include<stdlib.h>
+  #include"utils.h"
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0] - 48;
+      int *array = (int *) malloc(sizeof(int) * 10);
+      int k = 0;
+
+      for (k=0; k<10; k++){
+          array[k] = k;
+      }
+
+      if(array[symvar % 10] == 7){
+          // Unexecuted code (lines 18-19) removed. Its line cov: 2/2 (100%)
+      }
+
+      fprintf(stderr, "Path without the bomb\n");
+      return 0;
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 28-29) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [malloc_sm_l1_klee.c] enter main 1
+  [malloc_sm_l1_klee.c] enter main 3
+  [malloc_sm_l1_klee.c] enter logic_bomb 1
+  [malloc_sm_l1_klee.c] enter logic_bomb 2
+  [malloc_sm_l1_klee.c] enter logic_bomb 2
+  [malloc_sm_l1_klee.c] enter logic_bomb 2
+  [malloc_sm_l1_klee.c] enter logic_bomb 2
+  [malloc_sm_l1_klee.c] enter logic_bomb 2
+  [malloc_sm_l1_klee.c] enter logic_bomb 2
+  [malloc_sm_l1_klee.c] enter logic_bomb 2
+  [malloc_sm_l1_klee.c] enter logic_bomb 2
+  [malloc_sm_l1_klee.c] enter logic_bomb 2
+  [malloc_sm_l1_klee.c] enter logic_bomb 2
+  [malloc_sm_l1_klee.c] enter logic_bomb 3
+  Logic bomb triggered

@@ -1,0 +1,260 @@
+id: 1
+src_id: 0
+create_time: '2025-11-17 21:08:20.019'
+time_taken: 277
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: false
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $1.37100000
+    call_cnt: 5
+    latency: 187.87s
+    input_tokens: 28338
+    output_tokens: 13404
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $1.19880000
+      call_cnt: 4
+      latency: 166.75s
+      input_tokens: 24996
+      output_tokens: 11648
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10626000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.43832000
+      call_cnt: 1
+      latency: 67.46s
+      input_tokens: 5313
+      output_tokens: 5451
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: gpt-5
+      cost: $0.20720000
+      call_cnt: 1
+      latency: 14.02s
+      input_tokens: 5563
+      output_tokens: 1196
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.14978000
+      call_cnt: 1
+      latency: 2.04s
+      input_tokens: 6772
+      output_tokens: 47
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.29724000
+      call_cnt: 1
+      latency: 83.23s
+      input_tokens: 7348
+      output_tokens: 4954
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.17220000
+      call_cnt: 1
+      latency: 21.12s
+      input_tokens: 3342
+      output_tokens: 1756
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.06684000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.10536000
+      call_cnt: 1
+      latency: 21.12s
+      input_tokens: 3342
+      output_tokens: 1756
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+target_branch: if (n != 5) -> true in heap_bo_l1_klee.c:logic_bomb()
+target_file_lines: heap_bo_l1_klee.c:17-18
+target_lines_content: |2-
+          free(p);
+          fprintf(stderr, "Logic bomb triggered\n");
+justification: 'This branch has zero historical coverage (lines 17-19: 0/3, 0%). It
+  guards the program’s "bomb" path, which is triggered by heap-buffer-overflow behavior
+  caused by copying the command-line string into a 16-byte heap buffer using strcpy.
+  Reaching this branch will exercise the core vulnerability logic and produce a different
+  program behavior than the currently covered path (which prints "Path without the
+  bomb"). The harness provides one string argument to the program, and the program
+  explicitly treats this argument as a symbolic input (comment indicates a symbolic
+  variable of length 256), making this branch reachable via input manipulation without
+  changing the harness.'
+target_path_constraint: |-
+  Program invocation and argument count:
+  - Execute the binary with exactly one command-line argument. The program reads only argv[1] and does not read from files or stdin. Ensure the process environment permits execution (binary exists, is executable) so the program reaches logic_bomb.
+
+  Argument encoding and general properties:
+  - The sole argument is a C string (sequence of non-NUL bytes terminated by a single NUL). Do not include embedded NUL bytes before the end; otherwise strcpy stops early and the overflow will not occur.
+  - The string must be long enough to overflow a 16-byte heap buffer allocated by the program. Therefore, the length of the argument (number of bytes before the terminating NUL) must be strictly greater than 16.
+  - The string must be sufficiently long to overwrite not only the first heap chunk’s payload (the 16-byte buffer “p”) but also into the next adjacent heap chunk (“q”), including its allocator metadata header and selected fields used by the memory allocator during free(q). Practically, the length must extend well past 16 bytes, covering at least the header area of the second chunk. Use an alignment-consistent total length (e.g., greater than 32 bytes) so the overwrite reaches and controls the second chunk’s metadata.
+
+  Allocator-compatibility requirements for the overflow:
+  - The bytes written into the second chunk’s metadata must encode a syntactically valid header for the allocator in the target environment (e.g., a valid chunk size field aligned to allocator granularity with required status bits such as PREV_INUSE set appropriately). This prevents immediate allocator aborts in free(q).
+  - The crafted metadata must be structured so that when free(q) processes the corrupted chunk, it performs a write that modifies a global writable memory location. Specifically, the corruption must direct the allocator’s internal pointer manipulations (e.g., forward/back pointers in a free list or equivalent bookkeeping) to target the global integer variable “n” and update its value.
+
+  Targeted state change before the branch:
+  - The argument must be crafted so that, after strcpy(p, argv[1]) completes and free(q) is called, the allocator’s metadata operations triggered by free(q) result in the global variable n (initially 5) being changed to a value not equal to 5.
+  - Constraint on the post-free state: n != 5 must hold immediately after free(q) and before evaluating the condition if (n != 5).
+
+  Safety and determinism constraints:
+  - The allocator integrity checks must pass (no immediate crash or abort in free(q)); the metadata values must satisfy the allocator’s invariants (e.g., size fields aligned to the minimum chunk size; any flags set consistently), ensuring execution continues to the branch check.
+  - The crafted write must target exactly the memory address of n and set it to a value different from 5. Avoid partial writes or misaligned updates that leave n == 5.
+
+  Summary of chronological constraints:
+  1) Provide exactly one command-line argument as a C string with no embedded NULs, terminated by NUL.
+  2) Ensure argument length > 16 and long enough to reach and control the next chunk’s metadata (cover at least the first allocator header of the second allocation).
+  3) Arrange the argument’s overflow bytes to encode a valid allocator header for the second chunk, satisfying allocator invariants so that free(q) proceeds.
+  4) Arrange the overflow to cause free(q) to perform a write to the global int n, setting n to a value != 5.
+  5) Ensure the program continues without aborting, so the branch if (n != 5) evaluates to true and the path inside it executes.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code:
+returncode:
+src_execution_summary: |2+
+
+  ```c
+  // heap_bo_l1_klee.c (35 lines total)
+  #include <stdio.h>
+  #include <string.h> 
+  #include "utils.h"
+  #include "a_tester.h"
+
+  int n = 5;
+
+  // {"symvar":{"length": 256}}
+  int logic_bomb(char* symvar) {
+      char *p, *q;
+      p = (char*)malloc(16);
+      q = (char*)malloc(16);
+      strcpy(p, symvar);
+      free(q);
+
+      if (n != 5){
+          // Unexecuted code (lines 17-19) removed. Its line cov: 0/3 (0%)
+      } else {
+          free(p);
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 29-30) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace:
+execution_summary:
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [heap_bo_l1_klee.c] enter main 1
+  [heap_bo_l1_klee.c] enter main 3
+  [heap_bo_l1_klee.c] enter logic_bomb 1
+  [heap_bo_l1_klee.c] enter logic_bomb 3
+  Path without the bomb

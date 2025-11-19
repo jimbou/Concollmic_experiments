@@ -1,0 +1,365 @@
+id: 2
+src_id: 1
+create_time: '2025-11-17 21:44:59.067'
+time_taken: 403
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $1.02212000
+    call_cnt: 4
+    latency: 107.50s
+    input_tokens: 22615
+    output_tokens: 9497
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.84866000
+      call_cnt: 3
+      latency: 85.33s
+      input_tokens: 19453
+      output_tokens: 7660
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10702000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.24482000
+      call_cnt: 1
+      latency: 21.64s
+      input_tokens: 5351
+      output_tokens: 1767
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.44936000
+      call_cnt: 1
+      latency: 53.77s
+      input_tokens: 6940
+      output_tokens: 5102
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.04746000
+      call_cnt: 1
+      latency: 9.92s
+      input_tokens: 7162
+      output_tokens: 791
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.17346000
+      call_cnt: 1
+      latency: 22.17s
+      input_tokens: 3162
+      output_tokens: 1837
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.06324000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.11022000
+      call_cnt: 1
+      latency: 22.17s
+      input_tokens: 3162
+      output_tokens: 1837
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (ping_it(&dst) == 1) -> true in ping_csv_klee.c:logic_bomb
+target_file_lines: ping_csv_klee.c:95-96
+target_lines_content: |2-
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+justification: This branch’s then-body (lines 95-96) has zero historical coverage
+  (0/2, 0%). Reaching it exercises the program’s primary success path (the “logic
+  bomb” trigger) and ensures end-to-end coverage through argument parsing, socket
+  creation, ICMP send/receive, and readiness handling. It is reachable via the existing
+  harness by controlling the command-line argument and environment/network conditions,
+  and it contributes more than any single internal branch to overall coverage because
+  it validates the successful ICMP path.
+target_path_constraint: |
+  Chronological constraints to reach logic_bomb’s success branch (ping_it(&dst) == 1 evaluates true):
+
+  1) Command invocation and argument presence
+  - The program must be executed with exactly one non-empty command-line argument (besides argv[0]). This argument supplies an IPv4 address string.
+  - argv[1] must be present; argc >= 2 holds.
+
+  2) Argument format: valid IPv4 address
+  - The single argument must be a syntactically valid IPv4 address string in dotted-decimal notation recognizable by inet_aton. Examples of validity constraints:
+    * Four decimal octets separated by dots.
+    * Each octet is an integer in [0, 255].
+    * No extra characters, whitespace, or trailing data.
+    * No hostname or IPv6 notation.
+  - Semantics: inet_aton(argv[1], &dst) returns non-zero, populating dst with a valid IPv4 address.
+
+  3) Environment and locale
+  - The process environment must not interfere with parsing. Locale can be arbitrary, but to remove ambiguity, ensure LANG and LC_ALL use a standard C locale or any locale where inet_aton behavior is unaffected (inet_aton is locale-independent). No special environment variables are required.
+
+  4) Networking capability: raw ICMP via UDP sockets
+  - The runtime must permit creating a datagram socket with domain AF_INET, type SOCK_DGRAM, and protocol IPPROTO_ICMP. Constraint: socket(AF_INET, SOCK_DGRAM, IPPROTO_ICMP) returns a file descriptor >= 0.
+  - The executing user must have privileges or system support for IPPROTO_ICMP datagram sockets. Systems typically allow this without elevated privileges; however, if the platform requires capabilities, they must be provided.
+
+  5) ICMP send path to destination
+  - The destination address (dst) must be routable and reachable from the executing host.
+  - The kernel must allow sending an ICMP Echo request to dst and deliver it to the network stack without immediate errors. Constraint: sendto(...) returns rc > 0 (positive byte count), not <= 0.
+
+  6) ICMP echo reply readiness within timeout
+  - The destination must respond with an ICMP Echo Reply to the request.
+  - An ICMP Echo Reply must arrive and be readable from the socket before the select timeout expires. Constraint: select(...) returns rc > 0 (indicating readiness), not 0 (timeout) and not < 0 (error).
+
+  7) Receive and minimal packet validation
+  - Receiving from the socket must succeed. Constraint: recvfrom(...) returns rc > 0.
+  - The returned buffer must contain at least sizeof(struct icmphdr) bytes. Constraint: rc >= sizeof(struct icmphdr).
+  - The first bytes of the received buffer, interpreted as struct icmphdr, must indicate type == ICMP_ECHOREPLY.
+
+  8) Overall success path
+  - Under constraints 1–7, ping_it(&dst) returns 1, causing logic_bomb’s branch if (ping_it(&dst) == 1) to evaluate true, thereby executing the then-body and returning 1.
+
+  Input/Environment summary for solver:
+  - Input string: a valid IPv4 dotted-decimal address whose host responds to ICMP echo quickly (e.g., within ~1 second), and is locally reachable.
+  - System/network: permissions and routing that allow AF_INET datagram socket with IPPROTO_ICMP; outbound and inbound ICMP permitted; no firewall rules blocking echo requests/replies; destination sends a reply in time.
+  - No additional files or stdin content are read; only the single argv[1] string controls logic.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import os
+      import signal
+      import subprocess
+
+      # Use the original test harness and provide a single, valid IPv4 address argument
+      exe_path = "./temp_executable"
+      arg = "127.0.0.1"  # Valid dotted-decimal IPv4, locally reachable, fast ICMP reply
+
+      # Ensure a simple, predictable environment (locale-independent behavior)
+      env = dict(os.environ)
+      env.setdefault("LANG", "C")
+      env.setdefault("LC_ALL", "C")
+
+      try:
+          result = subprocess.run(
+              [exe_path, arg],
+              capture_output=True,
+              text=True,
+              timeout=timeout,
+              env=env,
+          )
+          # Return stderr and the return code even if non-zero
+          return result.stderr or "", result.returncode
+      except subprocess.TimeoutExpired as e:
+          stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+          return stderr_text, -getattr(signal, "SIGKILL", 9)
+      except Exception as e:
+          # Surface any unexpected execution/setup issue
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // ping_csv_klee.c (111 lines total)
+  #include <stdio.h>
+  #include <stdio.h>
+  #include <errno.h>
+  #include <string.h>
+  #include <stdlib.h>
+  #include <sys/socket.h>
+  #include <sys/socket.h>
+  #include <netinet/in.h>
+  #include <netinet/ip_icmp.h>
+  #include <arpa/inet.h>
+  #include <sys/select.h>
+
+
+  int ping_it(struct in_addr *dst)
+  {
+      struct icmphdr icmp_hdr;
+      struct sockaddr_in addr;
+      int sequence = 0;
+      int sock = socket(AF_INET,SOCK_DGRAM,IPPROTO_ICMP);
+      if (sock < 0) {
+          perror("socket");
+          return -1;
+      }
+
+      // Unexecuted code (lines 25-77) removed. Its line cov: 0/47 (0%)
+      return 1;
+  }
+
+  #include "a_tester.h"
+
+  // {"s":{"length": 32}}
+  int logic_bomb(char* s) {
+      struct in_addr dst;
+
+      if (inet_aton(s, &dst) == 0) {
+          // Unexecuted code (lines 88-91) removed. Its line cov: 4/4 (100%)
+      }
+
+      if (ping_it(&dst) == 1){
+          // Unexecuted code (lines 95-96) removed. Its line cov: 0/2 (0%)
+      }else{
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+  }
+
+  int main(int argc, char **argv) {
+      fprintf(stderr, "\n");
+      if (argc < 2) {
+          // Unexecuted code (lines 106-107) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [ping_csv_klee.c] enter main 3
+  [ping_csv_klee.c] enter logic_bomb 1
+  [ping_csv_klee.c] enter ping_it 1
+  [ping_csv_klee.c] enter ping_it 2
+  socket: Permission denied
+  [ping_csv_klee.c] enter logic_bomb 4
+  Path without the bomb
+execution_summary: |2+
+
+  ```c
+  // ping_csv_klee.c (111 lines total)
+  #include <stdio.h>
+  #include <stdio.h>
+  #include <errno.h>
+  #include <string.h>
+  #include <stdlib.h>
+  #include <sys/socket.h>
+  #include <sys/socket.h>
+  #include <netinet/in.h>
+  #include <netinet/ip_icmp.h>
+  #include <arpa/inet.h>
+  #include <sys/select.h>
+
+
+  int ping_it(struct in_addr *dst)
+  {
+      struct icmphdr icmp_hdr;
+      struct sockaddr_in addr;
+      int sequence = 0;
+      int sock = socket(AF_INET,SOCK_DGRAM,IPPROTO_ICMP);
+      if (sock < 0) {
+          perror("socket");
+          return -1;
+      }
+
+      // Unexecuted code (lines 25-77) removed. Its line cov: 0/47 (0%)
+      return 1;
+  }
+
+  #include "a_tester.h"
+
+  // {"s":{"length": 32}}
+  int logic_bomb(char* s) {
+      struct in_addr dst;
+
+      if (inet_aton(s, &dst) == 0) {
+          // Unexecuted code (lines 88-91) removed. Its line cov: 4/4 (100%)
+      }
+
+      if (ping_it(&dst) == 1){
+          // Unexecuted code (lines 95-96) removed. Its line cov: 0/2 (0%)
+      }else{
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+  }
+
+  int main(int argc, char **argv) {
+      fprintf(stderr, "\n");
+      if (argc < 2) {
+          // Unexecuted code (lines 106-107) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import os
+      import signal
+      import subprocess
+
+      # Concrete input satisfying constraints:
+      # - argv[1] is a valid IPv4 address in dotted-decimal notation recognized by inet_aton
+      # - Choose 127.0.0.1 to ensure local ICMP Echo Reply without external routing
+      exe_path = "./temp_executable"
+      arg = "127.0.0.1"
+
+      # Environment: inherit current env, but ensure consistent locale to avoid encoding surprises
+      env = dict(os.environ)
+      env.setdefault("LANG", "C")
+      env.setdefault("LC_ALL", "C")
+
+      try:
+          result = subprocess.run(
+              [exe_path, arg],
+              capture_output=True,
+              text=True,
+              timeout=timeout,
+              env=env,
+          )
+          # Return stderr and the return code even if the program exits non-zero
+          return result.stderr or "", result.returncode
+      except subprocess.TimeoutExpired as e:
+          # On timeout, return any captured stderr and a negative SIGKILL-like code
+          stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+          return stderr_text, -getattr(signal, "SIGKILL", 9)
+      except Exception as e:
+          # Surface unexpected execution issues clearly
+          raise e
+src_execution_trace: |2
+
+  [ping_csv_klee.c] enter main 3
+  [ping_csv_klee.c] enter logic_bomb 1
+  [ping_csv_klee.c] enter ping_it 1
+  [ping_csv_klee.c] enter ping_it 2
+  socket: Permission denied
+  [ping_csv_klee.c] enter logic_bomb 4
+  Path without the bomb

@@ -1,0 +1,321 @@
+id: 2
+src_id: 0
+create_time: '2025-11-18 23:13:09.107'
+time_taken: 217
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: claude-3-7-sonnet-latest
+    cost: $0.83415000
+    call_cnt: 8
+    latency: 82.05s
+    input_tokens: 49402
+    output_tokens: 3104
+    cache_read_tokens: 49372
+    cache_write_tokens: 6460
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.70053000
+      call_cnt: 6
+      latency: 60.30s
+      input_tokens: 42448
+      output_tokens: 2127
+      cache_read_tokens: 42425
+      cache_write_tokens: 5558
+    INITIAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.08499000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: claude-3-7-sonnet-latest
+      cost: $0.22203000
+      call_cnt: 2
+      latency: 26.11s
+      input_tokens: 12944
+      output_tokens: 1234
+      cache_read_tokens: 12938
+      cache_write_tokens: 1565
+    request_code:
+      model: claude-3-7-sonnet-latest
+      cost: $0.24258000
+      call_cnt: 2
+      latency: 12.59s
+      input_tokens: 12334
+      output_tokens: 201
+      cache_read_tokens: 12325
+      cache_write_tokens: 3438
+    select_target_branch:
+      model: claude-3-7-sonnet-latest
+      cost: $0.13956000
+      call_cnt: 1
+      latency: 11.05s
+      input_tokens: 8492
+      output_tokens: 313
+      cache_read_tokens: 8488
+      cache_write_tokens: 186
+    generate_path_constraint:
+      model: claude-3-7-sonnet-latest
+      cost: $0.01137000
+      call_cnt: 1
+      latency: 10.55s
+      input_tokens: 8678
+      output_tokens: 379
+      cache_read_tokens: 8674
+      cache_write_tokens: 369
+  SOLVE:
+    TOTAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.13362000
+      call_cnt: 2
+      latency: 21.75s
+      input_tokens: 6954
+      output_tokens: 977
+      cache_read_tokens: 6947
+      cache_write_tokens: 902
+    INITIAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.04974000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: claude-3-7-sonnet-latest
+      cost: $0.07164000
+      call_cnt: 1
+      latency: 13.06s
+      input_tokens: 3316
+      output_tokens: 569
+      cache_read_tokens: 3313
+      cache_write_tokens: 321
+    provide_solution:
+      model: claude-3-7-sonnet-latest
+      cost: $0.01224000
+      call_cnt: 1
+      latency: 8.69s
+      input_tokens: 3638
+      output_tokens: 408
+      cache_read_tokens: 3634
+      cache_write_tokens: 581
+  EXECUTE:
+    TOTAL: {}
+target_branch: if(i==7) -> true in atoi_ef_l2_klee.c:logic_bomb
+target_file_lines: atoi_ef_l2_klee.c:14-15
+target_lines_content: |2-
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+justification: |-
+  This branch checks if the integer value converted from the input string equals 7. When this condition is true, the program triggers the "Logic bomb" path. 
+
+  Although the coverage information shows this branch already has 100% coverage in the test suite, it wasn't executed in the current trace with input "AAAA". Since the harness always executes with one argument and we can control the value of that argument, this is the most feasible branch to target.
+
+  The current execution took the else path because atoi("AAAA") returns 0, which is not equal to 7. By generating constraints to make i==7 true, we can explore the alternate path through the program.
+target_path_constraint: |-
+  To reach the branch `if(i==7) -> true` in the logic_bomb function, the following constraints must be satisfied:
+
+  1. The program must be executed with exactly one command-line argument (to pass the `if (argc < 2)` check in main).
+
+  2. The command-line argument must be a string that, when processed by the C function atoi(), evaluates to the integer 7.
+
+     The atoi() function in C converts a string to an integer as follows:
+     - It skips leading whitespace
+     - It reads an optional sign (+ or -)
+     - It reads consecutive digits until a non-digit character is encountered
+     - It stops parsing at the first non-digit character
+     - It returns 0 if no valid conversion could be performed
+
+     Therefore, the input string must start with the digit '7' optionally preceded by whitespace and/or a '+' sign. It may contain additional characters after the '7', which will be ignored by atoi().
+
+     Valid examples that satisfy this constraint include:
+     - "7"
+     - "7xyz"
+     - "+7"
+     - " 7"
+     - "007"
+
+     The simplest constraint is that the command-line argument must be a string that starts with '7' (possibly with leading whitespace and/or '+'), with no other digits before any non-digit character.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable", "7"],  # Changed argument from "AAAA" to "7"
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=False,  # Using shell=False for security and proper argument passing
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 1
+src_execution_summary: |2+
+
+  ```c
+  // atoi_ef_l2_klee.c (30 lines total)
+  #include <stdio.h>
+  /*
+  TOY:
+  */
+  #include <string.h> 
+  #include <math.h>
+  #include "utils.h"
+  #include "a_tester.h"
+
+  // {"s":{"length": 3}}
+  int logic_bomb(char* symvar) {
+      int i = atoi(symvar);
+      if(i==7){
+          // Unexecuted code (lines 14-15) removed. Its line cov: 2/2 (100%)
+      }else{
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+  }
+
+  int main(int argc, char **argv) {
+      fprintf(stderr, "\n");
+      if (argc < 2) {
+          // Unexecuted code (lines 25-26) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [atoi_ef_l2_klee.c] enter main 3
+  [atoi_ef_l2_klee.c] enter logic_bomb 1
+  [atoi_ef_l2_klee.c] enter logic_bomb 2
+  Logic bomb triggered
+execution_summary: |2+
+
+  ```c
+  // atoi_ef_l2_klee.c (30 lines total)
+  #include <stdio.h>
+  /*
+  TOY:
+  */
+  #include <string.h> 
+  #include <math.h>
+  #include "utils.h"
+  #include "a_tester.h"
+
+  // {"s":{"length": 3}}
+  int logic_bomb(char* symvar) {
+      int i = atoi(symvar);
+      if(i==7){
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+      }else{
+          // Unexecuted code (lines 17-18) removed. Its line cov: 2/2 (100%)
+      }
+  }
+
+  int main(int argc, char **argv) {
+      fprintf(stderr, "\n");
+      if (argc < 2) {
+          // Unexecuted code (lines 25-26) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [atoi_ef_l2_klee.c] enter main 3
+  [atoi_ef_l2_klee.c] enter logic_bomb 1
+  [atoi_ef_l2_klee.c] enter logic_bomb 3
+  Path without the bomb

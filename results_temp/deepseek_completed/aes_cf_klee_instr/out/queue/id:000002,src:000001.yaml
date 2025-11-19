@@ -1,0 +1,363 @@
+id: 2
+src_id: 1
+create_time: '2025-11-18 21:42:25.204'
+time_taken: 289
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 2
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: deepseek-chat
+    cost: $0.03638220
+    call_cnt: 7
+    latency: 126.93s
+    input_tokens: 34694
+    output_tokens: 3043
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: deepseek-chat
+      cost: $0.01836270
+      call_cnt: 3
+      latency: 50.15s
+      input_tokens: 19034
+      output_tokens: 1043
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: deepseek-chat
+      cost: $0.00498300
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: deepseek-chat
+      cost: $0.00611430
+      call_cnt: 1
+      latency: 14.13s
+      input_tokens: 6040
+      output_tokens: 333
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: deepseek-chat
+      cost: $0.00589350
+      call_cnt: 1
+      latency: 15.24s
+      input_tokens: 6382
+      output_tokens: 172
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: deepseek-chat
+      cost: $0.00137190
+      call_cnt: 1
+      latency: 20.77s
+      input_tokens: 6612
+      output_tokens: 538
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: deepseek-chat
+      cost: $0.01801950
+      call_cnt: 4
+      latency: 76.78s
+      input_tokens: 15660
+      output_tokens: 2000
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: deepseek-chat
+      cost: $0.00253358
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: deepseek-chat
+      cost: $0.00394838
+      call_cnt: 1
+      latency: 18.48s
+      input_tokens: 3071
+      output_tokens: 417
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    execute_python:
+      model: deepseek-chat
+      cost: $0.01053795
+      call_cnt: 2
+      latency: 42.88s
+      input_tokens: 7650
+      output_tokens: 1191
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: deepseek-chat
+      cost: $0.00099960
+      call_cnt: 1
+      latency: 15.42s
+      input_tokens: 4939
+      output_tokens: 392
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if(0 == memcmp((char*) plaintext, (char*) decodetext, 16)) -> true
+  in aes_cf_klee.c:logic_bomb
+target_file_lines: aes_cf_klee.c:56-57
+target_lines_content: |2-
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+justification: This branch has 0% historical coverage (0/2 lines) and represents the
+  core functionality of the program - successful AES decryption. When this branch
+  is taken, it would execute the bomb-triggering code path. This is more valuable
+  than the main() argument check branch which has simpler error handling logic.
+target_path_constraint: |-
+  1. Command-Line Arguments: The program must be executed with exactly one argument (in addition to the program name): argc == 2
+
+  2. Input String Format: The argument must be a valid 32-character hexadecimal string containing only characters from the set [0-9a-f]:
+     - strlen(s) == 32
+     - ∀ character c in s: c ∈ {'0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f'}
+
+  3. Hexadecimal Parsing: The 32-character string must be successfully parsed into 16 bytes (each byte represented by 2 hex characters):
+     - sscanf(s, "%2x%2x%2x%2x%2x%2x%2x%2x%2x%2x%2x%2x%2x%2x%2x%2x", &key[0..15]) == 16
+
+  4. AES Decryption Constraint: The 16-byte key derived from the hex string must correctly decrypt the hardcoded ciphertext to match the expected plaintext:
+     - AES128_ECB_decrypt(ciphertext, key, decodetext) must produce decodetext such that memcmp(plaintext, decodetext, 16) == 0
+     - Where ciphertext = {0x3a, 0xd7, 0x7b, 0xb4, 0x0d, 0x7a, 0x36, 0x60, 0xa8, 0x9e, 0xca, 0xf3, 0x24, 0x66, 0xef, 0x97}
+     - And plaintext = {0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96, 0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a}
+
+  This requires finding the specific 128-bit AES key that correctly decrypts the given ciphertext to the expected plaintext using ECB mode.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Use the correct AES-128 test vector key
+      hex_string = "2b7e151628aed2a6abf7158809cf4f3c"  # Valid 32-char hex string that satisfies the AES decryption constraint
+
+      try:
+          # Execute with proper argument separation (executable and argument as separate list elements)
+          result = subprocess.run(
+              ["./temp_executable", hex_string],  # Separate executable and argument
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=False,  # Set to False to properly handle list arguments
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          stderr_text = e.stderr.decode("utf-8", errors="replace") if e.stderr else ""
+          return stderr_text, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 1
+src_execution_summary: |2+
+
+  ```c
+  // aes_cf_klee.c (72 lines total)
+  #include <stdio.h>
+  /*
+  TOY:
+  */
+  #include <inttypes.h>
+  #include "aes.h"
+  #include "utils.h"
+
+  void aes_print(uint8_t* str) {
+      // Unexecuted code (lines 10-13) removed. Its line cov: 0/4 (0%)
+  }
+
+  #include "a_tester.h"
+
+  // {"s":{"length": 32}}
+  int logic_bomb(char* s) {
+      if(strlen(s) != 32){
+          // Unexecuted code (lines 21-23) removed. Its line cov: 3/3 (100%)
+      }
+
+      uint8_t key[16];
+
+      sscanf(s,
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8,
+          &key[0],&key[1],
+          &key[2],&key[3],
+          &key[4],&key[5],
+          &key[6],&key[7],
+          &key[8],&key[9],
+          &key[10],&key[11],
+          &key[12],&key[13],
+          &key[14],&key[15]);
+
+      //aes_print(key);
+
+      uint8_t decodetext[16];
+      uint8_t ciphertext[] = {0x3a, 0xd7, 0x7b, 0xb4, 0x0d, 0x7a, 0x36, 0x60, 0xa8, 0x9e, 0xca, 0xf3, 0x24, 0x66, 0xef, 0x97};
+      uint8_t plaintext[] = {0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96, 0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a};
+
+      AES128_ECB_decrypt(ciphertext, key, decodetext);
+
+      //aes_print(decodetext);
+      if(0 == memcmp((char*) plaintext, (char*) decodetext, 16)){
+          // Unexecuted code (lines 56-57) removed. Its line cov: 0/2 (0%)
+      }else{
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 66-67) removed. Its line cov: 0/2 (0%)
+      }
+
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [aes_cf_klee.c] enter main 1
+  [aes_cf_klee.c] enter main 3
+  [aes_cf_klee.c] enter logic_bomb 1
+  [aes_cf_klee.c] enter logic_bomb 3
+  [aes_cf_klee.c] enter logic_bomb 4
+  Logic bomb triggered
+execution_summary: |2+
+
+  ```c
+  // aes_cf_klee.c (72 lines total)
+  #include <stdio.h>
+  /*
+  TOY:
+  */
+  #include <inttypes.h>
+  #include "aes.h"
+  #include "utils.h"
+
+  void aes_print(uint8_t* str) {
+      // Unexecuted code (lines 10-13) removed. Its line cov: 0/4 (0%)
+  }
+
+  #include "a_tester.h"
+
+  // {"s":{"length": 32}}
+  int logic_bomb(char* s) {
+      if(strlen(s) != 32){
+          // Unexecuted code (lines 21-23) removed. Its line cov: 3/3 (100%)
+      }
+
+      uint8_t key[16];
+
+      sscanf(s,
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8
+          "%2" SCNx8 "%2" SCNx8,
+          &key[0],&key[1],
+          &key[2],&key[3],
+          &key[4],&key[5],
+          &key[6],&key[7],
+          &key[8],&key[9],
+          &key[10],&key[11],
+          &key[12],&key[13],
+          &key[14],&key[15]);
+
+      //aes_print(key);
+
+      uint8_t decodetext[16];
+      uint8_t ciphertext[] = {0x3a, 0xd7, 0x7b, 0xb4, 0x0d, 0x7a, 0x36, 0x60, 0xa8, 0x9e, 0xca, 0xf3, 0x24, 0x66, 0xef, 0x97};
+      uint8_t plaintext[] = {0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96, 0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a};
+
+      AES128_ECB_decrypt(ciphertext, key, decodetext);
+
+      //aes_print(decodetext);
+      if(0 == memcmp((char*) plaintext, (char*) decodetext, 16)){
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+      }else{
+          // Unexecuted code (lines 59-60) removed. Its line cov: 2/2 (100%)
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 66-67) removed. Its line cov: 0/2 (0%)
+      }
+
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Generate a valid 32-character hexadecimal string
+      hex_chars = '0123456789abcdef'
+      hex_string = '55966374aa56a0aa46853de7780f7723'  # Valid 32-char hex string
+
+      try:
+          # Execute with proper argument separation (executable and argument as separate list elements)
+          result = subprocess.run(
+              ["./temp_executable", hex_string],  # Separate executable and argument
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=False,  # Set to False to properly handle list arguments
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          stderr_text = e.stderr.decode("utf-8", errors="replace") if e.stderr else ""
+          return stderr_text, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [aes_cf_klee.c] enter main 1
+  [aes_cf_klee.c] enter main 3
+  [aes_cf_klee.c] enter logic_bomb 1
+  [aes_cf_klee.c] enter logic_bomb 3
+  [aes_cf_klee.c] enter logic_bomb 5
+  Path without the bomb

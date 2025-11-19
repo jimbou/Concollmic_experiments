@@ -1,0 +1,336 @@
+id: 2
+src_id: 0
+create_time: '2025-11-17 14:37:42.875'
+time_taken: 323
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: true
+is_hang: false
+usage: |
+  TOTAL:
+    model: deepseek-chat
+    cost: $0.05881515
+    call_cnt: 11
+    latency: 130.94s
+    input_tokens: 61700
+    output_tokens: 3103
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: deepseek-chat
+      cost: $0.04333343
+      call_cnt: 7
+      latency: 73.29s
+      input_tokens: 47617
+      output_tokens: 1588
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: deepseek-chat
+      cost: $0.00475943
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: deepseek-chat
+      cost: $0.01261350
+      call_cnt: 2
+      latency: 23.36s
+      input_tokens: 13017
+      output_tokens: 551
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: deepseek-chat
+      cost: $0.01812278
+      call_cnt: 3
+      latency: 23.32s
+      input_tokens: 19243
+      output_tokens: 495
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: deepseek-chat
+      cost: $0.00708548
+      call_cnt: 1
+      latency: 13.00s
+      input_tokens: 7532
+      output_tokens: 247
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: deepseek-chat
+      cost: $0.00075225
+      call_cnt: 1
+      latency: 13.62s
+      input_tokens: 7825
+      output_tokens: 295
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: deepseek-chat
+      cost: $0.01548173
+      call_cnt: 4
+      latency: 57.65s
+      input_tokens: 14083
+      output_tokens: 1515
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: deepseek-chat
+      cost: $0.00247912
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: deepseek-chat
+      cost: $0.00773340
+      call_cnt: 2
+      latency: 25.42s
+      input_tokens: 6709
+      output_tokens: 647
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    execute_python:
+      model: deepseek-chat
+      cost: $0.00380040
+      call_cnt: 1
+      latency: 11.57s
+      input_tokens: 3358
+      output_tokens: 292
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: deepseek-chat
+      cost: $0.00146880
+      call_cnt: 1
+      latency: 20.66s
+      input_tokens: 4016
+      output_tokens: 576
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (n != 5) -> true in heap_bo_l1_klee.c:logic_bomb()
+target_file_lines: heap_bo_l1_klee.c:17-18
+target_lines_content: |2-
+          free(p);
+          fprintf(stderr, "Logic bomb triggered\n");
+justification: "This branch has 0% historical coverage and represents the core logic
+  bomb functionality. While challenging to reach due to the global variable n being
+  initialized to 5, the program contains a buffer overflow vulnerability in strcpy(p,
+  symvar) where p is allocated only 16 bytes. A sufficiently long input string could
+  potentially overflow the buffer and overwrite the global variable n in memory. The
+  comment '// {\"symvar\":{\"length\": 256}}' suggests the symbolic variable can be
+  up to 256 characters, supporting this approach. This branch would significantly
+  improve code coverage and test the program's security boundary."
+target_path_constraint: |-
+  1. Command-Line Arguments: The program must be executed with exactly one argument (argc == 2). The first argument argv[0] is the program name, and argv[1] is the input string.
+
+  2. Buffer Overflow Constraint: The input string (argv[1]) must be long enough to cause a buffer overflow that modifies the global variable n. The buffer p is allocated 16 bytes, so the input string must exceed 15 characters (plus null terminator) to overflow. However, to reliably modify the global variable n which is located elsewhere in memory, the input likely needs to be significantly longer to overwrite the correct memory location.
+
+  3. Memory Layout Constraint: The buffer overflow must overwrite the global variable n with a value different from 5. The specific memory layout and offset between the heap-allocated buffer p and the global variable n in the data section determines the exact length and content pattern needed. The input string should contain specific byte patterns at calculated offsets to change n from 5 to any other value.
+
+  4. Input Format: The input is a single command-line argument passed as a string. No file I/O is involved - the program reads directly from argv[1].
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Create a long input string that should cause buffer overflow
+      # Buffer p is 16 bytes, so we need more than 16 characters
+      # Global variable n could be at various offsets, so use a long string
+      # Using a pattern that increases gradually to help identify the offset
+      
+      # Create a pattern: 16 chars to fill buffer + 84 more to reach likely offset
+      # Total 100 characters should be sufficient for most memory layouts
+      input_string = "A" * 16  # Fill the 16-byte buffer
+      input_string += "B" * 84  # Additional characters to overflow and hit global variable
+      
+      try:
+          # Use proper subprocess call without shell=True for better control
+          # The program expects argc == 2 with argv[1] as the input string
+          result = subprocess.run(
+              ["./temp_executable", input_string],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          stderr_text = e.stderr.decode('utf-8', errors='replace') if e.stderr else ""
+          return stderr_text, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: -6
+src_execution_summary: |2+
+
+  ```c
+  // heap_bo_l1_klee.c (35 lines total)
+  #include <stdio.h>
+  #include <string.h> 
+  #include "utils.h"
+  #include "a_tester.h"
+
+  int n = 5;
+
+  // {"symvar":{"length": 256}}
+  int logic_bomb(char* symvar) {
+      char *p, *q;
+      p = (char*)malloc(16);
+      q = (char*)malloc(16);
+      strcpy(p, symvar);
+      free(q);
+
+      if (n != 5){
+          // Unexecuted code (lines 17-19) removed. Its line cov: 0/3 (0%)
+      } else {
+          free(p);
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 29-30) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info: |
+  Crash reason: Terminated by signal 6 (SIGABRT)
+  Stderr:
+  munmap_chunk(): invalid pointer
+execution_trace: |
+  [heap_bo_l1_klee.c] enter main 1
+  [heap_bo_l1_klee.c] enter main 3
+  [heap_bo_l1_klee.c] enter logic_bomb 1
+  munmap_chunk(): invalid pointer
+execution_summary: |2+
+
+  ```c
+  // heap_bo_l1_klee.c (35 lines total)
+  #include <stdio.h>
+  #include <string.h> 
+  #include "utils.h"
+  #include "a_tester.h"
+
+  int n = 5;
+
+  // {"symvar":{"length": 256}}
+  int logic_bomb(char* symvar) {
+      char *p, *q;
+      p = (char*)malloc(16);
+      q = (char*)malloc(16);
+      strcpy(p, symvar);
+      free(q);
+
+      if (n != 5){
+          // Unexecuted code (lines 17-19) removed. Its line cov: 0/3 (0%)
+      } else {
+          // Unexecuted code (lines 21-23) removed. Its line cov: 3/3 (100%)
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 29-30) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [heap_bo_l1_klee.c] enter main 1
+  [heap_bo_l1_klee.c] enter main 3
+  [heap_bo_l1_klee.c] enter logic_bomb 1
+  [heap_bo_l1_klee.c] enter logic_bomb 3
+  Path without the bomb

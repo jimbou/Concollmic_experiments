@@ -1,0 +1,254 @@
+id: 2
+src_id: 1
+create_time: '2025-11-17 20:57:43.228'
+time_taken: 303
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 2
+is_satisfiable: true
+is_crash: true
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.63920000
+    call_cnt: 3
+    latency: 80.68s
+    input_tokens: 12937
+    output_tokens: 6341
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.48780000
+      call_cnt: 2
+      latency: 59.42s
+      input_tokens: 10389
+      output_tokens: 4667
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10194000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.37212000
+      call_cnt: 1
+      latency: 55.43s
+      input_tokens: 5097
+      output_tokens: 4438
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.01374000
+      call_cnt: 1
+      latency: 4.00s
+      input_tokens: 5292
+      output_tokens: 229
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.15140000
+      call_cnt: 1
+      latency: 21.26s
+      input_tokens: 2548
+      output_tokens: 1674
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05096000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.10044000
+      call_cnt: 1
+      latency: 21.26s
+      input_tokens: 2548
+      output_tokens: 1674
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (argc < 2) -> true in float1_fp_l1_klee.c:main
+target_file_lines: float1_fp_l1_klee.c:25-26
+target_lines_content: |2-
+          fprintf(stderr, "Usage: %s <input-string>\n", argv[0]);
+          return 2;
+justification: 'This branch has zero historical coverage according to the trace (lines
+  25-26: 0/2, 0%). Exercising it explores the error/usage path when no user argument
+  is provided, which is a distinct top-level behavior from the current run (which
+  provided one argument and entered logic_bomb). Covering this branch increases overall
+  coverage in main and validates input handling for missing arguments.'
+target_path_constraint: |-
+  Constraints to reach: main: if (argc < 2) -> true.
+
+  1. Process invocation (command-line argument count):
+     - Launch the executable without any user-supplied arguments. The operating system will still pass argv[0] (the program name), so the total argc must equal 1. Constraint: argc == 1.
+
+  2. Shell/harness behavior:
+     - Ensure the harness does not wrap the executable in a way that adds positional arguments. If a shell is used, the command string MUST NOT include any tokens after the program path. Constraint: the command line contains only the program path, with no spaces or additional tokens.
+
+  3. Environment conditions:
+     - No environment variable expansion or alias should append arguments automatically. Constraint: the execution environment must not prepend or append extra argv entries via wrappers (e.g., no exec alias adding default args).
+
+  These conditions guarantee that on process start, argc < 2 evaluates to true, taking the target branch body.
+selected_cnt: 1
+successful_generation_cnt: 1
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # To satisfy: main: if (argc < 2) -> true
+      # We must invoke the executable with no user-supplied positional arguments,
+      # so that argc == 1 (only argv[0] is present). Since a shell is used, the
+      # command string must contain only the program path with no extra tokens.
+      cmd = "./temp_executable"
+
+      try:
+          result = subprocess.run(
+              [cmd],                # single-token command string
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,           # same structure as original harness
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr if isinstance(e.stderr, str) else "", -signal.SIGKILL
+      except Exception as e:
+          # Surface unexpected execution issues to the harness
+          raise e
+returncode: 2
+src_execution_summary: |2+
+
+  ```c
+  // float1_fp_l1_klee.c (31 lines total)
+  #include <stdio.h>
+  #include<stdio.h>
+  #include <stdlib.h>
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0] - 48;
+      float a = symvar/70.0;
+      float b = 0.1;
+
+      if(a != 0.1){
+          if(a - b == 0) {
+              fprintf(stderr, "Logic bomb triggered\n");
+              return 1;
+          }
+      }
+
+      // Unexecuted code (lines 19-20) removed. Its line cov: 2/2 (100%)
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 25-26) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info: |
+  Crash reason: Segmentation fault
+  Stderr:
+  Usage: ./temp_executable <input-string>
+execution_trace: |
+  [float1_fp_l1_klee.c] enter main 1
+  [float1_fp_l1_klee.c] enter main 2
+  Usage: ./temp_executable <input-string>
+execution_summary: |2+
+
+  ```c
+  // float1_fp_l1_klee.c (31 lines total)
+  #include <stdio.h>
+  #include<stdio.h>
+  #include <stdlib.h>
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      // Unexecuted code (lines 8-10) removed. Its line cov: 3/3 (100%)
+
+      if(a != 0.1){
+          // Unexecuted code (lines 13-16) removed. Its line cov: 4/4 (100%)
+      }
+
+      // Unexecuted code (lines 19-20) removed. Its line cov: 2/2 (100%)
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          fprintf(stderr, "Usage: %s <input-string>\n", argv[0]);
+          return 2;
+      }
+      char *s = argv[1];
+
+      // Unexecuted code (line 30) removed. Its line cov: 1/1 (100%)
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Chosen concrete argument:
+      # s = "7AAA" so that the first byte c = ord('7') = 55
+      # Then symvar = 55 - 48 = 7 and a = 7 / 70.0f = 0.1f,
+      # which satisfies float32((c - 48) / 70.0) == float32(0.1).
+      cmd = "./temp_executable 7AAA"
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr if isinstance(e.stderr, str) else "", -signal.SIGKILL
+      except Exception as e:
+          # Surface unexpected execution issues to the harness
+          raise e
+src_execution_trace: |
+  [float1_fp_l1_klee.c] enter main 1
+  [float1_fp_l1_klee.c] enter main 3
+  [float1_fp_l1_klee.c] enter logic_bomb 1
+  [float1_fp_l1_klee.c] enter logic_bomb 2
+  [float1_fp_l1_klee.c] enter logic_bomb 3
+  Logic bomb triggered

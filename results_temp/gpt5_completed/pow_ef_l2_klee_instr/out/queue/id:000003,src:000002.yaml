@@ -1,0 +1,264 @@
+id: 3
+src_id: 2
+create_time: '2025-11-18 21:08:13.419'
+time_taken: 292
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.82986000
+    call_cnt: 4
+    latency: 87.31s
+    input_tokens: 18705
+    output_tokens: 7596
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.65396000
+      call_cnt: 3
+      latency: 63.49s
+      input_tokens: 16033
+      output_tokens: 5555
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.09958000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.17622000
+      call_cnt: 1
+      latency: 14.36s
+      input_tokens: 4979
+      output_tokens: 1130
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.35260000
+      call_cnt: 1
+      latency: 43.61s
+      input_tokens: 5421
+      output_tokens: 3999
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.02556000
+      call_cnt: 1
+      latency: 5.52s
+      input_tokens: 5633
+      output_tokens: 426
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.17590000
+      call_cnt: 1
+      latency: 23.82s
+      input_tokens: 2672
+      output_tokens: 2041
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05344000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.12246000
+      call_cnt: 1
+      latency: 23.82s
+      input_tokens: 2672
+      output_tokens: 2041
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (pow(symvar, 2) == 49) -> true in pow_ef_l2_klee.c:logic_bomb
+target_file_lines: pow_ef_l2_klee.c:14-15
+target_lines_content: |2-
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+justification: This branch was not executed in the current trace because the harness
+  invoked the program with no arguments (argc < 2). Although historical coverage is
+  100% for this file, there are no lower-coverage alternatives available. Reaching
+  the true branch of this condition exercises the core behavioral divergence of the
+  program (triggering the logic bomb) and will lead execution down a distinct path
+  compared to the current run.
+target_path_constraint: |-
+  Chronological external-input and environment constraints to reach the target branch (pow(symvar, 2) == 49) -> true in logic_bomb:
+
+  1. Command invocation (argument count):
+     - The program must be executed with exactly one user-supplied argument (in addition to the program name), so that argc >= 2 and the usage-exit path is bypassed.
+     - Constraint: Provide a single input string as argv[1]. No additional arguments are necessary.
+
+  2. Input format for argv[1]:
+     - argv[1] is treated as a C string. The program only reads its first byte and interprets it as an ASCII character.
+     - Let b0 be the first byte of argv[1]. The program computes symvar = (int)b0 - 48.
+
+  3. Mathematical relation required to take the target branch:
+     - The condition to trigger the branch is pow(symvar, 2) == 49.
+     - Therefore, symvar must satisfy symvar^2 = 49, i.e., symvar ∈ {7, -7}.
+
+  4. Deriving the constraint on b0 (first byte of argv[1]) from symvar:
+     - symvar = b0 - 48.
+     - For symvar = 7: b0 = 55.
+     - For symvar = -7: b0 = 41.
+
+  5. Final input constraint on argv[1]:
+     - The first byte of argv[1] must be either decimal 55 or decimal 41.
+     - The rest of argv[1] (subsequent bytes) are unconstrained and ignored by the program.
+
+  6. Environment assumptions:
+     - No files or environment variables are used; standard math library availability is assumed. The program must be invokable on the target system with the provided single argument.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Provide exactly one user-supplied argument so argc >= 2.
+      # Choose b0 = 55 (ASCII '7') so symvar = 55 - 48 = 7 and pow(symvar, 2) == 49.
+      # Preserve shell=True and the same executable path, embedding the single argument in the command string.
+      cmd = "./temp_executable 7"
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr if isinstance(e.stderr, str) else "", -signal.SIGKILL
+      except Exception as e:
+          raise e
+returncode: 1
+src_execution_summary: |2+
+
+  ```c
+  // pow_ef_l2_klee.c (30 lines total)
+  #include <stdio.h>
+  /*
+  TOY:
+  */
+  #include <string.h> 
+  #include <math.h>
+  #include "utils.h"
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      // Unexecuted code (lines 12-19) removed. Its line cov: 8/8 (100%)
+  }
+
+  int main(int argc, char **argv) {
+      fprintf(stderr, "\n");
+      if (argc < 2) {
+          fprintf(stderr, "Usage: %s <input-string>\n", argv[0]);
+          return 2;
+      }
+      // Unexecuted code (lines 28-29) removed. Its line cov: 2/2 (100%)
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [pow_ef_l2_klee.c] enter main 3
+  [pow_ef_l2_klee.c] enter logic_bomb 1
+  [pow_ef_l2_klee.c] enter logic_bomb 2
+  Logic bomb triggered
+execution_summary: |2+
+
+  ```c
+  // pow_ef_l2_klee.c (30 lines total)
+  #include <stdio.h>
+  /*
+  TOY:
+  */
+  #include <string.h> 
+  #include <math.h>
+  #include "utils.h"
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0] - 48;
+      if(pow(symvar, 2) == 49){
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+      }else{
+          // Unexecuted code (lines 17-18) removed. Its line cov: 2/2 (100%)
+      }
+  }
+
+  int main(int argc, char **argv) {
+      fprintf(stderr, "\n");
+      if (argc < 2) {
+          // Unexecuted code (lines 25-26) removed. Its line cov: 2/2 (100%)
+      }
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # To satisfy argc < 2 (i.e., only the program name present), invoke the executable
+      # with no user-supplied arguments. Preserve shell=True and the same executable path.
+      cmd = "./temp_executable"
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr if isinstance(e.stderr, str) else "", -signal.SIGKILL
+      except Exception as e:
+          raise e
+src_execution_trace: |2
+
+  [pow_ef_l2_klee.c] enter main 2
+  Usage: ./temp_executable <input-string>

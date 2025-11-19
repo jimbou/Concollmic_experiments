@@ -15,13 +15,17 @@ def safe_load_yaml(path):
 
 
 def classify_trace(text):
-    """Check presence of both patterns in a given trace string."""
     if not text:
         return (False, False)
 
-    has_logic = "Logic bomb triggered" in text
-    has_normal = "Path without the bomb" in text
+    # Ignore the literal escaped form: "Logic bomb triggered\n"
+    cleaned = text.replace("Logic bomb triggered\\n", "")
+
+    has_logic = "Logic bomb triggered" in cleaned
+    has_normal = "Path without the bomb" in cleaned
+
     return (has_logic, has_normal)
+
 
 
 def combine_classification(logic_any, normal_any):

@@ -1,0 +1,328 @@
+id: 1
+src_id: 0
+create_time: '2025-11-14 17:50:47.654'
+time_taken: 108
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 2
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: deepseek-chat
+    cost: $0.03411420
+    call_cnt: 7
+    latency: 86.12s
+    input_tokens: 33478
+    output_tokens: 2547
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: deepseek-chat
+      cost: $0.01756822
+      call_cnt: 3
+      latency: 35.06s
+      input_tokens: 18411
+      output_tokens: 933
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: deepseek-chat
+      cost: $0.00478253
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: deepseek-chat
+      cost: $0.00610620
+      call_cnt: 1
+      latency: 14.19s
+      input_tokens: 5797
+      output_tokens: 390
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: deepseek-chat
+      cost: $0.00576660
+      call_cnt: 1
+      latency: 7.57s
+      input_tokens: 6196
+      output_tokens: 185
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: deepseek-chat
+      cost: $0.00091290
+      call_cnt: 1
+      latency: 13.30s
+      input_tokens: 6418
+      output_tokens: 358
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: deepseek-chat
+      cost: $0.01654598
+      call_cnt: 4
+      latency: 51.06s
+      input_tokens: 15067
+      output_tokens: 1614
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: deepseek-chat
+      cost: $0.00253523
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: deepseek-chat
+      cost: $0.00819855
+      call_cnt: 2
+      latency: 20.86s
+      input_tokens: 7191
+      output_tokens: 667
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    execute_python:
+      model: deepseek-chat
+      cost: $0.00482535
+      call_cnt: 1
+      latency: 18.12s
+      input_tokens: 3378
+      output_tokens: 560
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: deepseek-chat
+      cost: $0.00098685
+      call_cnt: 1
+      latency: 12.08s
+      input_tokens: 4498
+      output_tokens: 387
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (p == q) -> false in logic_bomb() function
+target_file_lines: stackarray_sm_ln_klee.c:24-25
+target_lines_content: |2-
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+justification: This branch has 0% historical coverage and represents the alternative
+  execution path through the core logic bomb function. The current execution took
+  the true path (triggering the logic bomb), so exploring the false path would significantly
+  improve code coverage. This branch protects complex pointer arithmetic and array
+  indexing logic that hasn't been tested yet, making it a high-value target for exploration.
+target_path_constraint: |-
+  1. Command-Line Argument: The program must be executed with exactly one command-line argument (excluding the program name itself). This ensures argc == 2.
+
+  2. Input String Format: The first command-line argument must be a non-empty string where the first character is a digit (ASCII characters '0' through '9'). This ensures s[0] - 48 produces a valid integer value between 0 and 9.
+
+  3. Mathematical Constraint: The integer value derived from the first character (symvar = s[0] - 48) must satisfy the condition that the complex pointer arithmetic does NOT result in p == q. Specifically, after computing:
+     - i = symvar
+     - j = abs(i % 11)
+     - Array a[] = {(i+5)%11, (i+6)%11, (i+7)%11, (i+8)%11, (i+9)%11, (i+10)%11, i%11, (i+1)%11, (i+2)%11, (i+3)%11, (i+4)%11}
+     - p = &a[a[a[j]]]
+     - q = &a[a[a[a[a[*p]]]]]
+     The addresses p and q must be different.
+
+  4. The exact mathematical relationship depends on the complex nested array indexing, but essentially the input character must be chosen such that the pointer chain starting from index j through multiple levels of array dereferencing does not lead back to the same memory location.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          # Use digit '0' as the first character to satisfy the path constraint
+          # This ensures:
+          # 1. argc == 2 (one argument)
+          # 2. First character is a digit ('0')
+          # 3. The pointer arithmetic condition p != q is satisfied (i=0 gives p_index=4, q_index=7)
+          arg = "0"  # Starting with '0' satisfies all constraints
+          
+          result = subprocess.run(
+              ["./temp_executable", arg],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // stackarray_sm_ln_klee.c (36 lines total)
+  #include <stdio.h>
+  /*
+  *solution: 
+  */
+  #include<stdio.h>
+  #include"utils.h"
+
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0] - 48;
+      int i = symvar;
+      int j = abs(i%11);
+      int a[] = {(i+5)%11,(i+6)%11,(i+7)%11,(i+8)%11,(i+9)%11,(i+10)%11,i%11,(i+1)%11,(i+2)%11,(i+3)%11,(i+4)%11};
+      int* p = &a[a[a[j]]];
+      int* q = &a[a[a[a[a[*p]]]]];
+
+      if(p == q){
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+       }
+      else {
+          // Unexecuted code (lines 24-25) removed. Its line cov: 0/2 (0%)
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 31-32) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [stackarray_sm_ln_klee.c] enter main 1
+  [stackarray_sm_ln_klee.c] enter main 3
+  [stackarray_sm_ln_klee.c] enter logic_bomb 1
+  [stackarray_sm_ln_klee.c] enter logic_bomb 3
+  Path without the bomb
+execution_summary: |2+
+
+  ```c
+  // stackarray_sm_ln_klee.c (36 lines total)
+  #include <stdio.h>
+  /*
+  *solution: 
+  */
+  #include<stdio.h>
+  #include"utils.h"
+
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0] - 48;
+      int i = symvar;
+      int j = abs(i%11);
+      int a[] = {(i+5)%11,(i+6)%11,(i+7)%11,(i+8)%11,(i+9)%11,(i+10)%11,i%11,(i+1)%11,(i+2)%11,(i+3)%11,(i+4)%11};
+      int* p = &a[a[a[j]]];
+      int* q = &a[a[a[a[a[*p]]]]];
+
+      if(p == q){
+          // Unexecuted code (lines 20-21) removed. Its line cov: 2/2 (100%)
+       }
+      else {
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 31-32) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [stackarray_sm_ln_klee.c] enter main 1
+  [stackarray_sm_ln_klee.c] enter main 3
+  [stackarray_sm_ln_klee.c] enter logic_bomb 1
+  [stackarray_sm_ln_klee.c] enter logic_bomb 2
+  Logic bomb triggered

@@ -1,0 +1,349 @@
+id: 1
+src_id: 0
+create_time: '2025-11-14 21:59:04.082'
+time_taken: 77
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 2
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: claude-3-7-sonnet-latest
+    cost: $0.43711500
+    call_cnt: 5
+    latency: 55.71s
+    input_tokens: 24785
+    output_tokens: 2178
+    cache_read_tokens: 24766
+    cache_write_tokens: 4944
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.31107000
+      call_cnt: 3
+      latency: 36.27s
+      input_tokens: 18152
+      output_tokens: 1293
+      cache_read_tokens: 18140
+      cache_write_tokens: 3833
+    INITIAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.08499000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: claude-3-7-sonnet-latest
+      cost: $0.10138500
+      call_cnt: 1
+      latency: 19.19s
+      input_tokens: 5666
+      output_tokens: 546
+      cache_read_tokens: 5663
+      cache_write_tokens: 1151
+    select_target_branch:
+      model: claude-3-7-sonnet-latest
+      cost: $0.11296500
+      call_cnt: 1
+      latency: 8.59s
+      input_tokens: 5667
+      output_tokens: 356
+      cache_read_tokens: 5663
+      cache_write_tokens: 1709
+    generate_path_constraint:
+      model: claude-3-7-sonnet-latest
+      cost: $0.01173000
+      call_cnt: 1
+      latency: 8.49s
+      input_tokens: 6819
+      output_tokens: 391
+      cache_read_tokens: 6814
+      cache_write_tokens: 973
+  SOLVE:
+    TOTAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.12604500
+      call_cnt: 2
+      latency: 19.44s
+      input_tokens: 6633
+      output_tokens: 885
+      cache_read_tokens: 6626
+      cache_write_tokens: 1111
+    INITIAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.04974000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: claude-3-7-sonnet-latest
+      cost: $0.06181500
+      call_cnt: 1
+      latency: 8.18s
+      input_tokens: 3316
+      output_tokens: 402
+      cache_read_tokens: 3313
+      cache_write_tokens: 348
+    provide_solution:
+      model: claude-3-7-sonnet-latest
+      cost: $0.01449000
+      call_cnt: 1
+      latency: 11.26s
+      input_tokens: 3317
+      output_tokens: 483
+      cache_read_tokens: 3313
+      cache_write_tokens: 763
+  EXECUTE:
+    TOTAL: {}
+target_branch: if(atoi(rs) == 7) -> true in echo_cp_l1_klee.c:logic_bomb
+target_file_lines: echo_cp_l1_klee.c:31-32
+target_lines_content: |2-
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+justification: |-
+  This branch has 0% historical coverage (line cov: 0/2) and represents the core functionality of the program - the "logic bomb" that the program is designed to trigger. This branch is more valuable to explore than the argument check in main because:
+
+  1. It represents the primary functionality of the program (the "logic bomb")
+  2. It has never been executed in any test case (0% coverage)
+  3. It's reachable with the current test harness by modifying the input string
+
+  Based on the execution trace, we can see that the program takes the first character of the input string, converts it to a number by subtracting 48 (ASCII to digit conversion), echoes that number using a shell command, and then checks if the result equals 7. Currently, the program is run with "AAAA" as input, which results in symvar = 'A' - 48 = 17, causing the branch to evaluate to false.
+target_path_constraint: |-
+  To reach the target branch `if(atoi(rs) == 7) -> true` in the logic_bomb function, we need to satisfy the following constraints:
+
+  1. The program must be executed with at least one command-line argument to pass the check `if (argc < 2)` in the main function.
+
+  2. The first character of the input string must satisfy the following constraint:
+     - Let's denote the first character of the input string as s[0]
+     - The program computes `symvar = s[0] - 48`
+     - This value is then echoed via a shell command: `echo symvar`
+     - The output of this shell command is captured and converted back to an integer with `atoi(rs)`
+     - This final integer value must equal 7
+
+  3. Therefore, the core constraint is:
+     - s[0] must be a character such that when its ASCII value has 48 subtracted from it, the result is 7
+     - In other words: s[0] - 48 = 7
+     - Solving for s[0]: s[0] = 7 + 48 = 55
+     - ASCII value 55 corresponds to the character '7'
+
+  4. The input string must have the character '7' as its first character. The remaining characters can be arbitrary as they are not used in the program logic.
+
+  In summary, any input string that starts with the character '7' will satisfy the constraints and reach the target branch.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          # Modified the argument from "AAAA" to "7AAA" to satisfy the constraint
+          # The first character '7' will make atoi(rs) == 7 evaluate to true
+          result = subprocess.run(
+              ["./temp_executable 7AAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 1
+src_execution_summary: |2+
+
+  ```c
+  // echo_cp_l1_klee.c (46 lines total)
+  #include <stdio.h>
+  #include <string.h> 
+  #include "utils.h"
+
+  #include "a_tester.h"
+
+  char* shell(const char* cmd)
+  {
+      char* rs = "";
+      FILE *f;
+      f = popen(cmd, "r");
+      char buf[1024];
+      memset(buf,'\0',sizeof(buf));
+      while(fgets(buf,1024-1,f)!=NULL)
+      { 
+         rs = buf;
+      }
+
+      pclose(f);
+      return rs;
+  }
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0] - 48;
+      char cmd[256];
+      sprintf(cmd, "echo %d\n", symvar); 
+      char* rs = shell(cmd);
+
+      if(atoi(rs) == 7){
+          // Unexecuted code (lines 31-32) removed. Its line cov: 0/2 (0%)
+      } else {
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 41-42) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [echo_cp_l1_klee.c] enter main 1
+  [echo_cp_l1_klee.c] enter main 3
+  [echo_cp_l1_klee.c] enter logic_bomb 1
+  [echo_cp_l1_klee.c] enter shell 1
+  [echo_cp_l1_klee.c] enter shell 2
+  [echo_cp_l1_klee.c] enter logic_bomb 2
+  Logic bomb triggered
+execution_summary: |2+
+
+  ```c
+  // echo_cp_l1_klee.c (46 lines total)
+  #include <stdio.h>
+  #include <string.h> 
+  #include "utils.h"
+
+  #include "a_tester.h"
+
+  char* shell(const char* cmd)
+  {
+      char* rs = "";
+      FILE *f;
+      f = popen(cmd, "r");
+      char buf[1024];
+      memset(buf,'\0',sizeof(buf));
+      while(fgets(buf,1024-1,f)!=NULL)
+      { 
+         rs = buf;
+      }
+
+      pclose(f);
+      return rs;
+  }
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+      int symvar = s[0] - 48;
+      char cmd[256];
+      sprintf(cmd, "echo %d\n", symvar); 
+      char* rs = shell(cmd);
+
+      if(atoi(rs) == 7){
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+      } else {
+          // Unexecuted code (lines 34-35) removed. Its line cov: 2/2 (100%)
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 41-42) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [echo_cp_l1_klee.c] enter main 1
+  [echo_cp_l1_klee.c] enter main 3
+  [echo_cp_l1_klee.c] enter logic_bomb 1
+  [echo_cp_l1_klee.c] enter shell 1
+  [echo_cp_l1_klee.c] enter shell 2
+  [echo_cp_l1_klee.c] enter logic_bomb 3
+  Path without the bomb

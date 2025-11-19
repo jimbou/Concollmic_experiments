@@ -1,0 +1,337 @@
+id: 1
+src_id: 0
+create_time: '2025-11-14 20:39:41.855'
+time_taken: 101
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: claude-3-7-sonnet-latest
+    cost: $0.64065000
+    call_cnt: 8
+    latency: 80.19s
+    input_tokens: 36928
+    output_tokens: 2891
+    cache_read_tokens: 36895
+    cache_write_tokens: 6412
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.30615000
+      call_cnt: 3
+      latency: 32.28s
+      input_tokens: 17998
+      output_tokens: 1206
+      cache_read_tokens: 17985
+      cache_write_tokens: 3278
+    INITIAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.08499000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: claude-3-7-sonnet-latest
+      cost: $0.09927000
+      call_cnt: 1
+      latency: 12.83s
+      input_tokens: 5666
+      output_tokens: 475
+      cache_read_tokens: 5663
+      cache_write_tokens: 996
+    select_target_branch:
+      model: claude-3-7-sonnet-latest
+      cost: $0.10770000
+      call_cnt: 1
+      latency: 9.21s
+      input_tokens: 5668
+      output_tokens: 258
+      cache_read_tokens: 5663
+      cache_write_tokens: 1482
+    generate_path_constraint:
+      model: claude-3-7-sonnet-latest
+      cost: $0.01419000
+      call_cnt: 1
+      latency: 10.23s
+      input_tokens: 6664
+      output_tokens: 473
+      cache_read_tokens: 6659
+      cache_write_tokens: 800
+  SOLVE:
+    TOTAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.33450000
+      call_cnt: 5
+      latency: 47.92s
+      input_tokens: 18930
+      output_tokens: 1685
+      cache_read_tokens: 18910
+      cache_write_tokens: 3134
+    INITIAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.04974000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: claude-3-7-sonnet-latest
+      cost: $0.06253500
+      call_cnt: 1
+      latency: 10.77s
+      input_tokens: 3316
+      output_tokens: 426
+      cache_read_tokens: 3313
+      cache_write_tokens: 414
+    execute_python:
+      model: claude-3-7-sonnet-latest
+      cost: $0.12907500
+      call_cnt: 2
+      latency: 16.58s
+      input_tokens: 7049
+      output_tokens: 352
+      cache_read_tokens: 7040
+      cache_write_tokens: 1517
+    provide_solution:
+      model: claude-3-7-sonnet-latest
+      cost: $0.09315000
+      call_cnt: 2
+      latency: 20.57s
+      input_tokens: 8565
+      output_tokens: 907
+      cache_read_tokens: 8557
+      cache_write_tokens: 1203
+  EXECUTE:
+    TOTAL: {}
+target_branch: if(pid%78 == symvar) -> true in pid_csv_klee.c:logic_bomb
+target_file_lines: pid_csv_klee.c:15-16
+target_lines_content: |2-
+          fprintf(stderr, "Logic bomb triggered\n");
+          return 1;
+justification: 'This branch has 0% historical coverage as indicated by the comment
+  "Its line cov: 0/2 (0%)". This is the core functionality of the program that represents
+  the "logic bomb" condition. Exploring this branch would significantly improve code
+  coverage by executing previously untouched code. The branch depends on the relationship
+  between the process ID and the first character of the input string, which makes
+  it an interesting target for symbolic constraint generation.'
+target_path_constraint: |-
+  To reach the target branch where `if(pid%78 == symvar)` evaluates to true in the logic_bomb function, the following constraints must be satisfied:
+
+  1. Program Execution Constraint:
+     - The program must be executed with at least one command-line argument (argc >= 2)
+     - This ensures we don't hit the error check in main() and logic_bomb() gets called
+
+  2. Input Format Constraint:
+     - The first command-line argument (argv[1]) must be a string with at least one character
+     - This ensures that s[0] can be accessed without causing a segmentation fault
+
+  3. Critical Value Constraint:
+     - The first character of the input string (s[0]) must satisfy: s[0] - 48 = pid % 78
+     - Where pid is the process ID of the running program
+     - This is the key constraint that determines whether the target branch is taken
+
+  Since the process ID (pid) is not directly controllable through program input and varies between executions, the input must be dynamically adjusted based on the current pid value. The constraint can be expressed as:
+
+  s[0] = (pid % 78) + 48
+
+  This means the first character of the input string must be the ASCII character corresponding to the value of (pid % 78) + 48.
+
+  For example:
+  - If pid % 78 = 0, then s[0] should be '0' (ASCII 48)
+  - If pid % 78 = 10, then s[0] should be ':' (ASCII 58)
+  - If pid % 78 = 26, then s[0] should be 'J' (ASCII 74)
+
+  The remaining characters in the input string can be arbitrary as they are not used in the branch condition.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import os
+      import signal
+      import subprocess
+
+      try:
+          # Create a command that calculates the required character at runtime
+          # We need to use a bash command that:
+          # 1. Gets its own PID
+          # 2. Calculates (PID % 78) + 48
+          # 3. Converts to ASCII character
+          # 4. Uses that as the first character of the argument
+          
+          cmd = 'bash -c \'PID=$$; VAL=$(($PID % 78 + 48)); printf "\\$(printf \\\\\\%03o $VAL)" | xargs ./temp_executable\''
+          
+          result = subprocess.run(
+              cmd,
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // pid_csv_klee.c (31 lines total)
+  #include <stdio.h>
+  #define _GNU_SOURCE
+  #include <stdio.h>
+  #include <stdlib.h>
+  #include <unistd.h>
+
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+     int symvar = s[0] - 48;
+     int pid = (int) getpid();
+
+     if(pid%78 == symvar){
+          // Unexecuted code (lines 15-16) removed. Its line cov: 0/2 (0%)
+     } else {
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 25-26) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+
+      return logic_bomb(s);
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [pid_csv_klee.c] enter main 1
+  [pid_csv_klee.c] enter main 3
+  [pid_csv_klee.c] enter logic_bomb 1
+  [pid_csv_klee.c] enter logic_bomb 3
+  Path without the bomb
+execution_summary: |2+
+
+  ```c
+  // pid_csv_klee.c (31 lines total)
+  #include <stdio.h>
+  #define _GNU_SOURCE
+  #include <stdio.h>
+  #include <stdlib.h>
+  #include <unistd.h>
+
+  #include "a_tester.h"
+
+  // {"s":{"length": 4}}
+  int logic_bomb(char* s) {
+     int symvar = s[0] - 48;
+     int pid = (int) getpid();
+
+     if(pid%78 == symvar){
+          // Unexecuted code (lines 15-16) removed. Its line cov: 0/2 (0%)
+     } else {
+          fprintf(stderr, "Path without the bomb\n");
+          return 0;
+      }
+  }
+
+  int main(int argc, char **argv) {
+      if (argc < 2) {
+          // Unexecuted code (lines 25-26) removed. Its line cov: 0/2 (0%)
+      }
+      char *s = argv[1];
+
+      return logic_bomb(s);
+  }
+  ```
+
+src_exec_code: |
+  # #!/usr/bin/env python3
+  # """
+  # Harness that always executes a binary with one fixed string argument.
+  # Compatible with ConcoLLMic's expected signature: execute_program(timeout: int).
+  # """
+
+  # import subprocess
+  # import signal
+  # from typing import Tuple
+
+  # def execute_program(timeout: int) -> Tuple[str, int]:
+  #     """
+  #     Execute the instrumented program with one string argument.
+  #     Returns (stderr_text, return_code).
+  #     """
+  #     # ✅ Always run this binary (adjust path if needed)
+  #     exe_path = "./temp_executable"
+
+  #     # ✅ Always pass one string argument (change if your program needs specific format)
+  #     arg = "AAAA"
+
+  #     try:
+  #         result = subprocess.run(
+  #             [exe_path, arg],
+  #             capture_output=True,
+  #             text=True,
+  #             timeout=timeout,
+  #         )
+  #         return result.stderr or "", result.returncode
+  #     except subprocess.TimeoutExpired as e:
+  #         stderr_text = e.stderr if isinstance(e.stderr, str) else ""
+  #         return stderr_text, -getattr(signal, "SIGKILL", 9)
+  #     except Exception as e:
+  #         return f"Harness error: {type(e).__name__}: {e}", -1
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable AAAA"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [pid_csv_klee.c] enter main 1
+  [pid_csv_klee.c] enter main 3
+  [pid_csv_klee.c] enter logic_bomb 1
+  [pid_csv_klee.c] enter logic_bomb 3
+  Path without the bomb
