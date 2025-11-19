@@ -25,7 +25,6 @@ with open(klee_json, "r") as f:
 # ---------------------------------------------------------
 def extract_ace_name(queue_dir):
     base = os.path.basename(os.path.dirname(os.path.dirname(queue_dir)))  
-    # base = "stack_cp_l1_klee_instr"
     if base.endswith("_klee_instr"):
         base = base[:-len("_klee_instr")]
     return base
@@ -41,31 +40,53 @@ def extract_klee_name(path):
     return file
 
 # ---------------------------------------------------------
-# Build mapping from KLEE names to whether any solver == triggered_both
+# Build mapping: KLEE name -> did ANY solver trigger_both?
 # ---------------------------------------------------------
 klee_triggered_both = {}
 
-for path, result_dict in klee_data.items():
+for path, solvers in klee_data.items():
     name = extract_klee_name(path)
-    has_triggered_both = any(status == "triggered_both" for status in result_dict.values())
-    klee_triggered_both[name] = has_triggered_both
+    did_trigger = any(status == "triggered_both" for status in solvers.values())
+    klee_triggered_both[name] = did_trigger
 
 # ---------------------------------------------------------
-# Scan ACE entries: only entries where result != "both"
-# Check if KLEE has triggered_both for that name
+# 1) Cases where ACE < KLEE
+# ACE != both  AND  KLEE triggered_both
 # ---------------------------------------------------------
-print("Entries where ACE did NOT get 'both', but KLEE DID trigger_both:")
-print("--------------------------------------------------------------")
+print("\n==============================================================")
+print("Cases where ConcoLLMic is WORSE than KLEE")
+print("(ACE != 'both' but some KLEE solver triggered_both)")
+print("==============================================================\n")
 
 for entry in ace_data:
     ace_name = extract_ace_name(entry["queue_dir"])
     ace_result = entry["result"]
 
     if ace_result == "both":
-        continue  # ignore successful ones
+        continue
 
-    # Check if this name exists in KLEE results
-    if ace_name in klee_triggered_both:
-        if klee_triggered_both[ace_name]:
-            print(f"{ace_name}: ACE={ace_result}, KLEE=triggered_both")
+    if ace_name in klee_triggered_both and klee_triggered_both[ace_name]:
+        print(f"{ace_name}: ACE={ace_result}, KLEE=triggered_both")
 
+
+# ---------------------------------------------------------
+# 2) Cases where ACE > KLEE
+# ACE == both  AND  NO KLEE solver triggered_both
+# ---------------------------------------------------------
+print("\n==============================================================")
+print("Cases where ConcoLLMic OUTPERFORMS KLEE")
+print("(ACE == 'both' but NO KLEE solver triggered_both)")
+print("==============================================================\n")
+
+for entry in ace_data:
+    ace_name = extract_ace_name(entry["queue_dir"])
+    ace_result = entry["result"]
+
+    if ace_result != "both":
+        continue
+
+    # If KLEE has no triggered_both
+    if ace_name in klee_triggered_both and not klee_triggered_both[ace_name]:
+        print(f"{ace_name}: ACE=both, KLEE=no_triggered_both")
+
+print()
