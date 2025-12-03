@@ -8,7 +8,7 @@ trap 'echo "❗ Manual interrupt. Exiting..."; kill 0' INT
 # Batch ACE run execution script with timeout + JSON report
 # =====================================================
 
-BASE_DIR="/home/jim/ConcoLLMic/logic_bombs/copies"
+BASE_DIR="/home/jim/ConcoLLMic/logic_bombs/copies/ping_csv_klee"
 HARNESS="/home/jim/ConcoLLMic/logic_bombs/copies/harness/count.py"
 LOG_DIR="logs_run"
 SUMMARY_JSON="run_summary.json"

@@ -5,7 +5,7 @@ set -uo pipefail   # we handle errors manually
 # Batch compilation script for ACE instrumented outputs
 # =====================================================
 
-BASE_DIR="/home/jim/ConcoLLMic/logic_bombs/copies"
+BASE_DIR="/home/jim/ConcoLLMic/logic_bombs/copies/"
 INCLUDE_DIR="/home/jim/ConcoLLMic/logic_bombs/include"
 LIB_DIR="/home/jim/ConcoLLMic/logic_bombs/lib"
 LOG_DIR="logs_compile"

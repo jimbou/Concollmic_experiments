@@ -1,5 +1,4 @@
 #include <stdio.h>
-#include <stdio.h>
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
@@ -87,24 +86,12 @@ int logic_bomb(char* s) {
     if (inet_aton(s, &dst) == 0) {
         perror("inet_aton");
         //printf("%s isn't a valid IP address\n", s);
-        fprintf(stderr, "Path without the bomb\n");
-        return 0;
+        return NORMAL_ENDING;
     }
 
     if (ping_it(&dst) == 1){
-        fprintf(stderr, "Logic bomb triggered\n");
-        return 1;
+        return BOMB_ENDING;
     }else{
-        fprintf(stderr, "Path without the bomb\n");
-        return 0;
+        return NORMAL_ENDING;
     }
-}
-
-int main(int argc, char **argv) {
-    if (argc < 2) {
-        fprintf(stderr, "Usage: %s <input-string>\n", argv[0]);
-        return 2;
-    }
-    char *s = argv[1];
-    return logic_bomb(s);
 }
