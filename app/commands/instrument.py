@@ -597,8 +597,8 @@ def _instrument_file(file_path, rel_path, chunk_size):
     import traceback
 
     # set_model("gpt-4o")
-    set_model("claude-3-7-sonnet-latest")
-    # set_model("deepseek-chat")
+    # set_model("claude-3-7-sonnet-latest")
+    set_model("deepseek-chat")
     # set_model("deepseek-reasoner")
     # set_model("claude-sonnet-4-0")
     # set_model("gemini-2.5-pro")

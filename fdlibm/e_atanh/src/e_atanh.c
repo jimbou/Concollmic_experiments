@@ -1,0 +1,60 @@
+
+
+
+
+
+
+#include "fdlibm.h"
+
+#ifdef __STDC__
+static const double one = 1.0, huge = 1e300;
+#else
+static double one = 1.0, huge = 1e300;
+#endif
+
+static double zero = 0.0;
+
+#ifdef __STDC__
+	double __ieee754_atanh(double x)
+#else
+	double __ieee754_atanh(x)
+	double x;
+#endif
+{
+	double t;
+	int hx,ix;
+	unsigned lx;
+	hx = __HI(x);		
+	lx = __LO(x);		
+	ix = hx&0x7fffffff;
+	if ((ix|((lx|(-lx))>>31))>0x3ff00000) 
+	    return (x-x)/(x-x);
+	if(ix==0x3ff00000) 
+	    return x/zero;
+	if(ix<0x3e300000&&(huge+x)>zero) return x;	
+	__HI(x) = ix;		
+	if(ix<0x3fe00000) {		
+	    t = x+x;
+	    t = 0.5*log1p(t+t*x/(one-x));
+	} else 
+	    t = 0.5*log1p((x+x)/(one-x));
+	if(hx>=0) return t; else return -t;
+}
+
+#include <stdio.h>
+#include <stdlib.h>
+
+int main(int argc, char** argv) {
+
+    if (argc != 2) {
+        printf("Usage: %s <arg>\n", argv[0]);
+        return 1;
+    }
+
+    double a0 = atof(argv[1]);
+
+    double r = __ieee754_atanh(a0);
+    printf("%f\n", r);
+
+    return 0;
+}
