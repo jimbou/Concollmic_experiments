@@ -8,7 +8,7 @@ trap 'echo "❗ Manual interrupt. Exiting..."; kill 0' INT
 # Batch ACE run execution script with timeout + JSON report (FDLIBM)
 # =====================================================
 
-BASE_DIR="/home/jim/ConcoLLMic/fdlibm/"
+BASE_DIR="/home/jim/ConcoLLMic/fdlibm/e_acos"
 LOG_DIR="logs_run_fdlibm"
 SUMMARY_JSON="run_summary_fdlibm.json"
 TIMEOUT_DURATION="15m"
@@ -49,8 +49,19 @@ run_ace() {
   local name
   name="$(basename "$(dirname "$instr_dir")")"
 
-  local out_dir="$RESULTS_DIR/$name/out"
-  mkdir -p "$out_dir"
+ local out_dir="$RESULTS_DIR/$name/out"
+
+# If directory exists, append counter: out_1, out_2, ...
+if [[ -d "$out_dir" ]]; then
+    counter=1
+    while [[ -d "${out_dir}_$counter" ]]; do
+        counter=$((counter+1))
+    done
+    out_dir="${out_dir}_$counter"
+fi
+
+mkdir -p "$out_dir"
+
 
   local log_file="$LOG_DIR/${name}_run.log"
   : > "$log_file"
