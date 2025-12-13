@@ -1,0 +1,313 @@
+id: 6
+src_id: 2
+create_time: '2025-12-13 06:16:25.138'
+time_taken: 796
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: deepseek-chat
+    cost: $0.04893285
+    call_cnt: 10
+    latency: 123.13s
+    input_tokens: 49026
+    output_tokens: 3328
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: deepseek-chat
+      cost: $0.02972565
+      call_cnt: 5
+      latency: 58.04s
+      input_tokens: 31642
+      output_tokens: 1420
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: deepseek-chat
+      cost: $0.00446078
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: deepseek-chat
+      cost: $0.01264200
+      call_cnt: 2
+      latency: 31.28s
+      input_tokens: 11812
+      output_tokens: 854
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: deepseek-chat
+      cost: $0.00542948
+      call_cnt: 1
+      latency: 5.01s
+      input_tokens: 5868
+      output_tokens: 57
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: deepseek-chat
+      cost: $0.00659670
+      call_cnt: 1
+      latency: 11.05s
+      input_tokens: 6816
+      output_tokens: 275
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: deepseek-chat
+      cost: $0.00059670
+      call_cnt: 1
+      latency: 10.70s
+      input_tokens: 7146
+      output_tokens: 234
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: deepseek-chat
+      cost: $0.01920720
+      call_cnt: 5
+      latency: 65.09s
+      input_tokens: 17384
+      output_tokens: 1908
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: deepseek-chat
+      cost: $0.00219038
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: deepseek-chat
+      cost: $0.00331155
+      call_cnt: 1
+      latency: 12.45s
+      input_tokens: 2655
+      output_tokens: 330
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    solve_with_smt:
+      model: deepseek-chat
+      cost: $0.00377340
+      call_cnt: 1
+      latency: 9.62s
+      input_tokens: 2994
+      output_tokens: 383
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    execute_python:
+      model: deepseek-chat
+      cost: $0.00898837
+      call_cnt: 2
+      latency: 29.64s
+      input_tokens: 7285
+      output_tokens: 825
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: deepseek-chat
+      cost: $0.00094350
+      call_cnt: 1
+      latency: 13.38s
+      input_tokens: 4450
+      output_tokens: 370
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if(!finite(value)||value==0.0) -> true at line 20 in s_ldexp.c:ldexp
+  (after scalbn call)
+target_file_lines: s_ldexp.c:21-22
+target_lines_content: |-
+  		errno = ERANGE;
+  	}
+justification: Although this code block has 100% coverage, the specific path where
+  scalbn() produces an overflow/underflow condition (making the result non-finite
+  or zero) represents an important edge case. This branch tests the error handling
+  for extreme exponent values and could reveal issues with range limits. The current
+  execution with NaN input bypassed this logic entirely, so exploring this path would
+  provide different execution behavior.
+target_path_constraint: |-
+  1. Command-Line Arguments: The program must be executed with exactly 2 arguments after the program name: `argc == 3`
+
+  2. First Argument (value): Must be a valid finite floating-point number that can be parsed by atof(). The value should be non-zero and finite to avoid the early return at line 16.
+
+  3. Second Argument (exponent): Must be a valid integer that can be parsed by atoi(). The exponent value must be large enough (positive or negative) such that when ldexp() calls scalbn(value, exp), the result becomes either:
+     - Non-finite (overflow to infinity or underflow to denormal/zero)
+     - Exactly zero (extreme underflow)
+
+  4. Mathematical Constraint: The combination of the finite non-zero value and the extreme exponent must cause the scalbn() function to produce a result that satisfies: `!finite(result) || result == 0.0`
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          # Use concrete values that satisfy all constraints:
+          # - First argument: "1.0" (finite non-zero floating-point number)
+          # - Second argument: "1025" (large enough exponent to cause overflow in scalbn)
+          result = subprocess.run(
+              ["./temp_executable", "1.0", "1025"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=False,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // s_ldexp.c (39 lines total)
+
+
+
+
+  #include "fdlibm.h"
+  #include <errno.h>
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double ldexp(double value, int exp)
+  #else
+  	double ldexp(value, exp)
+  	double value; int exp;
+  #endif
+  {
+  	if(!finite(value)||value==0.0) {
+  		return value;
+  	}
+  	// Unexecuted code (lines 19-23) removed. Its line cov: 5/5 (100%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	if (argc != 3) {
+  		// Unexecuted code (lines 31-32) removed. Its line cov: 2/2 (100%)
+  	}
+  	double a0 = atof(argv[1]);
+  	int a1 = atoi(argv[2]);
+  	double r = ldexp(a0, a1);
+  	printf("%f\n", r);
+  	return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [s_ldexp.c] enter main 1
+  [s_ldexp.c] enter main 3
+  [s_ldexp.c] enter main 4
+  [s_ldexp.c] enter ldexp 1
+  [s_ldexp.c] enter ldexp 3
+  [s_ldexp.c] enter ldexp 4
+  [s_ldexp.c] enter ldexp 6
+  [s_ldexp.c] enter main 5
+execution_summary: |2+
+
+  ```c
+  // s_ldexp.c (39 lines total)
+
+
+
+
+  #include "fdlibm.h"
+  #include <errno.h>
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double ldexp(double value, int exp)
+  #else
+  	double ldexp(value, exp)
+  	double value; int exp;
+  #endif
+  {
+  	if(!finite(value)||value==0.0) {
+  		// Unexecuted code (line 17) removed. Its line cov: 1/1 (100%)
+  	}
+  	value = scalbn(value,exp);
+  	if(!finite(value)||value==0.0) {
+  		// Unexecuted code (line 21) removed. Its line cov: 1/1 (100%)
+  	}
+  	return value;
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	if (argc != 3) {
+  		// Unexecuted code (lines 31-32) removed. Its line cov: 2/2 (100%)
+  	}
+  	double a0 = atof(argv[1]);
+  	int a1 = atoi(argv[2]);
+  	double r = ldexp(a0, a1);
+  	printf("%f\n", r);
+  	return 0;
+  }
+  ```
+
+src_exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable", "NaN", "42"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=False,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [s_ldexp.c] enter main 1
+  [s_ldexp.c] enter main 3
+  [s_ldexp.c] enter main 4
+  [s_ldexp.c] enter ldexp 1
+  [s_ldexp.c] enter ldexp 2
+  [s_ldexp.c] enter main 5

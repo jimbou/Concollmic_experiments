@@ -1,0 +1,148 @@
+
+
+
+
+
+
+
+#include "fdlibm.h"
+#include <stdio.h>
+
+#ifdef __STDC__
+static const double 
+#else
+static double 
+#endif
+one =  1.00000000000000000000e+00, 
+huge =  1.000e+300,
+pio2_hi =  1.57079632679489655800e+00, 
+pio2_lo =  6.12323399573676603587e-17, 
+pio4_hi =  7.85398163397448278999e-01, 
+	
+pS0 =  1.66666666666666657415e-01, 
+pS1 = -3.25565818622400915405e-01, 
+pS2 =  2.01212532134862925881e-01, 
+pS3 = -4.00555345006794114027e-02, 
+pS4 =  7.91534994289814532176e-04, 
+pS5 =  3.47933107596021167570e-05, 
+qS1 = -2.40339491173441421878e+00, 
+qS2 =  2.02094576023350569471e+00, 
+qS3 = -6.88283971605453293030e-01, 
+qS4 =  7.70381505559019352791e-02; 
+
+#ifdef __STDC__
+	double __ieee754_asin(double x)
+#else
+	double __ieee754_asin(x)
+	double x;
+#endif
+{
+	fprintf(stderr, "[e_asin.c] enter __ieee754_asin 1\n");
+	double t,w,p,q,c,r,s;
+	int hx,ix;
+	hx = __HI(x);
+	ix = hx&0x7fffffff;
+	// fprintf(stderr, "[e_asin.c] exit __ieee754_asin 1\n");
+	if(ix>= 0x3ff00000) {		
+	    fprintf(stderr, "[e_asin.c] enter __ieee754_asin 2\n");
+	    if(((ix-0x3ff00000)|__LO(x))==0)
+	    {
+		fprintf(stderr, "[e_asin.c] enter __ieee754_asin 3\n");
+		    
+		return x*pio2_hi+x*pio2_lo;
+		// fprintf(stderr, "[e_asin.c] exit __ieee754_asin 3\n");
+	    }
+	    fprintf(stderr, "[e_asin.c] enter __ieee754_asin 4\n");
+	    return (x-x)/(x-x);
+	    // fprintf(stderr, "[e_asin.c] exit __ieee754_asin 4\n");
+	    // fprintf(stderr, "[e_asin.c] exit __ieee754_asin 2\n");
+	} else if (ix<0x3fe00000) {	
+	    fprintf(stderr, "[e_asin.c] enter __ieee754_asin 5\n");
+	    if(ix<0x3e400000) {		
+		fprintf(stderr, "[e_asin.c] enter __ieee754_asin 6\n");
+		if(huge+x>one) 
+		{
+		    fprintf(stderr, "[e_asin.c] enter __ieee754_asin 7\n");
+		    return x;
+		    // fprintf(stderr, "[e_asin.c] exit __ieee754_asin 7\n");
+		}
+		fprintf(stderr, "[e_asin.c] enter __ieee754_asin 8\n");
+		return x;
+		// fprintf(stderr, "[e_asin.c] exit __ieee754_asin 8\n");
+		// fprintf(stderr, "[e_asin.c] exit __ieee754_asin 6\n");
+	    } else 
+	    {
+		fprintf(stderr, "[e_asin.c] enter __ieee754_asin 9\n");
+		t = x*x;
+		p = t*(pS0+t*(pS1+t*(pS2+t*(pS3+t*(pS4+t*pS5)))));
+		q = one+t*(qS1+t*(qS2+t*(qS3+t*qS4)));
+		w = p/q;
+		return x+x*w;
+		// fprintf(stderr, "[e_asin.c] exit __ieee754_asin 9\n");
+	    }
+	    // fprintf(stderr, "[e_asin.c] exit __ieee754_asin 5\n");
+	}
+	
+	fprintf(stderr, "[e_asin.c] enter __ieee754_asin 10\n");
+	w = one-fabs(x);
+	t = w*0.5;
+	p = t*(pS0+t*(pS1+t*(pS2+t*(pS3+t*(pS4+t*pS5)))));
+	q = one+t*(qS1+t*(qS2+t*(qS3+t*qS4)));
+	s = sqrt(t);
+	// fprintf(stderr, "[e_asin.c] exit __ieee754_asin 10\n");
+	if(ix>=0x3FEF3333) { 	
+	    fprintf(stderr, "[e_asin.c] enter __ieee754_asin 11\n");
+	    w = p/q;
+	    t = pio2_hi-(2.0*(s+s*w)-pio2_lo);
+	    // fprintf(stderr, "[e_asin.c] exit __ieee754_asin 11\n");
+	} else {
+	    fprintf(stderr, "[e_asin.c] enter __ieee754_asin 12\n");
+	    w  = s;
+	    __LO(w) = 0;
+	    c  = (t-w*w)/(s+w);
+	    r  = p/q;
+	    p  = 2.0*s*r-(pio2_lo-2.0*c);
+	    q  = pio4_hi-2.0*w;
+	    t  = pio4_hi-(p-q);
+	    // fprintf(stderr, "[e_asin.c] exit __ieee754_asin 12\n");
+	}
+	fprintf(stderr, "[e_asin.c] enter __ieee754_asin 13\n");
+	if(hx>0) 
+	{
+	    fprintf(stderr, "[e_asin.c] enter __ieee754_asin 14\n");
+	    return t;
+	    // fprintf(stderr, "[e_asin.c] exit __ieee754_asin 14\n");
+	} else 
+	{
+	    fprintf(stderr, "[e_asin.c] enter __ieee754_asin 15\n");
+	    return -t;
+	    // fprintf(stderr, "[e_asin.c] exit __ieee754_asin 15\n");
+	}
+	// fprintf(stderr, "[e_asin.c] exit __ieee754_asin 13\n");
+}
+
+#include <stdio.h>
+#include <stdlib.h>
+
+int main(int argc, char** argv) {
+    fprintf(stderr, "[e_asin.c] enter main 1\n");
+    if (argc != 2) {
+        fprintf(stderr, "[e_asin.c] enter main 2\n");
+        printf("Usage: %s <arg>\n", argv[0]);
+        return 1;
+        // fprintf(stderr, "[e_asin.c] exit main 2\n");
+    }
+    // fprintf(stderr, "[e_asin.c] exit main 1\n");
+
+    fprintf(stderr, "[e_asin.c] enter main 3\n");
+    double a0 = atof(argv[1]);
+
+    double r = __ieee754_asin(a0);
+    printf("%f\n", r);
+
+    return 0;
+    // fprintf(stderr, "[e_asin.c] exit main 3\n");
+}
+// Total cost: 0.005815
+// Total split cost: 0.000000, input tokens: 0, output tokens: 0, cache read tokens: 0, cache write tokens: 0, split chunks: [(0, 95)]
+// Total instrumented cost: 0.005815, input tokens: 7735, output tokens: 3388, cache read tokens: 0, cache write tokens: 0

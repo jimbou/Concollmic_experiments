@@ -51,10 +51,15 @@ find "$FDLIBM_ROOT" -type d -name instr | while read -r instr_dir; do
         echo
         continue
     fi
-
+   
     base=$(basename "$instr_file")   # e.g. e_acos.c
     output="$instr_dir/temp_executable"
-
+    #if output exists continue to the next
+    if [[ -f "$output" ]]; then
+        echo "Output file already exists, skipping compilation for $instr_file"
+        echo
+        continue
+    fi
     echo "Found instrumented file: $instr_file"
     echo "Excluding original file: $base"
 

@@ -1,0 +1,351 @@
+id: 3
+src_id: 1
+create_time: '2025-12-13 04:54:51.953'
+time_taken: 364
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 1
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: deepseek-chat
+    cost: $0.04307573
+    call_cnt: 8
+    latency: 123.86s
+    input_tokens: 40041
+    output_tokens: 3938
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: deepseek-chat
+      cost: $0.01767412
+      call_cnt: 3
+      latency: 31.95s
+      input_tokens: 18323
+      output_tokens: 1003
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: deepseek-chat
+      cost: $0.00470580
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: deepseek-chat
+      cost: $0.00635010
+      call_cnt: 1
+      latency: 10.56s
+      input_tokens: 5704
+      output_tokens: 485
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: deepseek-chat
+      cost: $0.00577418
+      call_cnt: 1
+      latency: 8.60s
+      input_tokens: 6198
+      output_tokens: 187
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: deepseek-chat
+      cost: $0.00084405
+      call_cnt: 1
+      latency: 12.79s
+      input_tokens: 6421
+      output_tokens: 331
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: deepseek-chat
+      cost: $0.02540160
+      call_cnt: 5
+      latency: 91.91s
+      input_tokens: 21718
+      output_tokens: 2935
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: deepseek-chat
+      cost: $0.00233805
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: deepseek-chat
+      cost: $0.00383723
+      call_cnt: 1
+      latency: 16.55s
+      input_tokens: 2834
+      output_tokens: 442
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    execute_python:
+      model: deepseek-chat
+      cost: $0.01809413
+      call_cnt: 3
+      latency: 59.93s
+      input_tokens: 12695
+      output_tokens: 2049
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: deepseek-chat
+      cost: $0.00113220
+      call_cnt: 1
+      latency: 15.43s
+      input_tokens: 6189
+      output_tokens: 444
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: 'switch(n&3) case 0: in function cos()'
+target_file_lines: s_cos.c:39-39
+target_lines_content: "\t\t\treturn  __kernel_cos(y[0],y[1]);"
+justification: This branch has 0% historical coverage and represents a different quadrant
+  handling in the cosine calculation. The switch statement handles different cases
+  based on the remainder of x divided by π/2. Case 0 corresponds to when x is in a
+  specific quadrant where the cosine calculation follows a particular path. This branch
+  is more likely to be reachable than the infinity/NaN branch that previously failed,
+  and it will exercise a different code path in the core cosine function.
+target_path_constraint: |-
+  1. Command-Line Arguments: The program must be executed with exactly 2 arguments: program name and a numeric value. argc == 2
+
+  2. Input Value Constraint: The input value must be a valid floating-point number that can be parsed by atof(). The value must satisfy the following conditions in the cosine function:
+     - The high word of the double (ix = __HI(x)) when ANDed with 0x7fffffff must be greater than 0x3fe921fb (which represents π/2)
+     - The same value must be less than 0x7ff00000 (not infinity or NaN)
+     - The result of __ieee754_rem_pio2(x, y) must return a value where (n & 3) equals 0
+
+  3. Mathematical Constraint: The input value x must satisfy that when reduced modulo π/2, the quotient n has the property that n mod 4 equals 0. This means x must be in the range where the cosine function uses the specific case 0 calculation path, typically corresponding to angles where the cosine is computed directly from the reduced value without sign changes or phase shifts.
+
+  In simpler terms: The input value must be a finite number greater than π/2 but not infinity/NaN, and when its angle is reduced modulo π/2, the result must fall into the quadrant where the cosine calculation follows the case 0 path.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          # Use the value that satisfies all constraints: 6.283185307179586 (2π)
+          # This value satisfies:
+          # 1. |x| > π/2 (high word constraint)
+          # 2. (n & 3) == 0 from __ieee754_rem_pio2 (n = 4)
+          # 3. Valid finite floating-point number
+          result = subprocess.run(
+              ["./temp_executable", "6.283185307179586"],  # Exactly 2 arguments: program name + value
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=False,  # Use shell=False to pass arguments directly
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // s_cos.c (66 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double cos(double x)
+  #else
+  	double cos(x)
+  	double x;
+  #endif
+  {
+  	double y[2],z=0.0;
+  	int n, ix;
+
+      
+  	ix = __HI(x);
+
+      
+  	ix &= 0x7fffffff;
+  	if(ix <= 0x3fe921fb) {
+  		// Unexecuted code (line 26) removed. Its line cov: 1/1 (100%)
+  	}
+
+      
+  	else if (ix>=0x7ff00000) {
+  		// Unexecuted code (line 31) removed. Its line cov: 0/1 (0%)
+  	}
+
+      
+  	else {
+  	    n = __ieee754_rem_pio2(x,y);
+  	    switch(n&3) {
+  		case 0: 
+  			// Unexecuted code (line 39) removed. Its line cov: 0/1 (0%)
+  		case 1: 
+  			// Unexecuted code (line 41) removed. Its line cov: 0/1 (0%)
+  		case 2: 
+  			// Unexecuted code (line 43) removed. Its line cov: 0/1 (0%)
+  		default:
+  		        return  __kernel_sin(y[0],y[1],1);
+  	    }
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+
+      if (argc != 2) {
+          // Unexecuted code (lines 56-57) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = cos(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [s_cos.c] enter main 1
+  [s_cos.c] enter main 3
+  [s_cos.c] enter cos 1
+  [s_cos.c] enter cos 4
+  [s_cos.c] enter cos 5
+execution_summary: |2+
+
+  ```c
+  // s_cos.c (66 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double cos(double x)
+  #else
+  	double cos(x)
+  	double x;
+  #endif
+  {
+  	double y[2],z=0.0;
+  	int n, ix;
+
+      
+  	ix = __HI(x);
+
+      
+  	ix &= 0x7fffffff;
+  	if(ix <= 0x3fe921fb) {
+  		// Unexecuted code (line 26) removed. Its line cov: 1/1 (100%)
+  	}
+
+      
+  	else if (ix>=0x7ff00000) {
+  		// Unexecuted code (line 31) removed. Its line cov: 0/1 (0%)
+  	}
+
+      
+  	else {
+  	    n = __ieee754_rem_pio2(x,y);
+  	    switch(n&3) {
+  		case 0: 
+  			return  __kernel_cos(y[0],y[1]);
+  		case 1: 
+  			// Unexecuted code (line 41) removed. Its line cov: 0/1 (0%)
+  		case 2: 
+  			// Unexecuted code (line 43) removed. Its line cov: 0/1 (0%)
+  		default:
+  		        // Unexecuted code (line 45) removed. Its line cov: 1/1 (100%)
+  	    }
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+
+      if (argc != 2) {
+          // Unexecuted code (lines 56-57) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = cos(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          # Use the value that satisfies all constraints: 1.6707963267948966
+          # This is π/2 + 0.1, which satisfies |x| > π/2 and the IEEE 754 constraint
+          result = subprocess.run(
+              ["./temp_executable", "1.6707963267948966"],  # Exactly 2 arguments: program name + value
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=False,  # Use shell=False to pass arguments directly
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [s_cos.c] enter main 1
+  [s_cos.c] enter main 3
+  [s_cos.c] enter cos 1
+  [s_cos.c] enter cos 4
+  [s_cos.c] enter cos 8
