@@ -1,0 +1,390 @@
+id: 5
+src_id: 3
+create_time: '2025-12-14 02:33:11.389'
+time_taken: 653
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: claude-3-7-sonnet-latest
+    cost: $0.82782000
+    call_cnt: 8
+    latency: 91.15s
+    input_tokens: 48988
+    output_tokens: 3100
+    cache_read_tokens: 48966
+    cache_write_tokens: 9171
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.70618500
+      call_cnt: 6
+      latency: 56.58s
+      input_tokens: 42913
+      output_tokens: 2083
+      cache_read_tokens: 42896
+      cache_write_tokens: 7699
+    INITIAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.08499000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: claude-3-7-sonnet-latest
+      cost: $0.24960000
+      call_cnt: 2
+      latency: 26.18s
+      input_tokens: 12477
+      output_tokens: 1099
+      cache_read_tokens: 12472
+      cache_write_tokens: 3108
+    request_code:
+      model: claude-3-7-sonnet-latest
+      cost: $0.21924000
+      call_cnt: 2
+      latency: 9.58s
+      input_tokens: 13047
+      output_tokens: 213
+      cache_read_tokens: 13040
+      cache_write_tokens: 2948
+    select_target_branch:
+      model: claude-3-7-sonnet-latest
+      cost: $0.13849500
+      call_cnt: 1
+      latency: 9.43s
+      input_tokens: 8774
+      output_tokens: 309
+      cache_read_tokens: 8772
+      cache_write_tokens: 559
+    generate_path_constraint:
+      model: claude-3-7-sonnet-latest
+      cost: $0.01386000
+      call_cnt: 1
+      latency: 11.39s
+      input_tokens: 8615
+      output_tokens: 462
+      cache_read_tokens: 8612
+      cache_write_tokens: 1084
+  SOLVE:
+    TOTAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.12163500
+      call_cnt: 2
+      latency: 34.57s
+      input_tokens: 6075
+      output_tokens: 1017
+      cache_read_tokens: 6070
+      cache_write_tokens: 1472
+    INITIAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.03963000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: claude-3-7-sonnet-latest
+      cost: $0.07159500
+      call_cnt: 1
+      latency: 25.47s
+      input_tokens: 2642
+      output_tokens: 670
+      cache_read_tokens: 2640
+      cache_write_tokens: 790
+    provide_solution:
+      model: claude-3-7-sonnet-latest
+      cost: $0.01041000
+      call_cnt: 1
+      latency: 9.11s
+      input_tokens: 3433
+      output_tokens: 347
+      cache_read_tokens: 3430
+      cache_write_tokens: 682
+  EXECUTE:
+    TOTAL: {}
+target_branch: if(fabs(x)>X_TLOSS) -> true in w_jn.c:jn
+target_file_lines: w_jn.c:26-26
+target_lines_content: "\t    return __kernel_standard((double)n,x,38); "
+justification: |-
+  This branch has 0% historical coverage (line 26 has never been executed) and represents an important error handling path in the Bessel function implementation. When the absolute value of the input exceeds a threshold (X_TLOSS), the function should call a special error handling function `__kernel_standard` instead of returning the regular calculation. 
+
+  This branch is particularly interesting because it handles extreme input values which could reveal numerical stability issues or edge cases in the mathematical function implementation. The branch is reachable by manipulating the command line argument that becomes the input value to the jn function.
+
+  Other uncovered branches either depend on this one or are in the yn function which isn't called in the current execution setup.
+target_path_constraint: |-
+  To reach the target branch where `if(fabs(x)>X_TLOSS)` evaluates to true in the `jn` function, the following constraints must be satisfied:
+
+  1. Program Invocation Constraint:
+     - The program must be invoked with exactly 3 command-line arguments (program name + 2 arguments)
+     - Format: `./temp_executable <n> <x>`
+
+  2. First Argument Constraint:
+     - The first argument must be convertible to an integer via `atoi`
+     - This becomes the parameter `n` for the Bessel function
+     - No specific value constraints for `n` to reach our target branch
+
+  3. Second Argument Constraint:
+     - The second argument must be convertible to a double via `atof`
+     - This becomes the parameter `x` for the Bessel function
+     - Critical constraint: The absolute value of this parameter must exceed X_TLOSS
+       |x| > X_TLOSS
+
+  4. Additional Constraint to Avoid Early Return:
+     - The condition `_LIB_VERSION == _IEEE_ || isnan(x)` must evaluate to false
+     - This means:
+       a. `_LIB_VERSION` must not equal `_IEEE_`
+       b. `x` must not be NaN (Not a Number)
+
+  X_TLOSS is likely a large threshold value defined in the fdlibm library that determines when the input to the Bessel function is too large for accurate computation. Based on common implementations of mathematical libraries, this value is typically very large (e.g., 1e8 or greater).
+
+  Therefore, to satisfy the constraint |x| > X_TLOSS, provide an extremely large positive or negative value for the second command-line argument.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          # Using a very large value (1e20) for the second argument to ensure |x| > X_TLOSS
+          # The first argument can remain as 1 since there are no specific constraints on it
+          result = subprocess.run(
+              ["./temp_executable 1 1e20"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // w_jn.c (83 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double jn(int n, double x)	
+  #else
+  	double jn(n,x)			
+  	double x; int n;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	return __ieee754_jn(n,x);
+  #else
+  	double z;
+  	z = __ieee754_jn(n,x);
+  	if(_LIB_VERSION == _IEEE_ || isnan(x) ) {
+  	    return z;
+  	}
+  	if(fabs(x)>X_TLOSS) {
+  	    // Unexecuted code (line 26) removed. Its line cov: 0/1 (0%)
+  	} else {
+  	    // Unexecuted code (line 28) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  }
+
+  #ifdef __STDC__
+  	double yn(int n, double x)	
+  #else
+  	double yn(n,x)			
+  	double x; int n;
+  #endif
+  {
+  // Unexecuted code (lines 40-41) removed. Its line cov: 0/2 (0%)
+  #else
+  	double z;
+  	z = __ieee754_yn(n,x);
+  	if(_LIB_VERSION == _IEEE_ || isnan(x) ) {
+  	    // Unexecuted code (line 46) removed. Its line cov: 0/1 (0%)
+  	}
+          if(x <= 0.0){
+                  if(x==0.0) {
+                      // Unexecuted code (lines 50-51) removed. Its line cov: 0/1 (0%)
+                  } else {
+                      // Unexecuted code (lines 53-54) removed. Its line cov: 0/1 (0%)
+                  }
+          }
+  	if(x>X_TLOSS) {
+  	    // Unexecuted code (line 58) removed. Its line cov: 0/1 (0%)
+  	} else {
+  	    // Unexecuted code (line 60) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  fprintf(stderr, "\n");
+
+      if (argc != 3) {
+          // Unexecuted code (lines 72-73) removed. Its line cov: 2/2 (100%)
+      }
+
+      int a0 = atoi(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = jn(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [w_jn.c] enter main 3
+  [w_jn.c] enter jn 1
+  [w_jn.c] enter jn 2
+execution_summary: |2+
+
+  ```c
+  // w_jn.c (83 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double jn(int n, double x)	
+  #else
+  	double jn(n,x)			
+  	double x; int n;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	return __ieee754_jn(n,x);
+  #else
+  	double z;
+  	z = __ieee754_jn(n,x);
+  	if(_LIB_VERSION == _IEEE_ || isnan(x) ) {
+  	    return z;
+  	}
+  	if(fabs(x)>X_TLOSS) {
+  	    // Unexecuted code (line 26) removed. Its line cov: 0/1 (0%)
+  	} else {
+  	    // Unexecuted code (line 28) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  }
+
+  #ifdef __STDC__
+  	double yn(int n, double x)	
+  #else
+  	double yn(n,x)			
+  	double x; int n;
+  #endif
+  {
+  // Unexecuted code (lines 40-41) removed. Its line cov: 0/2 (0%)
+  #else
+  	double z;
+  	z = __ieee754_yn(n,x);
+  	if(_LIB_VERSION == _IEEE_ || isnan(x) ) {
+  	    // Unexecuted code (line 46) removed. Its line cov: 0/1 (0%)
+  	}
+          if(x <= 0.0){
+                  if(x==0.0) {
+                      // Unexecuted code (lines 50-51) removed. Its line cov: 0/1 (0%)
+                  } else {
+                      // Unexecuted code (lines 53-54) removed. Its line cov: 0/1 (0%)
+                  }
+          }
+  	if(x>X_TLOSS) {
+  	    // Unexecuted code (line 58) removed. Its line cov: 0/1 (0%)
+  	} else {
+  	    // Unexecuted code (line 60) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  fprintf(stderr, "\n");
+
+      if (argc != 3) {
+          // Unexecuted code (lines 72-73) removed. Its line cov: 2/2 (100%)
+      }
+
+      int a0 = atoi(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = jn(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          # Modified to have 3 arguments total (program name + 2 arguments)
+          # Removed the "extra_arg" to make argc = 3
+          result = subprocess.run(
+              ["./temp_executable 1 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [w_jn.c] enter main 3
+  [w_jn.c] enter jn 1
+  [w_jn.c] enter jn 2

@@ -1,0 +1,330 @@
+id: 1
+src_id: 0
+create_time: '2025-12-14 00:30:41.360'
+time_taken: 115
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: claude-3-7-sonnet-latest
+    cost: $0.65304000
+    call_cnt: 7
+    latency: 75.14s
+    input_tokens: 39040
+    output_tokens: 2248
+    cache_read_tokens: 39020
+    cache_write_tokens: 5051
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.53484000
+      call_cnt: 5
+      latency: 53.41s
+      input_tokens: 32796
+      output_tokens: 1430
+      cache_read_tokens: 32781
+      cache_write_tokens: 4253
+    INITIAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.08499000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: claude-3-7-sonnet-latest
+      cost: $0.20910000
+      call_cnt: 2
+      latency: 12.08s
+      input_tokens: 12090
+      output_tokens: 179
+      cache_read_tokens: 12085
+      cache_write_tokens: 1492
+    think:
+      model: claude-3-7-sonnet-latest
+      cost: $0.10197000
+      call_cnt: 1
+      latency: 13.45s
+      input_tokens: 7158
+      output_tokens: 565
+      cache_read_tokens: 7156
+      cache_write_tokens: 144
+    select_target_branch:
+      model: claude-3-7-sonnet-latest
+      cost: $0.12870000
+      call_cnt: 1
+      latency: 18.38s
+      input_tokens: 5668
+      output_tokens: 350
+      cache_read_tokens: 5664
+      cache_write_tokens: 2212
+    generate_path_constraint:
+      model: claude-3-7-sonnet-latest
+      cost: $0.01008000
+      call_cnt: 1
+      latency: 9.49s
+      input_tokens: 7880
+      output_tokens: 336
+      cache_read_tokens: 7876
+      cache_write_tokens: 405
+  SOLVE:
+    TOTAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.11820000
+      call_cnt: 2
+      latency: 21.73s
+      input_tokens: 6244
+      output_tokens: 818
+      cache_read_tokens: 6239
+      cache_write_tokens: 798
+    INITIAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.04461000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: claude-3-7-sonnet-latest
+      cost: $0.06378000
+      call_cnt: 1
+      latency: 14.09s
+      input_tokens: 2974
+      output_tokens: 491
+      cache_read_tokens: 2972
+      cache_write_tokens: 295
+    provide_solution:
+      model: claude-3-7-sonnet-latest
+      cost: $0.00981000
+      call_cnt: 1
+      latency: 7.65s
+      input_tokens: 3270
+      output_tokens: 327
+      cache_read_tokens: 3267
+      cache_write_tokens: 503
+  EXECUTE:
+    TOTAL: {}
+target_branch: if(fabs(x)>1.0) -> true in w_asin.c:asin
+target_file_lines: w_asin.c:28-28
+target_lines_content: "\t        return __kernel_standard(x,x,2); "
+justification: |-
+  This branch handles the case where the input to the asin() function is outside its valid domain of [-1.0, 1.0]. It has 0% historical coverage (line 28 is marked as uncovered), indicating this error handling path has never been tested. 
+
+  The asin() function is mathematically defined only for inputs between -1 and 1 inclusive. When given values outside this range, the function should trigger special error handling via __kernel_standard(). This is an important edge case to test as it verifies proper error handling for invalid inputs.
+
+  In the current execution, we can see that the program is called with input 1.0, which is exactly at the boundary of the valid range but doesn't exceed it. By selecting this branch, we'll verify how the program behaves when given mathematically invalid inputs to the asin function, which is critical for robust error handling.
+target_path_constraint: |-
+  To reach the target branch `if(fabs(x)>1.0) -> true` in the asin function, the following constraints must be satisfied:
+
+  1. Command-line argument constraints:
+     - The program must be called with exactly one argument (argc == 2)
+     - The argument must be parseable as a floating-point number by atof()
+
+  2. Input value constraints:
+     - The absolute value of the input must be greater than 1.0
+     - Specifically, either:
+       * The input value must be greater than 1.0, OR
+       * The input value must be less than -1.0
+
+  3. Control flow constraints:
+     - The program must not be compiled with _IEEE_LIBM defined
+     - The condition `_LIB_VERSION == _IEEE_ || isnan(x)` must evaluate to false
+       * This means _LIB_VERSION must not equal _IEEE_
+       * AND the input value must not be NaN
+
+  In mathematical notation:
+  - argc = 2
+  - Let x = atof(argv[1])
+  - |x| > 1.0
+  - _LIB_VERSION ≠ _IEEE_
+  - ¬isnan(x)
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          # Using 1.1 as the input value to satisfy |x| > 1.0
+          # This ensures the condition fabs(x) > 1.0 evaluates to true
+          result = subprocess.run(
+              ["./temp_executable 1.1"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // w_asin.c (50 lines total)
+
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+
+  #ifdef __STDC__
+  	double asin(double x)		
+  #else
+  	double asin(x)			
+  	double x;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	// Unexecuted code (line 20) removed. Its line cov: 0/1 (0%)
+  #else
+  	double z;
+  	z = __ieee754_asin(x);
+  	if(_LIB_VERSION == _IEEE_ || isnan(x)) {
+  		return z;
+  	}
+  	if(fabs(x)>1.0) {
+  	        // Unexecuted code (line 28) removed. Its line cov: 0/1 (0%)
+  	} else {
+  	    // Unexecuted code (line 30) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      if (argc != 2) {
+          // Unexecuted code (lines 40-41) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = asin(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [w_asin.c] enter main 1
+  [w_asin.c] enter main 3
+  [w_asin.c] enter main 4
+  [w_asin.c] enter asin 2
+  [w_asin.c] enter asin 3
+  [w_asin.c] enter main 5
+execution_summary: |2+
+
+  ```c
+  // w_asin.c (50 lines total)
+
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+
+  #ifdef __STDC__
+  	double asin(double x)		
+  #else
+  	double asin(x)			
+  	double x;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	// Unexecuted code (line 20) removed. Its line cov: 0/1 (0%)
+  #else
+  	double z;
+  	z = __ieee754_asin(x);
+  	if(_LIB_VERSION == _IEEE_ || isnan(x)) {
+  		return z;
+  	}
+  	if(fabs(x)>1.0) {
+  	        // Unexecuted code (line 28) removed. Its line cov: 0/1 (0%)
+  	} else {
+  	    // Unexecuted code (line 30) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      if (argc != 2) {
+          // Unexecuted code (lines 40-41) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = asin(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [w_asin.c] enter main 1
+  [w_asin.c] enter main 3
+  [w_asin.c] enter main 4
+  [w_asin.c] enter asin 2
+  [w_asin.c] enter asin 3
+  [w_asin.c] enter main 5

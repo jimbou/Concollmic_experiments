@@ -1,0 +1,345 @@
+id: 1
+src_id: 0
+create_time: '2025-12-13 14:53:46.214'
+time_taken: 167
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: deepseek-chat
+    cost: $0.03079395
+    call_cnt: 7
+    latency: 136.66s
+    input_tokens: 30628
+    output_tokens: 2167
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: deepseek-chat
+      cost: $0.01685887
+      call_cnt: 3
+      latency: 59.97s
+      input_tokens: 17851
+      output_tokens: 836
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: deepseek-chat
+      cost: $0.00462660
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: deepseek-chat
+      cost: $0.00597052
+      call_cnt: 1
+      latency: 23.42s
+      input_tokens: 5608
+      output_tokens: 396
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: deepseek-chat
+      cost: $0.00557070
+      call_cnt: 1
+      latency: 12.79s
+      input_tokens: 6013
+      output_tokens: 169
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: deepseek-chat
+      cost: $0.00069105
+      call_cnt: 1
+      latency: 23.75s
+      input_tokens: 6230
+      output_tokens: 271
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: deepseek-chat
+      cost: $0.01393508
+      call_cnt: 4
+      latency: 76.70s
+      input_tokens: 12777
+      output_tokens: 1331
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: deepseek-chat
+      cost: $0.00222255
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: deepseek-chat
+      cost: $0.00736650
+      call_cnt: 2
+      latency: 46.29s
+      input_tokens: 6027
+      output_tokens: 705
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    solve_with_smt:
+      model: deepseek-chat
+      cost: $0.00344588
+      call_cnt: 1
+      latency: 15.36s
+      input_tokens: 3047
+      output_tokens: 273
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: deepseek-chat
+      cost: $0.00090015
+      call_cnt: 1
+      latency: 15.05s
+      input_tokens: 3703
+      output_tokens: 353
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if(!(finite(z)||isnan(z))&&finite(x)) -> true in w_scalb.c:scalb
+target_file_lines: w_scalb.c:36-36
+target_lines_content: "\t\treturn __kernel_standard(x,(double)fn,32); "
+justification: This branch has 0% coverage and handles overflow/underflow cases in
+  the scalb function. It's a critical error handling path that tests edge cases where
+  the result is neither finite nor NaN while the input x is finite. This branch is
+  likely to reveal important mathematical edge cases and significantly improve code
+  coverage.
+target_path_constraint: |-
+  1. Command-Line Arguments: argc == 3 (program name plus two numeric arguments)
+  2. Argument Format: Both argv[1] and argv[2] must be valid string representations of floating-point numbers that can be parsed by atof()
+  3. Mathematical Constraints:
+     - x = atof(argv[1]) must be a finite number (not infinite, not NaN)
+     - fn = atof(argv[2]) can be any value that causes the internal computation __ieee754_scalb(x, fn) to produce a result z that is neither finite nor NaN
+     - The specific mathematical relationship: z = x * 2^fn must result in overflow or underflow (infinite magnitude or denormalized to zero in a way that's not representable as finite or NaN)
+
+  This typically occurs when:
+  - x is a large finite number and fn is very large positive (causing overflow to infinity)
+  - x is a small finite number and fn is very large negative (causing underflow to zero in a way that's not representable)
+  - Or other edge cases where the exponent calculation exceeds the floating-point range
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          # Use proper argument format: pass arguments separately
+          # x = 1.0 (finite), fn = 2000 (large enough to cause overflow)
+          result = subprocess.run(
+              ["./temp_executable", "1.0", "2000.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // w_scalb.c (67 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+
+  #include <errno.h>
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  #ifdef _SCALB_INT
+  	double scalb(double x, int fn)		
+  #else
+  	double scalb(double x, double fn)	
+  #endif
+  #else
+  	double scalb(x,fn)			
+  #ifdef _SCALB_INT
+  	double x; int fn;
+  #else
+  	double x,fn;
+  #endif
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	return __ieee754_scalb(x,fn);
+  #else
+  	double z;
+  	z = __ieee754_scalb(x,fn);
+  	if(_LIB_VERSION == _IEEE_) {
+  		return z;
+  	}
+  	if(!(finite(z)||isnan(z))&&finite(x)) {
+  		// Unexecuted code (line 36) removed. Its line cov: 0/1 (0%)
+  	}
+  	if(z==0.0&&z!=x) {
+  		// Unexecuted code (line 39) removed. Its line cov: 0/1 (0%)
+  	} 
+  #ifndef _SCALB_INT
+  	if(!finite(fn)) {
+  		// Unexecuted code (line 43) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  	// Unexecuted code (line 46) removed. Its line cov: 0/1 (0%)
+  #endif 
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 3) {
+          // Unexecuted code (lines 56-57) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = scalb(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [w_scalb.c] enter main 3
+  [w_scalb.c] enter scalb 1
+  [w_scalb.c] enter scalb 2
+execution_summary: |2+
+
+  ```c
+  // w_scalb.c (67 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+
+  #include <errno.h>
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  #ifdef _SCALB_INT
+  	double scalb(double x, int fn)		
+  #else
+  	double scalb(double x, double fn)	
+  #endif
+  #else
+  	double scalb(x,fn)			
+  #ifdef _SCALB_INT
+  	double x; int fn;
+  #else
+  	double x,fn;
+  #endif
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	return __ieee754_scalb(x,fn);
+  #else
+  	double z;
+  	z = __ieee754_scalb(x,fn);
+  	if(_LIB_VERSION == _IEEE_) {
+  		return z;
+  	}
+  	if(!(finite(z)||isnan(z))&&finite(x)) {
+  		// Unexecuted code (line 36) removed. Its line cov: 0/1 (0%)
+  	}
+  	if(z==0.0&&z!=x) {
+  		// Unexecuted code (line 39) removed. Its line cov: 0/1 (0%)
+  	} 
+  #ifndef _SCALB_INT
+  	if(!finite(fn)) {
+  		// Unexecuted code (line 43) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  	// Unexecuted code (line 46) removed. Its line cov: 0/1 (0%)
+  #endif 
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 3) {
+          // Unexecuted code (lines 56-57) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = scalb(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [w_scalb.c] enter main 3
+  [w_scalb.c] enter scalb 1
+  [w_scalb.c] enter scalb 2

@@ -12,7 +12,7 @@ BASE_DIR="/home/jim/ConcoLLMic/fdlibm/"
 LOG_DIR="logs_run_fdlibm"
 SUMMARY_JSON="run_summary_fdlibm.json"
 TIMEOUT_DURATION="15m"
-MODEL_NAME="deepseek-chat"
+MODEL_NAME="claude"
 RESULTS_DIR="/home/jim/ConcoLLMic/results_fdlibm/$MODEL_NAME"
 
 mkdir -p "$RESULTS_DIR" "$LOG_DIR"
@@ -54,6 +54,7 @@ run_ace() {
 
   local out_dir="$RESULTS_DIR/$name/out"
   if [[ -d "$out_dir" ]]; then
+    return "Output dir exists: $out_dir — skipping"
     local counter=1
     while [[ -d "${out_dir}_$counter" ]]; do
       counter=$((counter + 1))

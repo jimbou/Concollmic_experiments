@@ -1,0 +1,373 @@
+id: 1
+src_id: 0
+create_time: '2025-12-14 03:39:01.541'
+time_taken: 142
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: claude-3-7-sonnet-latest
+    cost: $0.90775500
+    call_cnt: 10
+    latency: 91.07s
+    input_tokens: 53903
+    output_tokens: 3307
+    cache_read_tokens: 53874
+    cache_write_tokens: 10663
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.66729000
+      call_cnt: 6
+      latency: 52.49s
+      input_tokens: 40908
+      output_tokens: 1789
+      cache_read_tokens: 40891
+      cache_write_tokens: 7099
+    INITIAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.08499000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: claude-3-7-sonnet-latest
+      cost: $0.30229500
+      call_cnt: 3
+      latency: 14.73s
+      input_tokens: 18434
+      output_tokens: 397
+      cache_read_tokens: 18425
+      cache_write_tokens: 2719
+    think:
+      model: claude-3-7-sonnet-latest
+      cost: $0.14479500
+      call_cnt: 1
+      latency: 15.50s
+      input_tokens: 6591
+      output_tokens: 616
+      cache_read_tokens: 6588
+      cache_write_tokens: 1831
+    select_target_branch:
+      model: claude-3-7-sonnet-latest
+      cost: $0.12003000
+      call_cnt: 1
+      latency: 8.53s
+      input_tokens: 8421
+      output_tokens: 270
+      cache_read_tokens: 8419
+      cache_write_tokens: 630
+    generate_path_constraint:
+      model: claude-3-7-sonnet-latest
+      cost: $0.01518000
+      call_cnt: 1
+      latency: 13.75s
+      input_tokens: 7462
+      output_tokens: 506
+      cache_read_tokens: 7459
+      cache_write_tokens: 1919
+  SOLVE:
+    TOTAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.24046500
+      call_cnt: 4
+      latency: 38.58s
+      input_tokens: 12995
+      output_tokens: 1518
+      cache_read_tokens: 12983
+      cache_write_tokens: 3564
+    INITIAL:
+      model: claude-3-7-sonnet-latest
+      cost: $0.04467000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: claude-3-7-sonnet-latest
+      cost: $0.05365500
+      call_cnt: 1
+      latency: 10.48s
+      input_tokens: 2978
+      output_tokens: 467
+      cache_read_tokens: 2976
+      cache_write_tokens: 468
+    execute_python:
+      model: claude-3-7-sonnet-latest
+      cost: $0.12945000
+      call_cnt: 2
+      latency: 17.18s
+      input_tokens: 6091
+      output_tokens: 628
+      cache_read_tokens: 6084
+      cache_write_tokens: 2206
+    provide_solution:
+      model: claude-3-7-sonnet-latest
+      cost: $0.01269000
+      call_cnt: 1
+      latency: 10.92s
+      input_tokens: 3926
+      output_tokens: 423
+      cache_read_tokens: 3923
+      cache_write_tokens: 890
+  EXECUTE:
+    TOTAL: {}
+target_branch: if(!(finite(z)||isnan(z))&&finite(x)) -> true in w_scalb.c:scalb
+target_file_lines: w_scalb.c:36-36
+target_lines_content: "\t\treturn __kernel_standard(x,(double)fn,32); "
+justification: This branch has 0% historical coverage (line 36) and represents an
+  important error handling case for overflow conditions. This branch is triggered
+  when the result of scalb(x,fn) overflows to infinity while the input x is finite.
+  The scalb function scales a floating-point number by a power of the radix (typically
+  2), so providing a very large positive scaling factor with a non-zero x should trigger
+  this branch. This would exercise error handling code that hasn't been covered in
+  any existing test cases, making it a high-priority target for improving code coverage.
+target_path_constraint: |-
+  To reach the target branch "if(!(finite(z)||isnan(z))&&finite(x)) -> true" in the scalb function:
+
+  1. Program must be executed with exactly 2 command-line arguments (argc == 3, including the program name)
+     - This satisfies the condition "if (argc != 3)" being false
+
+  2. First argument (a0) must be a valid finite double-precision floating-point number
+     - This ensures finite(x) is true
+     - Examples include any regular number like 1.0, 2.5, -10.0, etc.
+     - Must NOT be infinity (±∞) or NaN
+
+  3. Second argument (a1) must be a sufficiently large positive double-precision floating-point number
+     - Must be large enough to cause overflow when scaling a0
+     - For IEEE 754 double precision, a value like 1024.0 or greater should work
+     - The goal is to make __ieee754_scalb(x,fn) produce infinity
+
+  4. The combination of a0 and a1 must result in z = __ieee754_scalb(x,fn) being infinite
+     - Since scalb effectively computes x * 2^fn (or x * radix^fn)
+     - For non-zero a0, a1 must be large enough that a0 * 2^a1 exceeds the maximum representable double value (~1.8e308)
+
+  5. _LIB_VERSION must not equal _IEEE_
+     - This ensures the code doesn't return early at line 33
+     - This appears to be a compile-time configuration that must be set appropriately
+
+  The key constraint is selecting values for a0 and a1 such that:
+  - a0 is finite (not infinity, not NaN)
+  - scalb(a0, a1) results in infinity
+  - This typically happens when a0 ≠ 0 and a1 is very large positive
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          # Changed the second argument from 1.0 to 1024.0 to cause overflow
+          # This will make scalb(1.0, 1024.0) produce infinity
+          result = subprocess.run(
+              ["./temp_executable 1.0 1024.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // w_scalb.c (67 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+
+  #include <errno.h>
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  #ifdef _SCALB_INT
+  	double scalb(double x, int fn)		
+  #else
+  	double scalb(double x, double fn)	
+  #endif
+  #else
+  	double scalb(x,fn)			
+  #ifdef _SCALB_INT
+  	double x; int fn;
+  #else
+  	double x,fn;
+  #endif
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	return __ieee754_scalb(x,fn);
+  #else
+  	double z;
+  	z = __ieee754_scalb(x,fn);
+  	if(_LIB_VERSION == _IEEE_) {
+  		return z;
+  	}
+  	if(!(finite(z)||isnan(z))&&finite(x)) {
+  		// Unexecuted code (line 36) removed. Its line cov: 0/1 (0%)
+  	}
+  	if(z==0.0&&z!=x) {
+  		// Unexecuted code (line 39) removed. Its line cov: 0/1 (0%)
+  	} 
+  #ifndef _SCALB_INT
+  	if(!finite(fn)) {
+  		// Unexecuted code (line 43) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  	// Unexecuted code (line 46) removed. Its line cov: 0/1 (0%)
+  #endif 
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 3) {
+          // Unexecuted code (lines 56-57) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = scalb(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [w_scalb.c] enter main 3
+  [w_scalb.c] enter scalb 1
+  [w_scalb.c] enter scalb 2
+execution_summary: |2+
+
+  ```c
+  // w_scalb.c (67 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+
+  #include <errno.h>
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  #ifdef _SCALB_INT
+  	double scalb(double x, int fn)		
+  #else
+  	double scalb(double x, double fn)	
+  #endif
+  #else
+  	double scalb(x,fn)			
+  #ifdef _SCALB_INT
+  	double x; int fn;
+  #else
+  	double x,fn;
+  #endif
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	return __ieee754_scalb(x,fn);
+  #else
+  	double z;
+  	z = __ieee754_scalb(x,fn);
+  	if(_LIB_VERSION == _IEEE_) {
+  		return z;
+  	}
+  	if(!(finite(z)||isnan(z))&&finite(x)) {
+  		// Unexecuted code (line 36) removed. Its line cov: 0/1 (0%)
+  	}
+  	if(z==0.0&&z!=x) {
+  		// Unexecuted code (line 39) removed. Its line cov: 0/1 (0%)
+  	} 
+  #ifndef _SCALB_INT
+  	if(!finite(fn)) {
+  		// Unexecuted code (line 43) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  	// Unexecuted code (line 46) removed. Its line cov: 0/1 (0%)
+  #endif 
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 3) {
+          // Unexecuted code (lines 56-57) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = scalb(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [w_scalb.c] enter main 3
+  [w_scalb.c] enter scalb 1
+  [w_scalb.c] enter scalb 2
