@@ -1,0 +1,261 @@
+id: 3
+src_id: 0
+create_time: '2025-12-14 17:36:46.611'
+time_taken: 258
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.60026000
+    call_cnt: 3
+    latency: 68.33s
+    input_tokens: 12784
+    output_tokens: 5743
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.46602000
+      call_cnt: 2
+      latency: 49.12s
+      input_tokens: 10233
+      output_tokens: 4356
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10028000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.34834000
+      call_cnt: 1
+      latency: 42.77s
+      input_tokens: 5014
+      output_tokens: 4066
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.01740000
+      call_cnt: 1
+      latency: 6.34s
+      input_tokens: 5219
+      output_tokens: 290
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.13424000
+      call_cnt: 1
+      latency: 19.21s
+      input_tokens: 2551
+      output_tokens: 1387
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05102000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.08322000
+      call_cnt: 1
+      latency: 19.21s
+      input_tokens: 2551
+      output_tokens: 1387
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (argc != 3) -> true in s_copysign.c:main
+target_file_lines: s_copysign.c:28-29
+target_lines_content: |2-
+          printf("Usage: %s <arg> <arg>\n", argv[0]);
+          return 1;
+justification: This is the only runtime branch visible in the provided program. Although
+  historical coverage for this branch is 100%, it was not executed in the current
+  run (the else-path was taken). There are no other conditional branches within copysign
+  or main. Exercising this branch will at least validate the program’s argument validation
+  path and error handling. I verified there are no other zero/low-coverage branches
+  in this file; the core copysign routine contains no conditional control flow.
+target_path_constraint: |-
+  Program invocation environment and arguments:
+  1) Invocation must pass a number of command-line arguments different from 3 (including program name counts as argv[0]). The program checks argc != 3, so ensure argc is any value except 3.
+     - Under the current harness style (shell=True), arguments are supplied as a single command string. To make argc != 3, either:
+       a) Provide fewer than two user arguments (e.g., zero or one argument after the program name), or
+       b) Provide more than two user arguments (three or more after the program name), or
+       c) Cause argument parsing to merge/split tokens such that the C program receives a count not equal to 3.
+
+  2) No file I/O or environment variables affect reaching this branch. The check occurs immediately after program start and before any conversions.
+
+  3) Platform/locale considerations: Not applicable—argument count is based on tokenization by the OS/loader. No specific encoding constraints needed.
+
+  4) Ensure the executable launches successfully (exists and is executable) so that main() runs and the argc check is evaluated.
+
+  Summary SMT-style predicate:
+  - Let argc be the integer number of tokens passed to the process (including argv[0]). Constraint: argc ≠ 3.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          # Run the executable with ZERO user arguments so that argc == 1 (argv[0] only),
+          # which satisfies the target constraint argc != 3.
+          result = subprocess.run(
+              ["./temp_executable"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 1
+src_execution_summary: |2+
+
+  ```c
+  // s_copysign.c (39 lines total)
+  #include <stdio.h>
+
+
+
+
+
+
+
+  #include "fdlibm.h"
+
+  #ifdef __STDC__
+  	double copysign(double x, double y)
+  #else
+  	double copysign(x,y)
+  	double x,y;
+  #endif
+  {
+  	__HI(x) = (__HI(x)&0x7fffffff)|(__HI(y)&0x80000000);
+          return x;
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      fprintf(stderr, "\n");
+      if (argc != 3) {
+          // Unexecuted code (lines 28-29) removed. Its line cov: 2/2 (100%)
+      }
+
+      double a0 = atof(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = copysign(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [s_copysign.c] enter main 2
+execution_summary: |2+
+
+  ```c
+  // s_copysign.c (39 lines total)
+  #include <stdio.h>
+
+
+
+
+
+
+
+  #include "fdlibm.h"
+
+  #ifdef __STDC__
+  	double copysign(double x, double y)
+  #else
+  	double copysign(x,y)
+  	double x,y;
+  #endif
+  {
+  	// Unexecuted code (lines 18-19) removed. Its line cov: 2/2 (100%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      fprintf(stderr, "\n");
+      if (argc != 3) {
+          printf("Usage: %s <arg> <arg>\n", argv[0]);
+          return 1;
+      }
+
+      // Unexecuted code (lines 32-38) removed. Its line cov: 5/5 (100%)
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [s_copysign.c] enter main 3
+  [s_copysign.c] enter copysign 1

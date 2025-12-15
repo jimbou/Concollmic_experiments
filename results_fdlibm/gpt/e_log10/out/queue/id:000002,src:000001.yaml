@@ -1,0 +1,354 @@
+id: 2
+src_id: 1
+create_time: '2025-12-14 15:05:07.001'
+time_taken: 314
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.90158000
+    call_cnt: 3
+    latency: 113.56s
+    input_tokens: 13732
+    output_tokens: 10449
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.56708000
+      call_cnt: 2
+      latency: 66.95s
+      input_tokens: 10774
+      output_tokens: 5860
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10532000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.42036000
+      call_cnt: 1
+      latency: 58.32s
+      input_tokens: 5266
+      output_tokens: 5170
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.04140000
+      call_cnt: 1
+      latency: 8.63s
+      input_tokens: 5508
+      output_tokens: 690
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.33450000
+      call_cnt: 1
+      latency: 46.61s
+      input_tokens: 2958
+      output_tokens: 4589
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05916000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.27534000
+      call_cnt: 1
+      latency: 46.61s
+      input_tokens: 2958
+      output_tokens: 4589
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (hx < 0) -> true in e_log10.c:__ieee754_log10 (within the small-magnitude
+  path guarded by hx < 0x00100000)
+target_file_lines: e_log10.c:44-44
+target_lines_content: '                return (x-x)/zero;        '
+justification: This branch handles negative (nonzero) inputs to log10 and currently
+  has zero historical coverage (line 44 shows 0/1, 0%). It is a critical error-handling
+  path (log10 of negative numbers) and diverges from the currently executed zero-input
+  path. It is reachable with the existing harness by supplying a single negative,
+  nonzero floating-point argument. Covering it will increase test coverage in a function
+  with numerically sensitive edge cases.
+target_path_constraint: |-
+  Chronological, input-environment level constraints to reach the selected branch (negative, nonzero input in the subnormal/small-magnitude path):
+
+  1. Command invocation format:
+     - The program must be executed with exactly one command-line argument following the executable name.
+     - Shell execution mode is used in the harness, but do not rely on shell globbing or variable expansion. Provide a single contiguous token representing the numeric literal.
+
+  2. Argument count and parsing:
+     - argc must equal 2 at program start, which occurs when exactly one argument is supplied.
+     - The sole argument must be a textual representation of a floating-point number that the C library function atof parses successfully.
+     - No leading/trailing non-numeric characters are allowed (aside from permitted whitespace which atof ignores). Avoid embedded spaces; use a single token.
+
+  3. Numeric value properties required by the target branch:
+     - The parsed value must be strictly negative: value < 0.0.
+     - The parsed value must be nonzero: value ≠ -0.0 and value ≠ 0.0.
+     - The magnitude must be small enough that, when interpreted as an IEEE-754 double under the C implementation used, the high 32-bit word hx of the double satisfies hx < 0x00100000. This corresponds to a subnormal or very small-magnitude negative double (|value| < 2^(-1022)).
+     - Combine the above: value ∈ (-2^(-1022), 0) but not equal to -0.0.
+
+  4. Locale and encoding assumptions:
+     - The input must use a dot '.' as the decimal separator (C locale). Avoid locale-dependent formats (e.g., commas).
+     - The process environment must not alter atof parsing away from the C locale behavior. No special environment variables are required beyond default; ensure no locale overrides that change decimal parsing.
+
+  5. Representation constraints for portability (to ensure hx < 0 and hx < 0x00100000 path is taken):
+     - Specify the number as a standard decimal string that represents a negative denormal or very small normal just below 2^(-1022) in magnitude, for example of the form "-d.dddde-n" where n ≥ 1022 and the significand ensures the absolute value < 2^(-1022). Do not include exponent markers other than 'e'/'E'.
+     - Avoid representations that might parse to -0.0 due to underflow (e.g., excessively small magnitudes that the implementation rounds to -0.0). Ensure the chosen magnitude is within representable subnormal range rather than underflowing to signed zero.
+
+  6. Summary of required condition chain:
+     - Provide exactly one argument.
+     - The argument parses via atof to a double strictly in (-2^(-1022), 0).
+     - Parsing succeeds without underflow to -0.0.
+     - __ieee754_log10 is invoked with this negative, subnormal double, leading to hx < 0x00100000 and hx < 0 (negative), thereby taking the selected branch.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import os
+      import signal
+      import subprocess
+
+      try:
+          # Use a single negative, nonzero, subnormal-valued argument: -1e-308
+          # - Strictly negative, nonzero
+          # - Magnitude < 2**-1022, well within representable subnormal range (no underflow to -0.0)
+          # - Single token numeric literal acceptable to atof in C locale
+          cmd = "./temp_executable -1e-308"
+
+          # Ensure C locale so atof uses '.' as decimal separator and standard exponent parsing
+          env = os.environ.copy()
+          env["LC_ALL"] = "C"
+          env["LANG"] = "C"
+
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+              env=env,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // e_log10.c (79 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+  #include <stdlib.h>
+  #ifdef __STDC__
+  static const double
+  #else
+  static double
+  #endif
+  two54      =  1.80143985094819840000e+16, 
+  ivln10     =  4.34294481903251816668e-01, 
+  log10_2hi  =  3.01029995663611771306e-01, 
+  log10_2lo  =  3.69423907715893078616e-13; 
+
+  static double zero   =  0.0;
+
+  #ifdef __STDC__
+  	double __ieee754_log10(double x)
+  #else
+  	double __ieee754_log10(x)
+  	double x;
+  #endif
+  {
+  	double y,z;
+  	int i,k,hx;
+  	unsigned lx;
+
+  	hx = __HI(x);	
+  	lx = __LO(x);	
+
+          k=0;
+          if (hx < 0x00100000) {                  
+              if (((hx&0x7fffffff)|lx)==0)
+              {
+                  return -two54/zero;             
+              }
+              if (hx<0) 
+              {
+                  // Unexecuted code (line 44) removed. Its line cov: 0/1 (0%)
+              }
+              // Unexecuted code (lines 46-47) removed. Its line cov: 2/2 (100%)
+          }
+  	
+  	// Unexecuted code (lines 50-61) removed. Its line cov: 10/11 (91%)
+  }
+
+
+
+  int main(int argc, char** argv) {
+
+      if (argc != 2) {
+          // Unexecuted code (lines 69-70) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = __ieee754_log10(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [e_log10.c] enter main 1
+  [e_log10.c] enter main 3
+  [e_log10.c] enter __ieee754_log10 1
+  [e_log10.c] enter __ieee754_log10 6
+  [e_log10.c] enter __ieee754_log10 8
+execution_summary: |2+
+
+  ```c
+  // e_log10.c (79 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+  #include <stdlib.h>
+  #ifdef __STDC__
+  static const double
+  #else
+  static double
+  #endif
+  two54      =  1.80143985094819840000e+16, 
+  ivln10     =  4.34294481903251816668e-01, 
+  log10_2hi  =  3.01029995663611771306e-01, 
+  log10_2lo  =  3.69423907715893078616e-13; 
+
+  static double zero   =  0.0;
+
+  #ifdef __STDC__
+  	double __ieee754_log10(double x)
+  #else
+  	double __ieee754_log10(x)
+  	double x;
+  #endif
+  {
+  	double y,z;
+  	int i,k,hx;
+  	unsigned lx;
+
+  	hx = __HI(x);	
+  	lx = __LO(x);	
+
+          k=0;
+          if (hx < 0x00100000) {                  
+              // Unexecuted code (lines 38-48) removed. Its line cov: 10/11 (91%)
+  	
+  	if (hx >= 0x7ff00000) 
+  	{
+  		// Unexecuted code (line 52) removed. Its line cov: 0/1 (0%)
+  	}
+  	
+  	k += (hx>>20)-1023;
+  	i  = ((unsigned)k&0x80000000)>>31;
+          hx = (hx&0x000fffff)|((0x3ff-i)<<20);
+          y  = (double)(k+i);
+          __HI(x) = hx;
+  	z  = y*log10_2lo + ivln10*__ieee754_log(x);
+  	return  z+y*log10_2hi;
+  }
+
+
+
+  int main(int argc, char** argv) {
+
+      if (argc != 2) {
+          // Unexecuted code (lines 69-70) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = __ieee754_log10(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          # Provide exactly one argument that atof parses as +0.0 under the C locale
+          # Using an explicit leading '+' to ensure positive zero
+          result = subprocess.run(
+              ["./temp_executable +0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [e_log10.c] enter main 1
+  [e_log10.c] enter main 3
+  [e_log10.c] enter __ieee754_log10 1
+  [e_log10.c] enter __ieee754_log10 2
+  [e_log10.c] enter __ieee754_log10 3

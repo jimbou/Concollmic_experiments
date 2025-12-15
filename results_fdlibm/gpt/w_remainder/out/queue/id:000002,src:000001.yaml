@@ -1,0 +1,326 @@
+id: 2
+src_id: 1
+create_time: '2025-12-14 22:18:14.697'
+time_taken: 356
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.91226000
+    call_cnt: 4
+    latency: 83.74s
+    input_tokens: 19747
+    output_tokens: 8622
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.67818000
+      call_cnt: 3
+      latency: 57.71s
+      input_tokens: 16860
+      output_tokens: 5683
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10308000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: gpt-5
+      cost: $0.41124000
+      call_cnt: 1
+      latency: 44.96s
+      input_tokens: 5154
+      output_tokens: 4938
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.12876000
+      call_cnt: 1
+      latency: 4.72s
+      input_tokens: 5748
+      output_tokens: 160
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03510000
+      call_cnt: 1
+      latency: 8.03s
+      input_tokens: 5958
+      output_tokens: 585
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.23408000
+      call_cnt: 1
+      latency: 26.03s
+      input_tokens: 2887
+      output_tokens: 2939
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05774000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.17634000
+      call_cnt: 1
+      latency: 26.03s
+      input_tokens: 2887
+      output_tokens: 2939
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (y == 0.0) -> true in w_remainder.c:remainder
+target_file_lines: w_remainder.c:26-26
+target_lines_content: "\t\treturn __kernel_standard(x,y,28); "
+justification: This branch has 0% historical coverage (line 26) and is part of the
+  non-IEEE libm error-handling path in the remainder wrapper. In the current run,
+  the path exited early due to isnan(y) being true. Exercising y == 0.0 forces execution
+  into a distinct branch that has never been covered and likely triggers special-case
+  behavior (e.g., domain error handling). This contributes new behaviors beyond the
+  already covered fast path and improves coverage of the wrapper logic.
+target_path_constraint: |-
+  Constraints to reach the target branch: w_remainder.c:remainder: `if (y == 0.0)` evaluates to true.
+
+  Chronological, input/environment-level constraints:
+
+  1) Program invocation format (command-line):
+  - The executable must be launched with exactly two separate command-line arguments after the program name, for a total argc of 3.
+  - Argument 1 (argv[1]) must be a valid textual representation of a finite double-precision floating-point number in the C locale (decimal digits, optional sign, optional decimal point, optional exponent), so that C’s atof parses it successfully to some finite value x. There is no further constraint on x.
+  - Argument 2 (argv[2]) must be a textual representation that C’s atof parses to the double value +0.0 or -0.0. Examples of forms atof treats as zero include strings consisting of optional sign followed by 0 possibly with a decimal point and/or trailing zeros, optionally with surrounding whitespace. However, DO NOT include any NaN or INF tokens; they must not parse to NaN or infinity.
+
+  2) Floating-point and locale assumptions for parsing:
+  - The C locale must be in effect for numeric parsing (i.e., the decimal point character is '.'), or the provided strings must be chosen to parse identically under the active locale. Avoid locale-dependent thousand separators; only plain numeral forms should be used.
+
+  3) Library/Runtime mode requirement to avoid early return:
+  - The math library mode must NOT be the IEEE fast-return mode that short-circuits when `_LIB_VERSION == _IEEE_`. The environment must ensure `_LIB_VERSION` is set to a non-IEEE mode (e.g., POSIX/SVID) so that, when `isnan(y)` is false, the function does not return early at `if (_LIB_VERSION == _IEEE_ || isnan(y)) { return z; }` and proceeds to evaluate `if (y == 0.0)`.
+
+  4) Additional semantic constraints on the second argument to target the branch:
+  - The parsed double value for argument 2 must be exactly zero (either +0.0 or -0.0) and not NaN or infinity, ensuring `isnan(y)` is false and `y == 0.0` is true.
+
+  5) Environmental stability constraints:
+  - No signal/timeouts should interrupt execution before printing; allow normal process completion.
+
+  Satisfying all above ensures main() parses two doubles, isnan(y) is false, the wrapper does not early-return due to IEEE mode, and the condition `y == 0.0` is evaluated as true within remainder(), reaching the selected branch.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import os
+      import signal
+      import subprocess
+
+      try:
+          # Ensure C locale numeric parsing and non-IEEE libm mode
+          env = os.environ.copy()
+          env.update({
+              "LC_ALL": "C",
+              "LANG": "C",
+              # fdlibm/libm wrappers commonly honor LIBM env to choose mode: IEEE/POSIX/SVID
+              # We need non-IEEE so that the wrapper does not fast-return before checking y == 0.0
+              "LIBM": "POSIX",
+          })
+
+          # Invoke the executable with exactly two arguments after the program name
+          # argv[1] = valid finite double string; argv[2] = string that parses to exactly 0.0
+          # This ensures isnan(y) is false and y == 0.0 is true in remainder()
+          cmd = "./temp_executable 1.0 0"
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+              env=env,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, return whatever stderr was captured and a killed code
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # Propagate unexpected errors
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // w_remainder.c (52 lines total)
+  #include <stdio.h>
+
+
+
+
+
+
+  #include "fdlibm.h"
+
+  #ifdef __STDC__
+  	double remainder(double x, double y)	
+  #else
+  	double remainder(x,y)			
+  	double x,y;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	// Unexecuted code (line 18) removed. Its line cov: 0/1 (0%)
+  #else
+  	double z;
+  	z = __ieee754_remainder(x,y);
+  	if(_LIB_VERSION == _IEEE_ || isnan(y)) {
+  		return z;
+  	}
+  	if(y==0.0) {
+  		// Unexecuted code (line 26) removed. Its line cov: 0/1 (0%)
+  	}
+  	else {
+  		// Unexecuted code (line 29) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+
+      if (argc != 3) {
+          // Unexecuted code (lines 41-42) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = remainder(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [w_remainder.c] enter main 3
+  [w_remainder.c] enter remainder 2
+  [w_remainder.c] enter remainder 3
+execution_summary: |2+
+
+  ```c
+  // w_remainder.c (52 lines total)
+  #include <stdio.h>
+
+
+
+
+
+
+  #include "fdlibm.h"
+
+  #ifdef __STDC__
+  	double remainder(double x, double y)	
+  #else
+  	double remainder(x,y)			
+  	double x,y;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	// Unexecuted code (line 18) removed. Its line cov: 0/1 (0%)
+  #else
+  	double z;
+  	z = __ieee754_remainder(x,y);
+  	if(_LIB_VERSION == _IEEE_ || isnan(y)) {
+  		return z;
+  	}
+  	if(y==0.0) {
+  		// Unexecuted code (line 26) removed. Its line cov: 0/1 (0%)
+  	}
+  	else {
+  		// Unexecuted code (line 29) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+
+      if (argc != 3) {
+          // Unexecuted code (lines 41-42) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = remainder(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          # Invoke the same executable with exactly two arguments where argv[2] parses to NaN
+          # argv[1] can be any valid number; we use 1.0. argv[2] is "nan" to satisfy isnan(y).
+          result = subprocess.run(
+              ["./temp_executable 1.0 nan"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [w_remainder.c] enter main 3
+  [w_remainder.c] enter remainder 2
+  [w_remainder.c] enter remainder 3

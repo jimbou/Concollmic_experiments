@@ -1,0 +1,288 @@
+id: 2
+src_id: 1
+create_time: '2025-12-14 18:43:41.720'
+time_taken: 206
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.63502000
+    call_cnt: 3
+    latency: 67.05s
+    input_tokens: 13295
+    output_tokens: 6152
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.47818000
+      call_cnt: 2
+      latency: 51.48s
+      input_tokens: 10415
+      output_tokens: 4498
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10160000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.34184000
+      call_cnt: 1
+      latency: 41.21s
+      input_tokens: 5080
+      output_tokens: 3919
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03474000
+      call_cnt: 1
+      latency: 10.27s
+      input_tokens: 5335
+      output_tokens: 579
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.15684000
+      call_cnt: 1
+      latency: 15.57s
+      input_tokens: 2880
+      output_tokens: 1654
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05760000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.09924000
+      call_cnt: 1
+      latency: 15.57s
+      input_tokens: 2880
+      output_tokens: 1654
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (!finite(value) || value == 0.0) -> false in s_ldexp.c:ldexp
+target_file_lines: s_ldexp.c:19-20
+target_lines_content: |-
+  	value = scalbn(value,exp);
+  	if(!finite(value)||value==0.0) {
+justification: In the current run, argv[1] is "nan", so ldexp returns early via the
+  true branch. The else-path (finite, non-zero value) is unexecuted in this trace
+  and guards the core computation path of ldexp. Although this block shows partial
+  historical coverage (4/5 lines, 80%), it remains a critical numeric path and will
+  exercise different behavior than the current tests. The other visible unexecuted
+  branch (if (argc != 3) in main) has 0% historical coverage but is effectively unreachable
+  with the fixed harness structure that always supplies exactly two user arguments.
+  Targeting the finite, non-zero path therefore maximizes feasible additional coverage.
+target_path_constraint: |-
+  Goal: Execute the else-path in ldexp where the pre-check (!finite(value) || value == 0.0) evaluates to false, i.e., value is finite and non-zero.
+
+  Constraints in chronological order:
+
+  1) Process invocation via command line
+  - The program must be launched with exactly two user-supplied arguments following the executable name, maintaining the pattern: <program> <arg1> <arg2>.
+  - Ensure the process environment allows normal execution (no special environment variables or signals required). Shell usage is acceptable but not required.
+
+  2) Argument count condition (to bypass argc != 3 handling)
+  - Provide exactly two arguments so that argc equals 3 (program path + 2 arguments). This ensures execution proceeds past the argc check.
+
+  3) Argument 1 (floating-point value for ldexp)
+  - argv[1] must be a textual floating-point literal that the standard C library function atof parses to a finite, non-zero double.
+  - Forbidden values and forms for argv[1]: strings that parse to NaN (e.g., "nan", case-insensitive), positive or negative infinity (e.g., "inf", "infinity", possibly with sign), zero in any form ("0", "0.0", "+0", "-0", scientific notation with zero value), empty string, or strings that atof parses to 0 due to no digits.
+  - Required property: isfinite(atof(argv[1])) == true and atof(argv[1]) != 0.0.
+
+  4) Argument 2 (integer exponent for ldexp)
+  - argv[2] must be a decimal integer string that the standard C library function atoi parses to some integer. Any integer is acceptable for reaching the target branch; no specific range constraints are imposed by the pre-check.
+  - Acceptable forms include optional leading whitespace, optional sign (+/-), and digits. Avoid non-numeric content that would cause atoi to parse 0 unintentionally only if such a value would later cause different behavior (it does not affect the pre-check). Therefore, any syntactically valid decimal integer string is sufficient.
+
+  5) Locale/encoding assumptions
+  - Arguments must be encoded in a standard ASCII/UTF-8 compatible encoding where decimal digits, optional sign, decimal point '.', and exponent marker 'e' (if used) are recognized by atof according to the C locale. Do not rely on locale-specific decimal separators like commas.
+
+  Satisfaction of these constraints ensures that inside ldexp, the condition (!finite(value) || value == 0.0) evaluates to false, causing execution to proceed into the main computational path (the previously unexecuted block).
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Use a finite, non-zero floating-point value for argv[1] and a valid decimal integer for argv[2]
+      # This preserves the original harness structure: <program> <arg1> <arg2>.
+      # argv[1] = "3.14159" satisfies isfinite(atof(argv[1])) == true and atof(argv[1]) != 0.0
+      # argv[2] = "42" is a valid decimal integer string for atoi
+      try:
+          result = subprocess.run(
+              ["./temp_executable 3.14159 42"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // s_ldexp.c (39 lines total)
+
+
+
+
+  #include "fdlibm.h"
+  #include <errno.h>
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double ldexp(double value, int exp)
+  #else
+  	double ldexp(value, exp)
+  	double value; int exp;
+  #endif
+  {
+  	if(!finite(value)||value==0.0) {
+  		return value;
+  	}
+  	// Unexecuted code (lines 19-23) removed. Its line cov: 4/5 (80%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	if (argc != 3) {
+  		// Unexecuted code (lines 31-32) removed. Its line cov: 0/2 (0%)
+  	}
+  	double a0 = atof(argv[1]);
+  	int a1 = atoi(argv[2]);
+  	double r = ldexp(a0, a1);
+  	printf("%f\n", r);
+  	return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [s_ldexp.c] enter main 1
+  [s_ldexp.c] enter main 3
+  [s_ldexp.c] enter main 4
+  [s_ldexp.c] enter ldexp 1
+  [s_ldexp.c] enter ldexp 3
+  [s_ldexp.c] enter ldexp 4
+  [s_ldexp.c] enter ldexp 6
+  [s_ldexp.c] enter main 5
+execution_summary: |2+
+
+  ```c
+  // s_ldexp.c (39 lines total)
+
+
+
+
+  #include "fdlibm.h"
+  #include <errno.h>
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double ldexp(double value, int exp)
+  #else
+  	double ldexp(value, exp)
+  	double value; int exp;
+  #endif
+  {
+  	if(!finite(value)||value==0.0) {
+  		// Unexecuted code (line 17) removed. Its line cov: 1/1 (100%)
+  	}
+  	value = scalbn(value,exp);
+  	if(!finite(value)||value==0.0) {
+  		// Unexecuted code (line 21) removed. Its line cov: 0/1 (0%)
+  	}
+  	return value;
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	if (argc != 3) {
+  		// Unexecuted code (lines 31-32) removed. Its line cov: 0/2 (0%)
+  	}
+  	double a0 = atof(argv[1]);
+  	int a1 = atoi(argv[2]);
+  	double r = ldexp(a0, a1);
+  	printf("%f\n", r);
+  	return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # We set argv[1] to a non-finite double ("nan") so the ldexp pre-check is true.
+      # argv[2] can be any decimal integer; we use "1".
+      # This preserves the original harness structure: <program> <arg1> <arg2>.
+      try:
+          result = subprocess.run(
+              ["./temp_executable nan 1"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [s_ldexp.c] enter main 1
+  [s_ldexp.c] enter main 3
+  [s_ldexp.c] enter main 4
+  [s_ldexp.c] enter ldexp 1
+  [s_ldexp.c] enter ldexp 2
+  [s_ldexp.c] enter main 5

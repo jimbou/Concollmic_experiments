@@ -1,0 +1,288 @@
+id: 1
+src_id: 0
+create_time: '2025-12-14 20:04:34.191'
+time_taken: 171
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 2
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.89904000
+    call_cnt: 4
+    latency: 113.83s
+    input_tokens: 18246
+    output_tokens: 8902
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.74870000
+      call_cnt: 3
+      latency: 99.02s
+      input_tokens: 15430
+      output_tokens: 7335
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.09942000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.31000000
+      call_cnt: 1
+      latency: 42.47s
+      input_tokens: 4971
+      output_tokens: 3457
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.30430000
+      call_cnt: 1
+      latency: 47.86s
+      input_tokens: 5129
+      output_tokens: 3295
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03498000
+      call_cnt: 1
+      latency: 8.69s
+      input_tokens: 5330
+      output_tokens: 583
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.15034000
+      call_cnt: 1
+      latency: 14.81s
+      input_tokens: 2816
+      output_tokens: 1567
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05632000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.09402000
+      call_cnt: 1
+      latency: 14.81s
+      input_tokens: 2816
+      output_tokens: 1567
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (argc != 2) -> true in s_significand.c:main
+target_file_lines: s_significand.c:26-27
+target_lines_content: |2-
+          printf("Usage: %s <arg>\n", argv[0]);
+          return 1;
+justification: 'This branch has 0% historical coverage per the trace (line cov: 0/2)
+  and represents the program’s argument validation path. Exercising it will cover
+  the error-handling behavior when the program is invoked with an incorrect number
+  of arguments, a distinct control-flow path from the current execution (which uses
+  exactly one user argument). Although simple, it is the only uncovered runtime branch
+  visible in this file and can increase coverage by ensuring the argument-check code
+  is executed.'
+target_path_constraint: |-
+  Chronological constraints to reach the target branch (argument validation failure path):
+
+  1. Process invocation format:
+     - The program is run via a shell command. The test harness uses: shell=True and a single string command "./temp_executable 1.0".
+     - To reach the branch where the program checks `if (argc != 2)` and evaluates to true, the process must be invoked such that the C `main(int argc, char** argv)` receives an argument count different from 2.
+
+  2. Command-line argument count constraint:
+     - Ensure the executed command yields `argc` not equal to 2. In C programs:
+       * `argc` counts the program name as the first argument.
+       * Therefore, `argc == 2` corresponds to exactly one user-supplied argument.
+     - To make `argc != 2`, choose either:
+       * `argc == 1` (no user-supplied arguments), or
+       * `argc >= 3` (two or more user-supplied arguments).
+
+  3. Shell tokenization considerations (since shell=True):
+     - The shell parses the command string into tokens separated by unquoted whitespace.
+     - Quoting prevents splitting. To achieve a specific `argc`, control tokenization accordingly:
+       * For `argc == 1`: Provide a command string with only the program path token and no additional unquoted tokens (e.g., omit any user argument).
+       * For `argc >= 3`: Provide a command string containing the program path followed by at least two additional unquoted tokens (they can be arbitrary strings). Avoid quoting or escaping them together into a single token.
+     - Ensure no shell expansions or globbing unintentionally change token counts unless intended.
+
+  4. Environment and executable existence:
+     - The executable file referenced must exist and be runnable to reach `main`. If the shell resolves to a file path (e.g., ./temp_executable), it must:
+       * Be present in the working directory.
+       * Have execute permissions for the current user.
+     - The working directory must be set such that `./temp_executable` is a valid path.
+
+  5. Input value parsing behavior (non-targeted but relevant):
+     - If `argc != 2`, the program’s path enters the argument validation branch before using `argv[1]`. No guarantees about accessing or parsing `argv[1]` are required. Therefore, there are no constraints on argument content other than count.
+
+  Satisfying these constraints guarantees that `argc != 2` evaluates to true in main, exercising the uncovered argument validation branch.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import os
+      import signal
+      import subprocess
+
+      # Ensure the executable exists and is runnable
+      exe_path = "./temp_executable"
+      if not os.path.exists(exe_path):
+          raise FileNotFoundError(f"Executable not found at {exe_path}")
+      if not os.access(exe_path, os.X_OK):
+          raise PermissionError(f"Executable at {exe_path} is not executable")
+
+      try:
+          # Invoke with no user-supplied arguments to ensure argc == 1 (thus argc != 2)
+          # Keep shell=True and a single command string, matching the original harness structure
+          result = subprocess.run(
+              ["./temp_executable"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          raise e
+returncode: 1
+src_execution_summary: |2+
+
+  ```c
+  // s_significand.c (36 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double significand(double x)
+  #else
+  	double significand(x)
+  	double x;
+  #endif
+  {
+  	return __ieee754_scalb(x,(double) -ilogb(x));
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 26-27) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = significand(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [s_significand.c] enter main 2
+execution_summary: |2+
+
+  ```c
+  // s_significand.c (36 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double significand(double x)
+  #else
+  	double significand(x)
+  	double x;
+  #endif
+  {
+  	// Unexecuted code (line 17) removed. Its line cov: 1/1 (100%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 2) {
+          printf("Usage: %s <arg>\n", argv[0]);
+          return 1;
+      }
+
+      // Unexecuted code (lines 30-35) removed. Its line cov: 4/4 (100%)
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [s_significand.c] enter main 3
+  [s_significand.c] enter significand 1

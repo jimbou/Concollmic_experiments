@@ -1,0 +1,359 @@
+id: 1
+src_id: 0
+create_time: '2025-12-14 19:41:24.379'
+time_taken: 284
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 1
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $1.70980000
+    call_cnt: 5
+    latency: 205.67s
+    input_tokens: 28154
+    output_tokens: 19112
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $1.56120000
+      call_cnt: 4
+      latency: 194.06s
+      input_tokens: 25308
+      output_tokens: 17584
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10712000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.27178000
+      call_cnt: 1
+      latency: 26.55s
+      input_tokens: 5356
+      output_tokens: 2342
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    non_tool:
+      model: gpt-5
+      cost: $0.62318000
+      call_cnt: 1
+      latency: 98.61s
+      input_tokens: 6563
+      output_tokens: 8192
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.52258000
+      call_cnt: 1
+      latency: 60.58s
+      input_tokens: 6583
+      output_tokens: 6441
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03654000
+      call_cnt: 1
+      latency: 8.32s
+      input_tokens: 6806
+      output_tokens: 609
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.14860000
+      call_cnt: 1
+      latency: 11.61s
+      input_tokens: 2846
+      output_tokens: 1528
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05692000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.09168000
+      call_cnt: 1
+      latency: 11.61s
+      input_tokens: 2846
+      output_tokens: 1528
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if(((i0 & 0x7fffffff) | i1) == 0) -> true in s_rint.c:rint
+target_file_lines: s_rint.c:38-38
+target_lines_content: "\t\t    return x;"
+justification: This branch corresponds to the input value being exactly zero (both
+  +0.0 and -0.0). It has zero historical coverage (line 38 is marked with 0/1, 0%).
+  Exercising this path covers a distinct behavior in rint for the subcase j0 < 0 where
+  the function returns immediately for zero without performing rounding via TWO52.
+  This is a fundamental edge case for rounding functions and improves coverage within
+  the core numeric routine.
+target_path_constraint: |-
+  Chronological constraints to reach the branch `if(((i0 & 0x7fffffff) | i1) == 0) -> true` inside rint:
+
+  1. Command invocation format:
+     - The program is executed via a shell command string. The harness runs: `"./temp_executable 1.0"` with `shell=True`. This means the program receives exactly one command-line argument parsed by the shell after splitting: `argv[1]` must be a textual representation of a floating-point number.
+     - Ensure the program is invoked with exactly one argument (besides the program name) so that `argc == 2` holds; otherwise the program would follow an unused error path.
+
+  2. Argument parsing and type:
+     - `argv[1]` is converted to a double using `atof`. Therefore, `argv[1]` must be a valid decimal floating-point string that the C standard library can parse into a double value.
+
+  3. Numeric range to enter the j0 < 0 region (|x| < 1.0):
+     - Internally, `j0 = exponent(x) - 0x3ff`. The condition `j0 < 0` is equivalent to `|x| < 1.0` (including subnormal values and zero). To reach the targeted inner branch, we must be inside this outer `j0 < 0` block.
+     - Constraint: The numeric value of `atof(argv[1])` must satisfy `|atof(argv[1])| < 1.0`.
+
+  4. Zero detection branch (both +0.0 and -0.0):
+     - The targeted branch checks whether the bitwise OR of the high and low 32-bit words of the double equals zero, i.e., the double is exactly zero. This matches both positive and negative zero representations.
+     - Constraint: The numeric value parsed from `argv[1]` must be exactly zero as a double. In terms of text input, supply a string that parses to zero (e.g., forms like "0", with optional sign and whitespace) such that `atof(argv[1]) == 0.0`.
+
+  5. Environment assumptions:
+     - No special environment variables or files are referenced. The executable must exist and be runnable. Standard locale or encoding variations should not affect `atof` parsing of zero for simple decimal formats.
+
+  Combined effect:
+  - With `argc == 2`, `argv[1]` parsable as a double, `|value| < 1.0`, and `value == 0.0`, execution enters `j0 < 0`, the zero sub-branch triggers, and the function returns immediately from the targeted line.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          # Provide exactly one floating-point argument that parses to zero
+          # This ensures argc == 2 and atof(argv[1]) == 0.0, satisfying |x| < 1.0 and zero-detection
+          result = subprocess.run(
+              ["./temp_executable 0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // s_rint.c (96 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double
+  #else
+  static double 
+  #endif
+  TWO52[2]={
+    4.50359962737049600000e+15, 
+   -4.50359962737049600000e+15, 
+  };
+
+  #ifdef __STDC__
+  	double rint(double x)
+  #else
+  	double rint(x)
+  	double x;
+  #endif
+  {
+  	int i0,j0,sx;
+  	unsigned i,i1;
+  	double w,t;
+  	i0 =  __HI(x);
+  	sx = (i0>>31)&1;
+  	i1 =  __LO(x);
+  	j0 = ((i0>>20)&0x7ff)-0x3ff;
+  	
+  	if(j0<20) {
+  	    if(j0<0) { 	
+  		if(((i0&0x7fffffff)|i1)==0) {
+  		    // Unexecuted code (line 38) removed. Its line cov: 0/1 (0%)
+  		}
+  		i1 |= (i0&0x0fffff);
+  		i0 &= 0xfffe0000;
+  		i0 |= ((i1|-i1)>>12)&0x80000;
+  		__HI(x)=i0;
+  	        w = TWO52[sx]+x;
+  	        t =  w-TWO52[sx];
+  	        i0 = __HI(t);
+  	        __HI(t) = (i0&0x7fffffff)|(sx<<31);
+  	        return t;
+  	    } else {
+  		// Unexecuted code (lines 50-59) removed. Its line cov: 0/10 (0%)
+  	} else if (j0>51) {
+  	    // Unexecuted code (lines 61-65) removed. Its line cov: 0/5 (0%)
+  	} else {
+  	    // Unexecuted code (lines 67-74) removed. Its line cov: 0/8 (0%)
+  	}
+  	// Unexecuted code (lines 76-79) removed. Its line cov: 0/4 (0%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      if (argc != 2) {
+          // Unexecuted code (lines 87-88) removed. Its line cov: 0/2 (0%)
+      }
+      double a0 = atof(argv[1]);
+
+      double r = rint(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [s_rint.c] enter main 1
+  [s_rint.c] enter main 3
+  [s_rint.c] enter rint 1
+  [s_rint.c] enter rint 2
+  [s_rint.c] enter rint 3
+  [s_rint.c] enter rint 4
+  [s_rint.c] enter rint 5
+execution_summary: |2+
+
+  ```c
+  // s_rint.c (96 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double
+  #else
+  static double 
+  #endif
+  TWO52[2]={
+    4.50359962737049600000e+15, 
+   -4.50359962737049600000e+15, 
+  };
+
+  #ifdef __STDC__
+  	double rint(double x)
+  #else
+  	double rint(x)
+  	double x;
+  #endif
+  {
+  	int i0,j0,sx;
+  	unsigned i,i1;
+  	double w,t;
+  	i0 =  __HI(x);
+  	sx = (i0>>31)&1;
+  	i1 =  __LO(x);
+  	j0 = ((i0>>20)&0x7ff)-0x3ff;
+  	
+  	if(j0<20) {
+  	    if(j0<0) { 	
+  		if(((i0&0x7fffffff)|i1)==0) {
+  		    return x;
+  		}
+  		// Unexecuted code (lines 40-48) removed. Its line cov: 9/9 (100%)
+  	    } else {
+  		// Unexecuted code (lines 50-59) removed. Its line cov: 0/10 (0%)
+  	} else if (j0>51) {
+  	    // Unexecuted code (lines 61-65) removed. Its line cov: 0/5 (0%)
+  	} else {
+  	    // Unexecuted code (lines 67-74) removed. Its line cov: 0/8 (0%)
+  	}
+  	// Unexecuted code (lines 76-79) removed. Its line cov: 0/4 (0%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      if (argc != 2) {
+          // Unexecuted code (lines 87-88) removed. Its line cov: 0/2 (0%)
+      }
+      double a0 = atof(argv[1]);
+
+      double r = rint(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [s_rint.c] enter main 1
+  [s_rint.c] enter main 3
+  [s_rint.c] enter rint 1
+  [s_rint.c] enter rint 2
+  [s_rint.c] enter rint 3
+  [s_rint.c] enter rint 4
+  [s_rint.c] enter rint 6

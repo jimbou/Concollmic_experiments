@@ -1,0 +1,388 @@
+id: 3
+src_id: 0
+create_time: '2025-12-14 20:51:57.020'
+time_taken: 753
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $1.79638000
+    call_cnt: 6
+    latency: 184.99s
+    input_tokens: 32975
+    output_tokens: 18948
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $1.44320000
+      call_cnt: 5
+      latency: 148.66s
+      input_tokens: 30184
+      output_tokens: 13992
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10166000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.65848000
+      call_cnt: 2
+      latency: 69.01s
+      input_tokens: 10730
+      output_tokens: 7180
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.38580000
+      call_cnt: 1
+      latency: 48.49s
+      input_tokens: 5737
+      output_tokens: 4449
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: gpt-5
+      cost: $0.26468000
+      call_cnt: 1
+      latency: 22.29s
+      input_tokens: 5943
+      output_tokens: 1820
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03258000
+      call_cnt: 1
+      latency: 8.87s
+      input_tokens: 7774
+      output_tokens: 543
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.35318000
+      call_cnt: 1
+      latency: 36.33s
+      input_tokens: 2791
+      output_tokens: 4956
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05582000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.29736000
+      call_cnt: 1
+      latency: 36.33s
+      input_tokens: 2791
+      output_tokens: 4956
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (fabs(x) > 1.0) -> true in w_asin.c:asin
+target_file_lines: w_asin.c:28-28
+target_lines_content: "\t        return __kernel_standard(x,x,2); "
+justification: This branch guards the error-handling path that calls __kernel_standard
+  when the input magnitude exceeds 1.0. The protected line 28 has 0% historical coverage,
+  indicating it has never been exercised. Reaching it will explore an alternative
+  behavior distinct from the current execution (which returns early under IEEE mode),
+  potentially surfacing math error handling. Although the earlier return depends on
+  the math library runtime mode, specifying environment-level conditions allows this
+  path to be targeted by tests.
+target_path_constraint: |-
+  Chronological, external constraints to reach branch: if (fabs(x) > 1.0) -> true in w_asin.c:asin
+
+  1. Command invocation and argument count
+  - The program must be launched with exactly one user-supplied argument (in addition to the program name), so the total argument count equals 2.
+  - Shell execution must not introduce additional arguments; the single argument must be passed as-is to the program.
+
+  2. Argument format and parsing (for atof)
+  - The sole argument must be an ASCII/UTF-8 string that atof can parse as a finite double-precision number.
+  - The string must not represent NaN or infinity (avoid tokens like "nan", "NaN", "inf", "+inf", "-inf"), and must not be empty.
+  - Locale should be such that a dot '.' is the decimal separator (or the string uses no locale-specific formatting); ensure the string is valid under the C locale for atof.
+
+  3. Numeric value required to reach the target branch in asin
+  - The parsed numeric value x must satisfy |x| > 1.0 (i.e., x > 1.0 or x < -1.0).
+  - x must be a normal finite number so that isnan(x) is false.
+
+  4. Runtime math library configuration (environment-level condition)
+  - The executable must be linked and run against fdlibm (or compatible libm) in a non-IEEE error-handling mode, meaning the runtime library’s error-handling configuration is NOT set to IEEE mode.
+  - Concretely, the library’s global error-handling mode (commonly represented by a runtime configuration symbol controlling whether domain errors return quietly) must be set to a mode that performs domain error handling for asin when |x| > 1.0 (e.g., POSIX or SVID modes), not the IEEE mode that returns immediately.
+  - The program must not be built with a configuration that forces the IEEE-only path at runtime (avoid builds that define the compile-time macro selecting the IEEE-only implementation); ensure the implementation variant that checks the error mode is active at runtime.
+
+  Satisfaction of these constraints guarantees that:
+  - main parses the single argument to a finite double x.
+  - asin(x) executes the non-IEEE path, bypasses the early return that occurs under IEEE or for NaN, and then evaluates fabs(x) > 1.0 as true, taking the branch that triggers the error-handling path.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import os
+      import signal
+      import subprocess
+      import tempfile
+      import textwrap
+      import shutil
+
+      # We need to ensure a non-IEEE error-handling mode in fdlibm at runtime.
+      # Achieve this by LD_PRELOAD-ing a tiny shared library that defines _LIB_VERSION = _POSIX_.
+      # Also set the locale to C to enforce '.' as decimal separator for atof.
+
+      tmpdir = tempfile.mkdtemp(prefix="fdlibm_mode_")
+      c_path = os.path.join(tmpdir, "libfdlibm_mode.c")
+      so_path = os.path.join(tmpdir, "libfdlibm_mode.so")
+
+      c_source = textwrap.dedent(
+          r"""
+          // Minimal interposer to set fdlibm's global error-handling mode to non-IEEE
+          // Matches fdlibm's common declaration of _LIB_VERSION and enum constants.
+          // This ensures wrappers like w_asin use the non-IEEE path (e.g., POSIX/SVID).
+          typedef enum {
+              _IEEE_ = 0,
+              _SVID_ = 1,
+              _XOPEN_ = 2,
+              _POSIX_ = 3
+          } _LIB_VERSION_TYPE;
+          __attribute__((visibility("default")))
+          _LIB_VERSION_TYPE _LIB_VERSION = _POSIX_;
+          // Provide a symbol that some variants check for, harmless if unused.
+          __attribute__((visibility("default")))
+          const char *__fdlibm_version_note = "force POSIX mode via LD_PRELOAD";
+          """
+      )
+
+      try:
+          with open(c_path, "w", encoding="utf-8") as f:
+              f.write(c_source)
+
+          # Try compiling the interposer. Attempt common compilers in order.
+          compile_cmds = [
+              ["cc", "-shared", "-fPIC", "-O2", "-Wall", c_path, "-o", so_path],
+              ["gcc", "-shared", "-fPIC", "-O2", "-Wall", c_path, "-o", so_path],
+              ["clang", "-shared", "-fPIC", "-O2", "-Wall", c_path, "-o", so_path],
+          ]
+          compiled = False
+          last_err = None
+          for cmd in compile_cmds:
+              try:
+                  res = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace")
+                  if res.returncode == 0 and os.path.exists(so_path):
+                      compiled = True
+                      break
+                  last_err = (res.stderr or "")
+              except Exception as e:
+                  last_err = str(e)
+          if not compiled:
+              raise RuntimeError(f"Failed to build fdlibm mode interposer: {last_err}")
+
+          # Prepare environment: enforce C locale and preload our interposer.
+          env = os.environ.copy()
+          env["LC_ALL"] = "C"
+          env["LANG"] = "C"
+          # Linux/ELF
+          env["LD_PRELOAD"] = so_path
+          # macOS (DYLD)
+          env["DYLD_INSERT_LIBRARIES"] = so_path
+          env["DYLD_FORCE_FLAT_NAMESPACE"] = "1"
+
+          # Execute the original harness structure but with the new concrete argument (|x| > 1.0)
+          # Single user argument passed as-is; shell runs the exact command string.
+          try:
+              result = subprocess.run(
+                  ["./temp_executable 2.0"],
+                  capture_output=True,
+                  encoding="utf-8",
+                  errors="replace",
+                  shell=True,
+                  timeout=timeout,
+                  env=env,
+              )
+              return result.stderr, result.returncode
+          except subprocess.TimeoutExpired as e:
+              return e.stderr, -signal.SIGKILL
+      finally:
+          # Clean up the temporary build directory
+          try:
+              shutil.rmtree(tmpdir)
+          except Exception:
+              pass
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // w_asin.c (50 lines total)
+
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+
+  #ifdef __STDC__
+  	double asin(double x)		
+  #else
+  	double asin(x)			
+  	double x;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	// Unexecuted code (line 20) removed. Its line cov: 0/1 (0%)
+  #else
+  	double z;
+  	z = __ieee754_asin(x);
+  	if(_LIB_VERSION == _IEEE_ || isnan(x)) {
+  		return z;
+  	}
+  	if(fabs(x)>1.0) {
+  	        // Unexecuted code (line 28) removed. Its line cov: 0/1 (0%)
+  	} else {
+  	    // Unexecuted code (line 30) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      if (argc != 2) {
+          // Unexecuted code (lines 40-41) removed. Its line cov: 2/2 (100%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = asin(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [w_asin.c] enter main 1
+  [w_asin.c] enter main 3
+  [w_asin.c] enter main 4
+  [w_asin.c] enter asin 2
+  [w_asin.c] enter asin 3
+  [w_asin.c] enter main 5
+execution_summary: |2+
+
+  ```c
+  // w_asin.c (50 lines total)
+
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+
+  #ifdef __STDC__
+  	double asin(double x)		
+  #else
+  	double asin(x)			
+  	double x;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	// Unexecuted code (line 20) removed. Its line cov: 0/1 (0%)
+  #else
+  	double z;
+  	z = __ieee754_asin(x);
+  	if(_LIB_VERSION == _IEEE_ || isnan(x)) {
+  		return z;
+  	}
+  	if(fabs(x)>1.0) {
+  	        // Unexecuted code (line 28) removed. Its line cov: 0/1 (0%)
+  	} else {
+  	    // Unexecuted code (line 30) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      if (argc != 2) {
+          // Unexecuted code (lines 40-41) removed. Its line cov: 2/2 (100%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = asin(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [w_asin.c] enter main 1
+  [w_asin.c] enter main 3
+  [w_asin.c] enter main 4
+  [w_asin.c] enter asin 2
+  [w_asin.c] enter asin 3
+  [w_asin.c] enter main 5

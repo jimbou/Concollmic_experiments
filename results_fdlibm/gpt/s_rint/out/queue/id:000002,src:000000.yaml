@@ -1,0 +1,372 @@
+id: 2
+src_id: 0
+create_time: '2025-12-14 19:45:44.360'
+time_taken: 588
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $1.51014000
+    call_cnt: 4
+    latency: 204.15s
+    input_tokens: 20610
+    output_tokens: 18299
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $1.06072000
+      call_cnt: 3
+      latency: 148.27s
+      input_tokens: 17642
+      output_tokens: 11798
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10712000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.41448000
+      call_cnt: 1
+      latency: 50.61s
+      input_tokens: 5356
+      output_tokens: 4902
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.49712000
+      call_cnt: 1
+      latency: 85.54s
+      input_tokens: 6018
+      output_tokens: 6196
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.04200000
+      call_cnt: 1
+      latency: 12.12s
+      input_tokens: 6268
+      output_tokens: 700
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.44942000
+      call_cnt: 1
+      latency: 55.88s
+      input_tokens: 2968
+      output_tokens: 6501
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05936000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.39006000
+      call_cnt: 1
+      latency: 55.88s
+      input_tokens: 2968
+      output_tokens: 6501
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: In s_rint.c:rint, within the block for 20 <= j0 <= 51 (lines 67-75),
+  take the inner condition `if ((i1 & i) == 0)` -> false
+target_file_lines: s_rint.c:71-74
+target_lines_content: |-
+  	    i>>=1;
+  	    if((i1&i)!=0) {
+  		i1 = (i1&(~i))|((0x40000000)>>(j0-20));
+  	    }
+justification: This path (lines 67-75 followed by 76-79) has 0% historical coverage
+  and exercises the core rounding logic for finite, non-integer values with large
+  magnitude (20 <= floor(log2(|x|)) <= 51). It drives execution through multiple untested
+  lines, including bit-masking and mantissa adjustment, and then the final rounding
+  sequence (76-79), thereby increasing coverage of untested arithmetic branches.
+target_path_constraint: |-
+  Environment and invocation constraints (chronological order):
+
+  1) Process invocation:
+  - Run the program with exactly one command-line argument (so that argc == 2). The harness already does this by invoking the executable with a single token argument. Ensure the shell does not split it (already enforced by the harness).
+
+  2) Argument format:
+  - The sole argument must be a finite, non-NaN, non-infinite decimal string that atof can parse into a double value x.
+
+  3) Magnitude range for selecting the code region 20 <= j0 <= 51:
+  - Let x be the parsed double. Define j0 = floor(log2(|x|)) (the unbiased exponent of x’s IEEE-754 representation), with x ≠ 0. Constrain 20 <= j0 <= 51. Equivalently, require 2^20 <= |x| < 2^52.
+  - This excludes subnormals, zeros, very small magnitudes (j0 < 20), and very large magnitudes / special values (j0 > 51 or NaN/Inf).
+
+  4) Ensure the lower-bits test (i1 & i) == 0 evaluates to false at lines 67-70:
+  - In this region, the code computes i = 0xffffffff >> (j0 - 20) and then checks (i1 & i) == 0. Here i1 is the low 32 bits of the IEEE-754 double (the fraction’s lower word, plus low sign/exponent bits impact only the high word). To make the condition false, require that at least one bit among the lowest (j0 - 20 + 1) bits of the 32-bit low word i1 is 1.
+  - Restated without referring to internals: Require x is not exactly representable at the granularity of 2^(−(j0−20)) in its low 32-bit portion; i.e., x must have a nonzero fractional component when truncated to a multiple of 2^(52−(j0+1)) in binary. Practically: choose x such that, when scaled so that its binary point is just left of bit index (j0), the fraction has at least one 1 within the lower 32-bit portion corresponding to positions [0 .. (j0−20)].
+
+  5) Preserve finiteness and normality:
+  - Disallow inputs that parse to NaN, +Inf, −Inf, or ±0.0. Ensure standard decimal syntax without overflows.
+
+  6) Avoid exact integer cases in this exponent band:
+  - Ensure x is not an integer multiple of 2^(52−j0). This prevents the check from returning true and short-circuiting to return x unchanged.
+
+  Notes on input encoding/format for the single argument:
+  - Acceptable forms include optional leading sign (+/−), digits, optional decimal point, optional fractional digits, and optional exponent part using e or E with an integer exponent. No surrounding whitespace is necessary but permitted by atof; avoid extra tokens since the harness passes a single shell word.
+  - The string must be ASCII or UTF-8 and free from NUL bytes so the C program reads it correctly.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # We choose x = 1048576.125, which is 2^20 + 1/8.
+      # This ensures:
+      # - The magnitude satisfies 2^20 <= |x| < 2^52 (j0 = 20)
+      # - The value is finite, non-zero, and normal
+      # - The low 32-bit mantissa word has a non-zero bit (specifically at position corresponding to 2^{-23})
+      # - x is not an integer multiple of 2^(52 - j0) (here, 2^32)
+      # - The sole argument is a standard decimal string parsable by atof
+
+      try:
+          cmd = "./temp_executable 1048576.125"
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // s_rint.c (96 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double
+  #else
+  static double 
+  #endif
+  TWO52[2]={
+    4.50359962737049600000e+15, 
+   -4.50359962737049600000e+15, 
+  };
+
+  #ifdef __STDC__
+  	double rint(double x)
+  #else
+  	double rint(x)
+  	double x;
+  #endif
+  {
+  	int i0,j0,sx;
+  	unsigned i,i1;
+  	double w,t;
+  	i0 =  __HI(x);
+  	sx = (i0>>31)&1;
+  	i1 =  __LO(x);
+  	j0 = ((i0>>20)&0x7ff)-0x3ff;
+  	
+  	if(j0<20) {
+  	    if(j0<0) { 	
+  		if(((i0&0x7fffffff)|i1)==0) {
+  		    // Unexecuted code (line 38) removed. Its line cov: 1/1 (100%)
+  		}
+  		i1 |= (i0&0x0fffff);
+  		i0 &= 0xfffe0000;
+  		i0 |= ((i1|-i1)>>12)&0x80000;
+  		__HI(x)=i0;
+  	        w = TWO52[sx]+x;
+  	        t =  w-TWO52[sx];
+  	        i0 = __HI(t);
+  	        __HI(t) = (i0&0x7fffffff)|(sx<<31);
+  	        return t;
+  	    } else {
+  		// Unexecuted code (lines 50-59) removed. Its line cov: 0/10 (0%)
+  	} else if (j0>51) {
+  	    // Unexecuted code (lines 61-65) removed. Its line cov: 0/5 (0%)
+  	} else {
+  	    // Unexecuted code (lines 67-74) removed. Its line cov: 0/8 (0%)
+  	}
+  	// Unexecuted code (lines 76-79) removed. Its line cov: 0/4 (0%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      if (argc != 2) {
+          // Unexecuted code (lines 87-88) removed. Its line cov: 0/2 (0%)
+      }
+      double a0 = atof(argv[1]);
+
+      double r = rint(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [s_rint.c] enter main 1
+  [s_rint.c] enter main 3
+  [s_rint.c] enter rint 1
+  [s_rint.c] enter rint 2
+  [s_rint.c] enter rint 3
+  [s_rint.c] enter rint 4
+  [s_rint.c] enter rint 6
+execution_summary: |2+
+
+  ```c
+  // s_rint.c (96 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double
+  #else
+  static double 
+  #endif
+  TWO52[2]={
+    4.50359962737049600000e+15, 
+   -4.50359962737049600000e+15, 
+  };
+
+  #ifdef __STDC__
+  	double rint(double x)
+  #else
+  	double rint(x)
+  	double x;
+  #endif
+  {
+  	int i0,j0,sx;
+  	unsigned i,i1;
+  	double w,t;
+  	i0 =  __HI(x);
+  	sx = (i0>>31)&1;
+  	i1 =  __LO(x);
+  	j0 = ((i0>>20)&0x7ff)-0x3ff;
+  	
+  	if(j0<20) {
+  	    if(j0<0) { 	
+  		if(((i0&0x7fffffff)|i1)==0) {
+  		    // Unexecuted code (line 38) removed. Its line cov: 1/1 (100%)
+  		}
+  		i1 |= (i0&0x0fffff);
+  		i0 &= 0xfffe0000;
+  		i0 |= ((i1|-i1)>>12)&0x80000;
+  		__HI(x)=i0;
+  	        w = TWO52[sx]+x;
+  	        t =  w-TWO52[sx];
+  	        i0 = __HI(t);
+  	        __HI(t) = (i0&0x7fffffff)|(sx<<31);
+  	        return t;
+  	    } else {
+  		// Unexecuted code (lines 50-59) removed. Its line cov: 0/10 (0%)
+  	} else if (j0>51) {
+  	    // Unexecuted code (lines 61-65) removed. Its line cov: 0/5 (0%)
+  	} else {
+  	    // Unexecuted code (lines 67-74) removed. Its line cov: 0/8 (0%)
+  	}
+  	// Unexecuted code (lines 76-79) removed. Its line cov: 0/4 (0%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      if (argc != 2) {
+          // Unexecuted code (lines 87-88) removed. Its line cov: 0/2 (0%)
+      }
+      double a0 = atof(argv[1]);
+
+      double r = rint(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [s_rint.c] enter main 1
+  [s_rint.c] enter main 3
+  [s_rint.c] enter rint 1
+  [s_rint.c] enter rint 2
+  [s_rint.c] enter rint 3
+  [s_rint.c] enter rint 4
+  [s_rint.c] enter rint 6

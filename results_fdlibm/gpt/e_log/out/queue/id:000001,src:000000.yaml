@@ -1,0 +1,386 @@
+id: 1
+src_id: 0
+create_time: '2025-12-14 15:16:47.208'
+time_taken: 510
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $2.44732000
+    call_cnt: 6
+    latency: 313.14s
+    input_tokens: 35201
+    output_tokens: 29055
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $2.05454000
+      call_cnt: 5
+      latency: 269.73s
+      input_tokens: 32263
+      output_tokens: 23488
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.11044000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $1.28944000
+      call_cnt: 3
+      latency: 165.56s
+      input_tokens: 18181
+      output_tokens: 14959
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.61308000
+      call_cnt: 1
+      latency: 94.00s
+      input_tokens: 6936
+      output_tokens: 7836
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.04158000
+      call_cnt: 1
+      latency: 10.17s
+      input_tokens: 7146
+      output_tokens: 693
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.39278000
+      call_cnt: 1
+      latency: 43.41s
+      input_tokens: 2938
+      output_tokens: 5567
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05876000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.33402000
+      call_cnt: 1
+      latency: 43.41s
+      input_tokens: 2938
+      output_tokens: 5567
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: 'if ((0x000fffff & (2 + hx)) < 3) -> false in e_log.c: __ieee754_log'
+target_file_lines: e_log.c:65-67
+target_lines_content: |2-
+   	s = f/(2.0+f); 
+  	dk = (double)k;
+  	z = s*s;
+justification: The entire general-logarithm evaluation path guarded by this condition
+  (lines 65-82) has 0/18 (0%) historical coverage and was not taken in the current
+  run. Exercising this branch will enter the main polynomial/rational approximation
+  logic of log() and cover multiple computations. This branch is reachable by varying
+  the single numeric command-line argument passed to the program (no harness changes
+  required).
+target_path_constraint: |-
+  Program entry and invocation:
+  1. Command-line invocation must pass exactly one numeric argument besides the program name (so argc == 2 when using a conventional argv array). The harness already provides a single token like "./temp_executable 1.0" and uses a shell, so ensure the argument string represents a single floating-point number (no spaces, no extra tokens).
+
+  Argument parsing and domain requirements for natural logarithm:
+  2. Let x be the double-precision value parsed from the sole argument (using strtod/atof semantics). The value must be a finite, strictly positive, normalized double so that the function does not take early special-case returns and reaches the targeted path. Concretely:
+     - x must be finite (not NaN, not +/-infinity).
+     - x must be > 0.0.
+     - x must not be subnormal (denormal) in IEEE-754 double format; i.e., its unbiased exponent must be in [1, 2046].
+
+  Bit-level condition to avoid the short-circuit branch and force the general path (target branch false):
+  3. Let hx denote the high 32 bits of x in IEEE-754 binary64: hx = (sign<<31) | (exponent<<20) | fraction_high20. The function masks hx &= 0x000fffff (retaining only the top 20 bits of the fraction after normalizing x so that its exponent is 0x3ff with a possible +1 adjustment). The targeted branch checks B = ((0x000fffff & (2 + hx)) < 3). To make this condition FALSE, require that (2 + hx) >= 3 when interpreted as an unsigned 20-bit integer, i.e., hx >= 1 after the earlier normalization step. This means the high 20 fraction bits of the normalized mantissa must not all be zero after normalization.
+
+  Practical numeric constraints implying hx >= 1 after normalization:
+  4. After internal normalization in the function, x is forced near 1.0 by setting its exponent to 0x3ff and possibly adding 1 to k. Let f = x - 1.0. The condition ((0x000fffff & (2 + hx)) < 3) is true only for values extremely close to 1.0 where the top 20 fraction bits + 2 are < 3. To make it FALSE, require that x is not exactly 1.0 and is not within the tiny window where the high 20 fraction bits are all zeros (or, equivalently, that |f| is larger than one ulp at 1.0 for the internal normalized representation). Expressed simply: require |x - 1.0| >= 2 * ulp(1.0) for binary64, ensuring hx >= 1.
+
+  Input formatting and environment constraints:
+  5. The process must have permission to execute the binary and no environment variables affect parsing. The single argument must be a string that the C runtime converts to the intended x without leading/trailing spaces that would split into multiple tokens in the shell. The locale should use a dot as the decimal separator (C/POSIX locale default).
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+      import os
+
+      # We choose x = 1.5, which is a finite, strictly positive, normalized double.
+      # After internal normalization to exponent 0x3ff, its mantissa is 1.5 (fraction 0.5),
+      # ensuring the high 20 fraction bits are not all zero (hx >= 1), so the target branch
+      # condition becomes FALSE. This also trivially satisfies |x - 1.0| >= 2 * ulp(1.0).
+      # Use C/POSIX locale to avoid any locale-related parsing issues.
+      try:
+          env = os.environ.copy()
+          env["LC_ALL"] = "C"
+          env["LANG"] = "C"
+          env["LC_NUMERIC"] = "C"
+
+          result = subprocess.run(
+              ["./temp_executable 1.5"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+              env=env,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // e_log.c (101 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double
+  #else
+  static double
+  #endif
+  ln2_hi  =  6.93147180369123816490e-01,	
+  ln2_lo  =  1.90821492927058770002e-10,	
+  two54   =  1.80143985094819840000e+16,  
+  Lg1 = 6.666666666666735130e-01,  
+  Lg2 = 3.999999999940941908e-01,  
+  Lg3 = 2.857142874366239149e-01,  
+  Lg4 = 2.222219843214978396e-01,  
+  Lg5 = 1.818357216161805012e-01,  
+  Lg6 = 1.531383769920937332e-01,  
+  Lg7 = 1.479819860511658591e-01;  
+
+  static double zero   =  0.0;
+
+  #ifdef __STDC__
+  	double __ieee754_log(double x)
+  #else
+  	double __ieee754_log(x)
+  	double x;
+  #endif
+  {
+  	double hfsq,f,s,z,R,w,t1,t2,dk;
+  	int k,hx,i,j;
+  	unsigned lx;
+
+  	hx = __HI(x);		
+  	lx = __LO(x);		
+
+  	k=0;
+  	if (hx < 0x00100000) {			
+  	    if (((hx&0x7fffffff)|lx)==0) 
+  		return -two54/zero;		
+  	    if (hx<0) return (x-x)/zero;	
+  	    k -= 54; x *= two54; 
+  	    hx = __HI(x);		
+  	} 
+  	fprintf(stderr, "\n");
+  	if (hx >= 0x7ff00000) return x+x;
+  	k += (hx>>20)-1023;
+  	hx &= 0x000fffff;
+  	i = (hx+0x95f64)&0x100000;
+  	__HI(x) = hx|(i^0x3ff00000);	
+  	k += (i>>20);
+  	f = x-1.0;
+  	if((0x000fffff&(2+hx))<3) {	
+  	    if(f==zero) if(k==0) return zero;  else {dk=(double)k;
+  				 return dk*ln2_hi+dk*ln2_lo;}
+  	    R = f*f*(0.5-0.33333333333333333*f);
+  	    if(k==0) return f-R; else {dk=(double)k;
+  	    	     return dk*ln2_hi-((R-dk*ln2_lo)-f);}
+  	}
+   	// Unexecuted code (lines 65-82) removed. Its line cov: 0/18 (0%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 91-92) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = __ieee754_log(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [e_log.c] enter main 3
+  [e_log.c] enter __ieee754_log 1
+  [e_log.c] enter __ieee754_log 2
+
+  [e_log.c] enter __ieee754_log 4
+execution_summary: |2+
+
+  ```c
+  // e_log.c (101 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double
+  #else
+  static double
+  #endif
+  ln2_hi  =  6.93147180369123816490e-01,	
+  ln2_lo  =  1.90821492927058770002e-10,	
+  two54   =  1.80143985094819840000e+16,  
+  Lg1 = 6.666666666666735130e-01,  
+  Lg2 = 3.999999999940941908e-01,  
+  Lg3 = 2.857142874366239149e-01,  
+  Lg4 = 2.222219843214978396e-01,  
+  Lg5 = 1.818357216161805012e-01,  
+  Lg6 = 1.531383769920937332e-01,  
+  Lg7 = 1.479819860511658591e-01;  
+
+  static double zero   =  0.0;
+
+  #ifdef __STDC__
+  	double __ieee754_log(double x)
+  #else
+  	double __ieee754_log(x)
+  	double x;
+  #endif
+  {
+  	double hfsq,f,s,z,R,w,t1,t2,dk;
+  	int k,hx,i,j;
+  	unsigned lx;
+
+  	hx = __HI(x);		
+  	lx = __LO(x);		
+
+  	k=0;
+  	if (hx < 0x00100000) {			
+  	    if (((hx&0x7fffffff)|lx)==0) 
+  		return -two54/zero;		
+  	    if (hx<0) return (x-x)/zero;	
+  	    k -= 54; x *= two54; 
+  	    hx = __HI(x);		
+  	} 
+  	fprintf(stderr, "\n");
+  	if (hx >= 0x7ff00000) return x+x;
+  	k += (hx>>20)-1023;
+  	hx &= 0x000fffff;
+  	i = (hx+0x95f64)&0x100000;
+  	__HI(x) = hx|(i^0x3ff00000);	
+  	k += (i>>20);
+  	f = x-1.0;
+  	if((0x000fffff&(2+hx))<3) {	
+  	    if(f==zero) if(k==0) return zero;  else {dk=(double)k;
+  				 return dk*ln2_hi+dk*ln2_lo;}
+  	    R = f*f*(0.5-0.33333333333333333*f);
+  	    if(k==0) return f-R; else {dk=(double)k;
+  	    	     return dk*ln2_hi-((R-dk*ln2_lo)-f);}
+  	}
+   	// Unexecuted code (lines 65-82) removed. Its line cov: 0/18 (0%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 91-92) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = __ieee754_log(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [e_log.c] enter main 3
+  [e_log.c] enter __ieee754_log 1
+  [e_log.c] enter __ieee754_log 2
+
+  [e_log.c] enter __ieee754_log 4

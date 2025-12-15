@@ -1,0 +1,363 @@
+id: 1
+src_id: 0
+create_time: '2025-12-14 13:19:29.043'
+time_taken: 121
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.72360000
+    call_cnt: 3
+    latency: 69.93s
+    input_tokens: 14076
+    output_tokens: 7368
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.54554000
+      call_cnt: 2
+      latency: 50.92s
+      input_tokens: 11266
+      output_tokens: 5337
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.11052000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.40058000
+      call_cnt: 1
+      latency: 43.79s
+      input_tokens: 5526
+      output_tokens: 4763
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03444000
+      call_cnt: 1
+      latency: 7.14s
+      input_tokens: 5740
+      output_tokens: 574
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.17806000
+      call_cnt: 1
+      latency: 19.00s
+      input_tokens: 2810
+      output_tokens: 2031
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05620000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.12186000
+      call_cnt: 1
+      latency: 19.00s
+      input_tokens: 2810
+      output_tokens: 2031
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (((ix - 0x3ff00000) | __LO(x)) == 0) -> true in e_acos.c::__ieee754_acos
+target_file_lines: e_acos.c:44-45
+target_lines_content: |-
+  		if(hx>0) {
+  		    return 0.0;
+justification: 'This inner branch handles the exact-value case x == +1.0 in acos.
+  It has zero historical coverage (lines 44-48: 0/5, 0%). The current harness supplies
+  the single argument "1.0", so this branch is directly reachable without changing
+  the harness and is core to correctness for boundary inputs, improving coverage of
+  special-case handling.'
+target_path_constraint: |-
+  Chronological, external-input constraints to reach the target branch (exact x == +1.0 case in __ieee754_acos):
+
+  1. Command invocation and arguments:
+     - The program must be executed via a shell command that provides exactly one command-line argument after the executable name. Under the given harness, the command format is a single string run by the shell (e.g., "./temp_executable 1.0"), which results in argc == 2.
+     - Ensure the shell does not alter or expand the numeric argument. The argument must be a plain decimal number string without shell metacharacters.
+
+  2. Argument format for atof(argv[1]):
+     - The sole argument must be a textual representation of the IEEE-754 double-precision value +1.0 so that the C library function atof parses it exactly to double 1.0.
+     - Acceptable textual forms that parse to +1.0 include: a simple decimal "1.0" or "1" (no trailing/leading non-numeric characters), optional leading plus sign is allowed ("+1.0").
+     - Disallow any formatting that could lead to a value different from 1.0 or introduce NaN/Infinity (e.g., "1.0e-308" or "1.0000000000000002"), because the target branch requires exactly x == +1.0 at the binary level.
+
+  3. Exact binary equality requirement at the start of __ieee754_acos:
+     - After atof parses the argument, the resulting double x must have the exact IEEE-754 binary representation of +1.0: sign bit 0, exponent 0x3ff, fraction 0x0000000000000.
+     - Formally: x == 1.0 and no rounding deviations; the lower 32 bits ("__LO(x)") must be 0, and the high 32 bits ("__HI(x)") must equal 0x3ff00000.
+
+  4. Environment assumptions:
+     - No locale or environment settings should alter atof’s decimal parsing (e.g., decimal comma locales). The decimal point character must be '.' so that the input string is parsed as intended.
+     - The executable must be present and executable; no file I/O is required beyond command-line parsing.
+
+  These constraints collectively guarantee that when main calls __ieee754_acos(a0), the function sees x exactly equal to +1.0, satisfying ((ix - 0x3ff00000) | __LO(x)) == 0 and taking the specified branch.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import os
+      import signal
+      import subprocess
+
+      # We ensure the locale uses '.' as the decimal separator and that parsing is in the C locale.
+      env = os.environ.copy()
+      env["LC_ALL"] = "C"
+      env["LANG"] = "C"
+      env["LC_NUMERIC"] = "C"
+
+      # Use exactly one plain numeric argument that atof parses to the IEEE-754 double +1.0.
+      # "1" is chosen to avoid any locale-dependent decimal separator concerns while still yielding 1.0 exactly.
+      cmd = "./temp_executable 1"
+
+      # Ensure the executable is present and executable; raise if not.
+      if not os.path.exists("./temp_executable"):
+          raise FileNotFoundError("./temp_executable not found")
+      if not os.access("./temp_executable", os.X_OK):
+          raise PermissionError("./temp_executable is not executable")
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+              env=env,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // e_acos.c (99 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double 
+  #else
+  static double 
+  #endif
+  one=  1.00000000000000000000e+00, 
+  pi =  3.14159265358979311600e+00, 
+  pio2_hi =  1.57079632679489655800e+00, 
+  pio2_lo =  6.12323399573676603587e-17, 
+  pS0 =  1.66666666666666657415e-01, 
+  pS1 = -3.25565818622400915405e-01, 
+  pS2 =  2.01212532134862925881e-01, 
+  pS3 = -4.00555345006794114027e-02, 
+  pS4 =  7.91534994289814532176e-04, 
+  pS5 =  3.47933107596021167570e-05, 
+  qS1 = -2.40339491173441421878e+00, 
+  qS2 =  2.02094576023350569471e+00, 
+  qS3 = -6.88283971605453293030e-01, 
+  qS4 =  7.70381505559019352791e-02; 
+
+  #ifdef __STDC__
+  	double __ieee754_acos(double x)
+  #else
+  	double __ieee754_acos(x)
+  	double x;
+  #endif
+  {
+  	double z,p,q,r,w,s,c,df;
+  	int hx,ix;
+  	hx = __HI(x);
+  	ix = hx&0x7fffffff;
+  	if(ix>=0x3ff00000) {	
+  	    fprintf(stderr, "\n");
+  	    if(((ix-0x3ff00000)|__LO(x))==0) {	
+  		// Unexecuted code (lines 44-48) removed. Its line cov: 0/5 (0%)
+  	    }
+  	    // Unexecuted code (line 50) removed. Its line cov: 0/1 (0%)
+  	}
+  	if(ix<0x3fe00000) {	
+  	    fprintf(stderr, "\n");
+  	    if(ix<=0x3c600000) {
+  		return pio2_hi+pio2_lo;
+  	    }
+  	    // Unexecuted code (lines 57-61) removed. Its line cov: 0/5 (0%)
+  	} else  if (hx<0) {		
+  	    // Unexecuted code (lines 63-69) removed. Its line cov: 0/7 (0%)
+  	} else {			
+  	    // Unexecuted code (lines 71-80) removed. Its line cov: 0/10 (0%)
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 90-91) removed. Its line cov: 0/2 (0%)
+      }
+      double a0 = atof(argv[1]);
+
+      double r = __ieee754_acos(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [e_acos.c] enter main 3
+  [e_acos.c] enter __ieee754_acos 1
+
+  [e_acos.c] enter __ieee754_acos 8
+execution_summary: |2+
+
+  ```c
+  // e_acos.c (99 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double 
+  #else
+  static double 
+  #endif
+  one=  1.00000000000000000000e+00, 
+  pi =  3.14159265358979311600e+00, 
+  pio2_hi =  1.57079632679489655800e+00, 
+  pio2_lo =  6.12323399573676603587e-17, 
+  pS0 =  1.66666666666666657415e-01, 
+  pS1 = -3.25565818622400915405e-01, 
+  pS2 =  2.01212532134862925881e-01, 
+  pS3 = -4.00555345006794114027e-02, 
+  pS4 =  7.91534994289814532176e-04, 
+  pS5 =  3.47933107596021167570e-05, 
+  qS1 = -2.40339491173441421878e+00, 
+  qS2 =  2.02094576023350569471e+00, 
+  qS3 = -6.88283971605453293030e-01, 
+  qS4 =  7.70381505559019352791e-02; 
+
+  #ifdef __STDC__
+  	double __ieee754_acos(double x)
+  #else
+  	double __ieee754_acos(x)
+  	double x;
+  #endif
+  {
+  	double z,p,q,r,w,s,c,df;
+  	int hx,ix;
+  	hx = __HI(x);
+  	ix = hx&0x7fffffff;
+  	if(ix>=0x3ff00000) {	
+  	    fprintf(stderr, "\n");
+  	    if(((ix-0x3ff00000)|__LO(x))==0) {	
+  		// Unexecuted code (lines 44-48) removed. Its line cov: 0/5 (0%)
+  	    }
+  	    // Unexecuted code (line 50) removed. Its line cov: 0/1 (0%)
+  	}
+  	if(ix<0x3fe00000) {	
+  	    fprintf(stderr, "\n");
+  	    if(ix<=0x3c600000) {
+  		return pio2_hi+pio2_lo;
+  	    }
+  	    // Unexecuted code (lines 57-61) removed. Its line cov: 0/5 (0%)
+  	} else  if (hx<0) {		
+  	    // Unexecuted code (lines 63-69) removed. Its line cov: 0/7 (0%)
+  	} else {			
+  	    // Unexecuted code (lines 71-80) removed. Its line cov: 0/10 (0%)
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 90-91) removed. Its line cov: 0/2 (0%)
+      }
+      double a0 = atof(argv[1]);
+
+      double r = __ieee754_acos(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [e_acos.c] enter main 3
+  [e_acos.c] enter __ieee754_acos 1
+
+  [e_acos.c] enter __ieee754_acos 8

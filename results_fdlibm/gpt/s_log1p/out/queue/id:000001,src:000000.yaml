@@ -1,0 +1,357 @@
+id: 1
+src_id: 0
+create_time: '2025-12-14 18:58:56.709'
+time_taken: 214
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $1.08162000
+    call_cnt: 4
+    latency: 98.63s
+    input_tokens: 22389
+    output_tokens: 10564
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.91806000
+      call_cnt: 3
+      latency: 83.18s
+      input_tokens: 19749
+      output_tokens: 8718
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10732000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.27828000
+      call_cnt: 1
+      latency: 24.45s
+      input_tokens: 5366
+      output_tokens: 2279
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.50900000
+      call_cnt: 1
+      latency: 47.41s
+      input_tokens: 7077
+      output_tokens: 6048
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.02346000
+      call_cnt: 1
+      latency: 11.32s
+      input_tokens: 7306
+      output_tokens: 391
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.16356000
+      call_cnt: 1
+      latency: 15.44s
+      input_tokens: 2640
+      output_tokens: 1846
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05280000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.11076000
+      call_cnt: 1
+      latency: 15.44s
+      input_tokens: 2640
+      output_tokens: 1846
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: 'In log1p() (s_log1p.c): `if (ax >= 0x3ff00000)` -> true, and the inner
+  check `if (x == -1.0)` -> true'
+target_file_lines: s_log1p.c:44-45
+target_lines_content: |-
+  		if(x==-1.0) return -two54/zero; 
+  		else return (x-x)/(x-x);	
+justification: This branch handles the mathematically significant edge case log1p(-1),
+  producing a negative infinity via division by zero. Both lines inside this branch
+  have 0% historical coverage (lines 44-45 marked as not covered). Exercising this
+  path validates error handling for the boundary of the function’s domain and adds
+  coverage to currently untouched code.
+target_path_constraint: |-
+  Constraints to drive execution to log1p() branch ax >= 0x3ff00000 with x == -1.0:
+
+  1) Program invocation via shell must pass exactly one command-line argument to the program (so that argc == 2 inside main). Environment must allow normal process creation.
+
+  2) The single command-line argument must be a textual representation of the floating-point value -1.0 such that the C standard library function atof parses it to the double value exactly equal to -1.0. Accepted encodings include optional leading/trailing whitespace per C locale rules, an optional leading '+' or '-' sign, and a decimal/exponential notation that results in -1.0. The critical requirement is that the resulting double equals -1.0 exactly (IEEE-754), not merely approximately.
+
+  3) No locale or environment settings may alter atof’s interpretation of the decimal point; it must use a dot '.' as the decimal separator (typical "C" locale). If locales could vary, set LC_NUMERIC=C to guarantee '.' decimal parsing.
+
+  4) With x == -1.0, in log1p(x):
+     - The bitwise condition ax >= 0x3ff00000 becomes true because |x| = 1.0 produces exponent bits corresponding to 1.0.
+     - The inner equality check x == -1.0 is satisfied, taking the first return in that block.
+
+  5) No other preconditions are required: standard I/O available to print the result; no need for files or stdin.
+
+  Summary (SMT-style):
+  - Input string S over ASCII must satisfy: atof_C_locale(S) = -1.0 exactly.
+  - Process args length = 2 (argv[0], S).
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import os
+      import signal
+      import subprocess
+
+      # Prepare environment to ensure C locale numeric parsing (decimal point '.')
+      env = os.environ.copy()
+      env["LC_NUMERIC"] = "C"
+      # Ensure no overriding of LC_NUMERIC by LC_ALL
+      env["LC_ALL"] = "C"
+
+      try:
+          # Execute the original harness but with the concrete input that makes atof == -1.0 exactly
+          # Using shell=True with a single string ensures one argument is passed to the program
+          result = subprocess.run(
+              ["./temp_executable -1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              env=env,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred; return any stderr captured before timeout and a killed return code
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed for other reasons
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // s_log1p.c (111 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double
+  #else
+  static double
+  #endif
+  ln2_hi  =  6.93147180369123816490e-01,	
+  ln2_lo  =  1.90821492927058770002e-10,	
+  two54   =  1.80143985094819840000e+16,  
+  Lp1 = 6.666666666666735130e-01,  
+  Lp2 = 3.999999999940941908e-01,  
+  Lp3 = 2.857142874366239149e-01,  
+  Lp4 = 2.222219843214978396e-01,  
+  Lp5 = 1.818357216161805012e-01,  
+  Lp6 = 1.531383769920937332e-01,  
+  Lp7 = 1.479819860511658591e-01;  
+
+  static double zero = 0.0;
+
+  #ifdef __STDC__
+  	double log1p(double x)
+  #else
+  	double log1p(x)
+  	double x;
+  #endif
+  {
+  	double hfsq,f,c,s,z,R,u;
+  	int k,hx,hu,ax;
+
+  	hx = __HI(x);		
+  	ax = hx&0x7fffffff;
+
+  	k = 1;
+  	if (hx < 0x3FDA827A) {			
+  	    if(ax>=0x3ff00000) {		
+  		// Unexecuted code (lines 44-45) removed. Its line cov: 0/2 (0%)
+  	    }
+  	    if(ax<0x3e200000) {			
+  		if(two54+x>zero			
+  	            &&ax<0x3c900000) 		
+  		    return x;
+  		else
+  		    return x - x*x*0.5;
+  	    }
+  	    // Unexecuted code (lines 54-55) removed. Its line cov: 0/2 (0%)
+  	} 
+  	// Unexecuted code (lines 57-93) removed. Its line cov: 0/37 (0%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      if (argc != 2) {
+          // Unexecuted code (lines 101-102) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = log1p(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [s_log1p.c] enter main 1
+  [s_log1p.c] enter main 3
+  [s_log1p.c] enter log1p 1
+  [s_log1p.c] enter log1p 3
+execution_summary: |2+
+
+  ```c
+  // s_log1p.c (111 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double
+  #else
+  static double
+  #endif
+  ln2_hi  =  6.93147180369123816490e-01,	
+  ln2_lo  =  1.90821492927058770002e-10,	
+  two54   =  1.80143985094819840000e+16,  
+  Lp1 = 6.666666666666735130e-01,  
+  Lp2 = 3.999999999940941908e-01,  
+  Lp3 = 2.857142874366239149e-01,  
+  Lp4 = 2.222219843214978396e-01,  
+  Lp5 = 1.818357216161805012e-01,  
+  Lp6 = 1.531383769920937332e-01,  
+  Lp7 = 1.479819860511658591e-01;  
+
+  static double zero = 0.0;
+
+  #ifdef __STDC__
+  	double log1p(double x)
+  #else
+  	double log1p(x)
+  	double x;
+  #endif
+  {
+  	double hfsq,f,c,s,z,R,u;
+  	int k,hx,hu,ax;
+
+  	hx = __HI(x);		
+  	ax = hx&0x7fffffff;
+
+  	k = 1;
+  	if (hx < 0x3FDA827A) {			
+  	    if(ax>=0x3ff00000) {		
+  		// Unexecuted code (lines 44-45) removed. Its line cov: 0/2 (0%)
+  	    }
+  	    if(ax<0x3e200000) {			
+  		if(two54+x>zero			
+  	            &&ax<0x3c900000) 		
+  		    return x;
+  		else
+  		    return x - x*x*0.5;
+  	    }
+  	    // Unexecuted code (lines 54-55) removed. Its line cov: 0/2 (0%)
+  	} 
+  	// Unexecuted code (lines 57-93) removed. Its line cov: 0/37 (0%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      if (argc != 2) {
+          // Unexecuted code (lines 101-102) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = log1p(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [s_log1p.c] enter main 1
+  [s_log1p.c] enter main 3
+  [s_log1p.c] enter log1p 1
+  [s_log1p.c] enter log1p 3

@@ -1,0 +1,373 @@
+id: 2
+src_id: 0
+create_time: '2025-12-14 19:07:43.983'
+time_taken: 750
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: true
+newly_covered_lines: 2
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $3.04480000
+    call_cnt: 7
+    latency: 373.82s
+    input_tokens: 40922
+    output_tokens: 37106
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $2.78636000
+      call_cnt: 6
+      latency: 349.77s
+      input_tokens: 37855
+      output_tokens: 33821
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10870000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.26498000
+      call_cnt: 1
+      latency: 22.29s
+      input_tokens: 5435
+      output_tokens: 2279
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    non_tool:
+      model: gpt-5
+      cost: $1.86168000
+      call_cnt: 3
+      latency: 249.27s
+      input_tokens: 19296
+      output_tokens: 24576
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.50186000
+      call_cnt: 1
+      latency: 68.32s
+      input_tokens: 6472
+      output_tokens: 6147
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.04914000
+      call_cnt: 1
+      latency: 9.88s
+      input_tokens: 6652
+      output_tokens: 819
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.25844000
+      call_cnt: 1
+      latency: 24.05s
+      input_tokens: 3067
+      output_tokens: 3285
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.06134000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.19710000
+      call_cnt: 1
+      latency: 24.05s
+      input_tokens: 3067
+      output_tokens: 3285
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (hx < 0x3FDA827A) -> false in s_log1p.c:log1p
+target_file_lines: s_log1p.c:60-64
+target_lines_content: |-
+  		u  = 1.0+x; 
+  	        hu = __HI(u);		
+  	        k  = (hu>>20)-1023;
+  	        c  = (k>0)? 1.0-(u-x):x-(u-1.0);
+  		c /= u;
+justification: 'This selects the main computation path of log1p that is currently
+  entirely uncovered (lines 57-93 show line cov: 0/37). Steering execution away from
+  the small-|x| early-return cases will exercise the core normalization and polynomial
+  evaluation logic, substantially improving coverage and exploring complex behavior.'
+target_path_constraint: |-
+  Chronological, self-contained constraints to make the branch `if (hx < 0x3FDA827A)` evaluate to false inside log1p(x):
+
+  1. Command invocation format:
+     - The program is executed via a shell command string. Do not modify the executable name or the argument count model; provide exactly one command-line argument following the executable name.
+     - The single argument must be a textual representation of a finite double-precision floating-point number in standard decimal notation that atof can parse (e.g., optional leading sign, digits, optional decimal point, optional fractional digits). No scientific notation is required but allowed if atof supports it; avoid leading/trailing spaces to prevent locale issues.
+
+  2. Argument count and parsing:
+     - Ensure exactly one argument is present (argc == 2 from the program’s perspective). The harness already supplies one; do not add more tokens or spaces that would split into multiple arguments under the shell.
+     - The argument must successfully convert via atof to a non-NaN, non-infinite double value x.
+
+  3. Value range to force `hx < 0x3FDA827A` to be false:
+     - `hx` is the IEEE-754 double’s high 32-bit word. The condition `hx < 0x3FDA827A` being false means `hx >= 0x3FDA827A`.
+     - Concretely, this requires the magnitude of x to be at least roughly 0.853553390593 (since 0x3FDA827A corresponds near that threshold for positive numbers) or any value with a high-word >= that bit pattern, including larger positive values and all negative values with sufficiently large magnitude in high-word ordering. To stay within the domain where the later normalization path executes, avoid triggering other early returns:
+       a) Do NOT make x so large that `hx >= 0x7ff00000` (this represents NaN/Inf). Thus, x must be finite.
+       b) Avoid values that would place ax (absolute high word) below tiny thresholds, since we want to skip the already-covered small-|x| returns.
+     - Therefore, require: |x| >= T where T is the minimal positive double whose high 32-bit word equals 0x3FDA827A, and x is finite.
+
+  4. Additional constraints to ensure entering the normalization/polynomial path:
+     - Exclude x = -1.0 specifically only if it would be checked earlier; however that check is inside a different branch guarded by `ax >= 0x3ff00000` AND `hx < 0x3FDA827A`. Since we set `hx >= 0x3FDA827A` (false path), that earlier branch is bypassed; no need to constrain x ≠ -1.0.
+     - Ensure that after bypassing the small-|x| block, the function reaches the general path beginning at line 57. This will happen when x is a finite number with `hx >= 0x3FDA827A`.
+
+  5. Environmental constraints:
+     - No file I/O is used; environment variables and locale should not alter atof behavior materially. Use plain ASCII digits and dot as decimal separator.
+
+  Summary SMT-style (over real interpretation of atof):
+  - Let x = atof(argv[1]). Constraints:
+    a) argc == 2.
+    b) x ∈ ℝ and is finite (not ±∞, not NaN).
+    c) IEEE-754 high-word of x, hx(x), satisfies hx(x) ≥ 0x3FDA827A.
+
+  These constraints guarantee the branch evaluates to false and the execution proceeds through the main normalization/polynomial block (lines 60-64 within the selected region will execute).
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Provide a single finite double argument whose high 32-bit word satisfies hx >= 0x3FDA827A.
+      # Chosen value: 0.9 (decimal), which is > ~0.853553390593 and finite.
+      # Keep the same shell-based command structure with exactly one argument.
+      cmd = "./temp_executable 0.9"
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // s_log1p.c (111 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double
+  #else
+  static double
+  #endif
+  ln2_hi  =  6.93147180369123816490e-01,	
+  ln2_lo  =  1.90821492927058770002e-10,	
+  two54   =  1.80143985094819840000e+16,  
+  Lp1 = 6.666666666666735130e-01,  
+  Lp2 = 3.999999999940941908e-01,  
+  Lp3 = 2.857142874366239149e-01,  
+  Lp4 = 2.222219843214978396e-01,  
+  Lp5 = 1.818357216161805012e-01,  
+  Lp6 = 1.531383769920937332e-01,  
+  Lp7 = 1.479819860511658591e-01;  
+
+  static double zero = 0.0;
+
+  #ifdef __STDC__
+  	double log1p(double x)
+  #else
+  	double log1p(x)
+  	double x;
+  #endif
+  {
+  	double hfsq,f,c,s,z,R,u;
+  	int k,hx,hu,ax;
+
+  	hx = __HI(x);		
+  	ax = hx&0x7fffffff;
+
+  	k = 1;
+  	if (hx < 0x3FDA827A) {			
+  	    if(ax>=0x3ff00000) {		
+  		// Unexecuted code (lines 44-45) removed. Its line cov: 0/2 (0%)
+  	    }
+  	    if(ax<0x3e200000) {			
+  		if(two54+x>zero			
+  	            &&ax<0x3c900000) 		
+  		    return x;
+  		else
+  		    return x - x*x*0.5;
+  	    }
+  	    // Unexecuted code (lines 54-55) removed. Its line cov: 0/2 (0%)
+  	} 
+  	// Unexecuted code (lines 57-93) removed. Its line cov: 0/37 (0%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      if (argc != 2) {
+          // Unexecuted code (lines 101-102) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = log1p(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [s_log1p.c] enter main 1
+  [s_log1p.c] enter main 3
+  [s_log1p.c] enter log1p 1
+  [s_log1p.c] enter log1p 2
+execution_summary: |2+
+
+  ```c
+  // s_log1p.c (111 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double
+  #else
+  static double
+  #endif
+  ln2_hi  =  6.93147180369123816490e-01,	
+  ln2_lo  =  1.90821492927058770002e-10,	
+  two54   =  1.80143985094819840000e+16,  
+  Lp1 = 6.666666666666735130e-01,  
+  Lp2 = 3.999999999940941908e-01,  
+  Lp3 = 2.857142874366239149e-01,  
+  Lp4 = 2.222219843214978396e-01,  
+  Lp5 = 1.818357216161805012e-01,  
+  Lp6 = 1.531383769920937332e-01,  
+  Lp7 = 1.479819860511658591e-01;  
+
+  static double zero = 0.0;
+
+  #ifdef __STDC__
+  	double log1p(double x)
+  #else
+  	double log1p(x)
+  	double x;
+  #endif
+  {
+  	double hfsq,f,c,s,z,R,u;
+  	int k,hx,hu,ax;
+
+  	hx = __HI(x);		
+  	ax = hx&0x7fffffff;
+
+  	k = 1;
+  	if (hx < 0x3FDA827A) {			
+  	    if(ax>=0x3ff00000) {		
+  		if(x==-1.0) return -two54/zero; 
+  		else return (x-x)/(x-x);	
+  	    }
+  	    if(ax<0x3e200000) {			
+  		// Unexecuted code (lines 48-52) removed. Its line cov: 5/5 (100%)
+  	    }
+  	    // Unexecuted code (lines 54-55) removed. Its line cov: 0/2 (0%)
+  	} 
+  	// Unexecuted code (lines 57-93) removed. Its line cov: 0/37 (0%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      if (argc != 2) {
+          // Unexecuted code (lines 101-102) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = log1p(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [s_log1p.c] enter main 1
+  [s_log1p.c] enter main 3
+  [s_log1p.c] enter log1p 1
+  [s_log1p.c] enter log1p 3

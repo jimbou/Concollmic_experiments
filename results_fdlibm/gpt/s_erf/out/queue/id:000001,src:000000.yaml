@@ -1,0 +1,501 @@
+id: 1
+src_id: 0
+create_time: '2025-12-14 17:47:32.055'
+time_taken: 123
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.78608000
+    call_cnt: 3
+    latency: 81.16s
+    input_tokens: 16060
+    output_tokens: 7748
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.66422000
+      call_cnt: 2
+      latency: 72.19s
+      input_tokens: 13432
+      output_tokens: 6593
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.13244000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.50934000
+      call_cnt: 1
+      latency: 65.91s
+      input_tokens: 6622
+      output_tokens: 6219
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.02244000
+      call_cnt: 1
+      latency: 6.27s
+      input_tokens: 6810
+      output_tokens: 374
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.12186000
+      call_cnt: 1
+      latency: 8.97s
+      input_tokens: 2628
+      output_tokens: 1155
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05256000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.06930000
+      call_cnt: 1
+      latency: 8.97s
+      input_tokens: 2628
+      output_tokens: 1155
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (ix >= 0x7ff00000) -> true in s_erf.c:erf(double)
+target_file_lines: s_erf.c:94-95
+target_lines_content: |-
+  	    i = ((unsigned)hx>>31)<<1;
+  	    return (double)(1-i)+one/x;
+justification: This branch handles non-finite inputs (NaN/±Inf) and currently has
+  0% historical coverage (lines 94-95). Exercising it validates boundary behavior
+  for special floating-point values and will cover code that is completely untested
+  by existing cases. It is reachable via the program’s single command-line argument
+  parsed as a double.
+target_path_constraint: |-
+  Program inputs and environment, in order encountered:
+
+  1) Process invocation:
+  - The executable must be launched with exactly one command-line argument (argc == 2 as seen by main). No additional arguments or spaces that would create extra argv entries.
+
+  2) Argument format and parsing:
+  - The single command-line argument is interpreted by the C function atof and then passed as a double to erf().
+  - Therefore, the argument must be a textual representation that atof parses into a non-finite double: either positive infinity, negative infinity, or NaN. The exact accepted strings depend on the C library but commonly include representations like "inf", "+inf", "-inf", "infinity", or "nan(...)" (case-insensitive variants may be accepted). The constraint at this layer is: atof(argv[1]) ∈ {+∞, −∞, NaN}.
+
+  3) Floating-point special-value condition at erf entry:
+  - Let x = atof(argv[1]). The bit-level test in erf computes ix = high_32_bits_of(x) & 0x7fffffff and checks ix >= 0x7ff00000. This condition is true precisely when x is either an infinity or NaN (any sign). Thus the input must ensure x is non-finite.
+
+  4) Environment assumptions:
+  - The process must have a standard C locale where atof recognizes the chosen non-finite token, or otherwise the provided string must be one of the universally accepted tokens defined by the used C library implementation. No files or environment variables are required.
+
+  These constraints guarantee control reaches the branch `if (ix >= 0x7ff00000)` with condition evaluating to true.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          # Use a single non-finite token so atof(argv[1]) is infinity
+          # This ensures ix >= 0x7ff00000 evaluates to true in erf's special-value check
+          result = subprocess.run(
+              ["./temp_executable inf"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // s_erf.c (261 lines total)
+
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double
+  #else
+  static double
+  #endif
+  tiny	    = 1e-300,
+  half=  5.00000000000000000000e-01, 
+  one =  1.00000000000000000000e+00, 
+  two =  2.00000000000000000000e+00, 
+  	
+  erx =  8.45062911510467529297e-01, 
+
+  efx =  1.28379167095512586316e-01, 
+  efx8=  1.02703333676410069053e+00, 
+  pp0  =  1.28379167095512558561e-01, 
+  pp1  = -3.25042107247001499370e-01, 
+  pp2  = -2.84817495755985104766e-02, 
+  pp3  = -5.77027029648944159157e-03, 
+  pp4  = -2.37630166566501626084e-05, 
+  qq1  =  3.97917223959155352819e-01, 
+  qq2  =  6.50222499887672944485e-02, 
+  qq3  =  5.08130628187576562776e-03, 
+  qq4  =  1.32494738004321644526e-04, 
+  qq5  = -3.96022827877536812320e-06, 
+
+  pa0  = -2.36211856075265944077e-03, 
+  pa1  =  4.14856118683748331666e-01, 
+  pa2  = -3.72207876035701323847e-01, 
+  pa3  =  3.18346619901161753674e-01, 
+  pa4  = -1.10894694282396677476e-01, 
+  pa5  =  3.54783043256182359371e-02, 
+  pa6  = -2.16637559486879084300e-03, 
+  qa1  =  1.06420880400844228286e-01, 
+  qa2  =  5.40397917702171048937e-01, 
+  qa3  =  7.18286544141962662868e-02, 
+  qa4  =  1.26171219808761642112e-01, 
+  qa5  =  1.36370839120290507362e-02, 
+  qa6  =  1.19844998467991074170e-02, 
+
+  ra0  = -9.86494403484714822705e-03, 
+  ra1  = -6.93858572707181764372e-01, 
+  ra2  = -1.05586262253232909814e+01, 
+  ra3  = -6.23753324503260060396e+01, 
+  ra4  = -1.62396669462573470355e+02, 
+  ra5  = -1.84605092906711035994e+02, 
+  ra6  = -8.12874355063065934246e+01, 
+  ra7  = -9.81432934416914548592e+00, 
+  sa1  =  1.96512716674392571292e+01, 
+  sa2  =  1.37657754143519042600e+02, 
+  sa3  =  4.34565877475229228821e+02, 
+  sa4  =  6.45387271733267880336e+02, 
+  sa5  =  4.29008140027567833386e+02, 
+  sa6  =  1.08635005541779435134e+02, 
+  sa7  =  6.57024977031928170135e+00, 
+  sa8  = -6.04244152148580987438e-02, 
+
+  rb0  = -9.86494292470009928597e-03, 
+  rb1  = -7.99283237680523006574e-01, 
+  rb2  = -1.77579549177547519889e+01, 
+  rb3  = -1.60636384855821916062e+02, 
+  rb4  = -6.37566443368389627722e+02, 
+  rb5  = -1.02509513161107724954e+03, 
+  rb6  = -4.83519191608651397019e+02, 
+  sb1  =  3.03380607434824582924e+01, 
+  sb2  =  3.25792512996573918826e+02, 
+  sb3  =  1.53672958608443695994e+03, 
+  sb4  =  3.19985821950859553908e+03, 
+  sb5  =  2.55305040643316442583e+03, 
+  sb6  =  4.74528541206955367215e+02, 
+  sb7  = -2.24409524465858183362e+01; 
+
+  #ifdef __STDC__
+  	double erf(double x) 
+  #else
+  	double erf(x) 
+  	double x;
+  #endif
+  {
+  	int hx,ix,i;
+  	double R,S,P,Q,s,y,z,r;
+  	hx = __HI(x);
+  	ix = hx&0x7fffffff;
+  	if(ix>=0x7ff00000) {		
+  	    // Unexecuted code (lines 94-95) removed. Its line cov: 0/2 (0%)
+  	}
+
+  	if(ix < 0x3feb0000) {		
+  	    if(ix < 0x3e300000) { 	
+  	        if (ix < 0x00800000) 
+  		{
+  		    return 0.125*(8.0*x+efx8*x);
+  		}
+  		// Unexecuted code (line 104) removed. Its line cov: 0/1 (0%)
+  	    }
+  	    // Unexecuted code (lines 106-110) removed. Its line cov: 0/5 (0%)
+  	}
+  	if(ix < 0x3ff40000) {		
+  	    // Unexecuted code (lines 113-123) removed. Its line cov: 0/11 (0%)
+  	}
+  	if (ix >= 0x40180000) {		
+  	    // Unexecuted code (lines 126-133) removed. Its line cov: 0/8 (0%)
+  	}
+  	// Unexecuted code (lines 135-158) removed. Its line cov: 0/24 (0%)
+  }
+
+  #ifdef __STDC__
+  	double erfc(double x) 
+  #else
+  	double erfc(x) 
+  	double x;
+  #endif
+  {
+  	// Unexecuted code (lines 168-175) removed. Its line cov: 0/7 (0%)
+
+  	if(ix < 0x3feb0000) {		
+  	    // Unexecuted code (lines 178-192) removed. Its line cov: 0/15 (0%)
+  	}
+  	if(ix < 0x3ff40000) {		
+  	    // Unexecuted code (lines 195-202) removed. Its line cov: 0/8 (0%)
+  	}
+  	if (ix < 0x403c0000) {		
+  	    // Unexecuted code (lines 205-233) removed. Its line cov: 0/29 (0%)
+  	} else {
+  	    // Unexecuted code (lines 235-242) removed. Its line cov: 0/8 (0%)
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      if (argc != 2) {
+          // Unexecuted code (lines 251-252) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = erf(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [s_erf.c] enter main 1
+  [s_erf.c] enter main 3
+  [s_erf.c] enter main 4
+  [s_erf.c] enter erf 1
+  [s_erf.c] enter erf 3
+  [s_erf.c] enter erf 4
+  [s_erf.c] enter erf 5
+execution_summary: |2+
+
+  ```c
+  // s_erf.c (261 lines total)
+
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double
+  #else
+  static double
+  #endif
+  tiny	    = 1e-300,
+  half=  5.00000000000000000000e-01, 
+  one =  1.00000000000000000000e+00, 
+  two =  2.00000000000000000000e+00, 
+  	
+  erx =  8.45062911510467529297e-01, 
+
+  efx =  1.28379167095512586316e-01, 
+  efx8=  1.02703333676410069053e+00, 
+  pp0  =  1.28379167095512558561e-01, 
+  pp1  = -3.25042107247001499370e-01, 
+  pp2  = -2.84817495755985104766e-02, 
+  pp3  = -5.77027029648944159157e-03, 
+  pp4  = -2.37630166566501626084e-05, 
+  qq1  =  3.97917223959155352819e-01, 
+  qq2  =  6.50222499887672944485e-02, 
+  qq3  =  5.08130628187576562776e-03, 
+  qq4  =  1.32494738004321644526e-04, 
+  qq5  = -3.96022827877536812320e-06, 
+
+  pa0  = -2.36211856075265944077e-03, 
+  pa1  =  4.14856118683748331666e-01, 
+  pa2  = -3.72207876035701323847e-01, 
+  pa3  =  3.18346619901161753674e-01, 
+  pa4  = -1.10894694282396677476e-01, 
+  pa5  =  3.54783043256182359371e-02, 
+  pa6  = -2.16637559486879084300e-03, 
+  qa1  =  1.06420880400844228286e-01, 
+  qa2  =  5.40397917702171048937e-01, 
+  qa3  =  7.18286544141962662868e-02, 
+  qa4  =  1.26171219808761642112e-01, 
+  qa5  =  1.36370839120290507362e-02, 
+  qa6  =  1.19844998467991074170e-02, 
+
+  ra0  = -9.86494403484714822705e-03, 
+  ra1  = -6.93858572707181764372e-01, 
+  ra2  = -1.05586262253232909814e+01, 
+  ra3  = -6.23753324503260060396e+01, 
+  ra4  = -1.62396669462573470355e+02, 
+  ra5  = -1.84605092906711035994e+02, 
+  ra6  = -8.12874355063065934246e+01, 
+  ra7  = -9.81432934416914548592e+00, 
+  sa1  =  1.96512716674392571292e+01, 
+  sa2  =  1.37657754143519042600e+02, 
+  sa3  =  4.34565877475229228821e+02, 
+  sa4  =  6.45387271733267880336e+02, 
+  sa5  =  4.29008140027567833386e+02, 
+  sa6  =  1.08635005541779435134e+02, 
+  sa7  =  6.57024977031928170135e+00, 
+  sa8  = -6.04244152148580987438e-02, 
+
+  rb0  = -9.86494292470009928597e-03, 
+  rb1  = -7.99283237680523006574e-01, 
+  rb2  = -1.77579549177547519889e+01, 
+  rb3  = -1.60636384855821916062e+02, 
+  rb4  = -6.37566443368389627722e+02, 
+  rb5  = -1.02509513161107724954e+03, 
+  rb6  = -4.83519191608651397019e+02, 
+  sb1  =  3.03380607434824582924e+01, 
+  sb2  =  3.25792512996573918826e+02, 
+  sb3  =  1.53672958608443695994e+03, 
+  sb4  =  3.19985821950859553908e+03, 
+  sb5  =  2.55305040643316442583e+03, 
+  sb6  =  4.74528541206955367215e+02, 
+  sb7  = -2.24409524465858183362e+01; 
+
+  #ifdef __STDC__
+  	double erf(double x) 
+  #else
+  	double erf(x) 
+  	double x;
+  #endif
+  {
+  	int hx,ix,i;
+  	double R,S,P,Q,s,y,z,r;
+  	hx = __HI(x);
+  	ix = hx&0x7fffffff;
+  	if(ix>=0x7ff00000) {		
+  	    // Unexecuted code (lines 94-95) removed. Its line cov: 0/2 (0%)
+  	}
+
+  	if(ix < 0x3feb0000) {		
+  	    if(ix < 0x3e300000) { 	
+  	        if (ix < 0x00800000) 
+  		{
+  		    return 0.125*(8.0*x+efx8*x);
+  		}
+  		// Unexecuted code (line 104) removed. Its line cov: 0/1 (0%)
+  	    }
+  	    // Unexecuted code (lines 106-110) removed. Its line cov: 0/5 (0%)
+  	}
+  	if(ix < 0x3ff40000) {		
+  	    // Unexecuted code (lines 113-123) removed. Its line cov: 0/11 (0%)
+  	}
+  	if (ix >= 0x40180000) {		
+  	    // Unexecuted code (lines 126-133) removed. Its line cov: 0/8 (0%)
+  	}
+  	// Unexecuted code (lines 135-158) removed. Its line cov: 0/24 (0%)
+  }
+
+  #ifdef __STDC__
+  	double erfc(double x) 
+  #else
+  	double erfc(x) 
+  	double x;
+  #endif
+  {
+  	// Unexecuted code (lines 168-175) removed. Its line cov: 0/7 (0%)
+
+  	if(ix < 0x3feb0000) {		
+  	    // Unexecuted code (lines 178-192) removed. Its line cov: 0/15 (0%)
+  	}
+  	if(ix < 0x3ff40000) {		
+  	    // Unexecuted code (lines 195-202) removed. Its line cov: 0/8 (0%)
+  	}
+  	if (ix < 0x403c0000) {		
+  	    // Unexecuted code (lines 205-233) removed. Its line cov: 0/29 (0%)
+  	} else {
+  	    // Unexecuted code (lines 235-242) removed. Its line cov: 0/8 (0%)
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      if (argc != 2) {
+          // Unexecuted code (lines 251-252) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = erf(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [s_erf.c] enter main 1
+  [s_erf.c] enter main 3
+  [s_erf.c] enter main 4
+  [s_erf.c] enter erf 1
+  [s_erf.c] enter erf 3
+  [s_erf.c] enter erf 4
+  [s_erf.c] enter erf 5

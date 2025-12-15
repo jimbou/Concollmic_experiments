@@ -1,0 +1,354 @@
+id: 4
+src_id: 0
+create_time: '2025-12-14 19:56:16.439'
+time_taken: 577
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 1
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.72412000
+    call_cnt: 3
+    latency: 89.33s
+    input_tokens: 14012
+    output_tokens: 7398
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.59578000
+      call_cnt: 2
+      latency: 78.01s
+      input_tokens: 11138
+      output_tokens: 6217
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10938000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.44818000
+      call_cnt: 1
+      latency: 69.44s
+      input_tokens: 5469
+      output_tokens: 5580
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03822000
+      call_cnt: 1
+      latency: 8.57s
+      input_tokens: 5669
+      output_tokens: 637
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.12834000
+      call_cnt: 1
+      latency: 11.32s
+      input_tokens: 2874
+      output_tokens: 1181
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05748000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.07086000
+      call_cnt: 1
+      latency: 11.32s
+      input_tokens: 2874
+      output_tokens: 1181
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if ((lx | (hx & 0x7fffffff)) == 0) -> true in s_scalbn.c:scalbn (x
+  is exactly ±0)
+target_file_lines: s_scalbn.c:29-29
+target_lines_content: "\t\treturn x;"
+justification: 'This branch has zero historical coverage (line cov: 0/1 (0%)) and
+  represents the zero-input fast path of scalbn, a core special-case behavior. Exercising
+  it increases coverage of fundamental edge-case handling without requiring any changes
+  to the harness beyond command-line arguments.'
+target_path_constraint: |-
+  Chronological, input-level constraints to reach the branch (lx | (hx & 0x7fffffff)) == 0 in scalbn:
+
+  1. Command invocation format:
+     - Use the existing harness invocation style with a single shell command string. The program is executed as: "./temp_executable <arg1> <arg2>".
+     - Ensure exactly two command-line arguments are provided after the executable name.
+
+  2. Argument parsing expectations:
+     - The first argument (<arg1>) is parsed as a double-precision floating-point number using a standard C ASCII-to-double conversion (similar to strtod/atof). It accepts optional leading/trailing whitespace, an optional sign (+/-), digits, an optional decimal point, and/or an exponent part (e.g., "e±N").
+     - The second argument (<arg2>) is parsed as a base-10 integer using standard C ASCII-to-int conversion (similar to atoi). It accepts optional leading/trailing whitespace, an optional sign, and digits until a non-digit character.
+
+  3. File-system/environment constraints:
+     - No files need to be read. The executable must exist and be runnable in the current working directory. No environment variables are required.
+
+  4. Numeric value constraints to trigger the target branch (x exactly ±0):
+     - Let x be the numeric value obtained from <arg1>. Require that x is exactly representable as IEEE-754 double zero. This means one of the following textual forms must parse to a floating zero:
+       * A canonical zero literal, e.g., optional sign then 0 with optional fractional part consisting only of zeros, and optional exponent that keeps the value at 0 (any exponent leaves 0 as 0). Examples of permitted forms include patterns like "+0", "-0", "0", "0.0", "-0.000", or "0e10". Avoid any nonzero digit anywhere in the significand.
+     - This ensures both the high and low 32-bit words of x correspond to the IEEE-754 zero representation, satisfying (lx | (hx & 0x7fffffff)) == 0.
+
+  5. Integer exponent argument constraints (n arbitrary):
+     - The second argument n can be any integer in the parsing domain; no additional constraints are required for this branch beyond being a valid integer string. It may be positive, zero, or negative.
+
+  6. Additional robustness constraints for parsing stability:
+     - Do not include trailing non-numeric characters in either argument (beyond permissible whitespace) to avoid partial parsing leading to unintended nonzero values for x or undefined integer parsing for n.
+
+  Outcome mapping:
+  - With x parsed as exactly ±0, scalbn will enter the k==0 subpath and the zero-value check (lx | (hx & 0x7fffffff)) == 0 evaluates true, reaching the targeted branch body.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Use x = 0 (exact IEEE-754 zero) to satisfy (lx | (hx & 0x7fffffff)) == 0 in scalbn
+      # Provide exactly two arguments as required: <arg1>=0 and <arg2>=0
+      cmd = ["./temp_executable 0 0"]
+
+      try:
+          result = subprocess.run(
+              cmd,
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // s_scalbn.c (80 lines total)
+  #include <stdio.h>
+
+  #include "fdlibm.h"
+
+  #ifdef __STDC__
+  static const double
+  #else
+  static double
+  #endif
+  two54   =  1.80143985094819840000e+16, 
+  twom54  =  5.55111512312578270212e-17, 
+  huge   = 1.0e+300,
+  tiny   = 1.0e-300;
+
+  #ifdef __STDC__
+  	double scalbn (double x, int n)
+  #else
+  	double scalbn (x,n)
+  	double x; int n;
+  #endif
+  {
+  	fprintf(stderr, "\n");
+  	int  k,hx,lx;
+  	hx = __HI(x);
+  	lx = __LO(x);
+          k = (hx&0x7ff00000)>>20;		
+          if (k==0) {				
+              if ((lx|(hx&0x7fffffff))==0) {
+  		// Unexecuted code (line 29) removed. Its line cov: 0/1 (0%)
+  	    }
+  	    x *= two54; 
+  	    hx = __HI(x);
+  	    k = ((hx&0x7ff00000)>>20) - 54; 
+              if (n< -50000) {
+  		// Unexecuted code (line 35) removed. Its line cov: 0/1 (0%)
+  	    }
+          }
+          if (k==0x7ff) {
+  		// Unexecuted code (line 39) removed. Its line cov: 0/1 (0%)
+  	}
+          fprintf(stderr, "\n");
+          k = k+n; 
+          if (k >  0x7fe) {
+  		// Unexecuted code (line 44) removed. Its line cov: 0/1 (0%)
+  	}
+          if (k > 0) 				
+  	    {
+  		// Unexecuted code (line 48) removed. Its line cov: 1/1 (100%)
+  	    }
+          if (k <= -54)
+              if (n > 50000) 	
+  		{
+  			// Unexecuted code (line 53) removed. Its line cov: 0/1 (0%)
+  		}
+  	    else {
+  		// Unexecuted code (line 56) removed. Its line cov: 1/1 (100%)
+  	    }
+          k += 54;				
+          __HI(x) = (hx&0x800fffff)|(k<<20);
+          return x*twom54;
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 3) {
+          // Unexecuted code (lines 69-70) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      int a1 = atoi(argv[2]);
+
+      double r = scalbn(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [s_scalbn.c] enter main 3
+
+  [s_scalbn.c] enter scalbn 2
+execution_summary: |2+
+
+  ```c
+  // s_scalbn.c (80 lines total)
+  #include <stdio.h>
+
+  #include "fdlibm.h"
+
+  #ifdef __STDC__
+  static const double
+  #else
+  static double
+  #endif
+  two54   =  1.80143985094819840000e+16, 
+  twom54  =  5.55111512312578270212e-17, 
+  huge   = 1.0e+300,
+  tiny   = 1.0e-300;
+
+  #ifdef __STDC__
+  	double scalbn (double x, int n)
+  #else
+  	double scalbn (x,n)
+  	double x; int n;
+  #endif
+  {
+  	fprintf(stderr, "\n");
+  	int  k,hx,lx;
+  	hx = __HI(x);
+  	lx = __LO(x);
+          k = (hx&0x7ff00000)>>20;		
+          if (k==0) {				
+              if ((lx|(hx&0x7fffffff))==0) {
+  		return x;
+  	    }
+  	    // Unexecuted code (lines 31-36) removed. Its line cov: 5/6 (83%)
+          }
+          if (k==0x7ff) {
+  		// Unexecuted code (line 39) removed. Its line cov: 0/1 (0%)
+  	}
+          fprintf(stderr, "\n");
+          k = k+n; 
+          if (k >  0x7fe) {
+  		// Unexecuted code (line 44) removed. Its line cov: 0/1 (0%)
+  	}
+          if (k > 0) 				
+  	    {
+  		// Unexecuted code (line 48) removed. Its line cov: 1/1 (100%)
+  	    }
+          if (k <= -54)
+              if (n > 50000) 	
+  		{
+  			// Unexecuted code (line 53) removed. Its line cov: 0/1 (0%)
+  		}
+  	    else {
+  		// Unexecuted code (line 56) removed. Its line cov: 1/1 (100%)
+  	    }
+          // Unexecuted code (lines 58-60) removed. Its line cov: 3/3 (100%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 3) {
+          // Unexecuted code (lines 69-70) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      int a1 = atoi(argv[2]);
+
+      double r = scalbn(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0 1"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [s_scalbn.c] enter main 3
+
+  [s_scalbn.c] enter scalbn 3
+
+  [s_scalbn.c] enter scalbn 11

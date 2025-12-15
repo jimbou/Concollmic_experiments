@@ -1,0 +1,357 @@
+id: 2
+src_id: 0
+create_time: '2025-12-14 22:22:55.988'
+time_taken: 266
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.72334000
+    call_cnt: 3
+    latency: 74.12s
+    input_tokens: 13904
+    output_tokens: 7421
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.53038000
+      call_cnt: 2
+      latency: 54.43s
+      input_tokens: 10739
+      output_tokens: 5260
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10516000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.36966000
+      call_cnt: 1
+      latency: 45.60s
+      input_tokens: 5258
+      output_tokens: 4334
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.05556000
+      call_cnt: 1
+      latency: 8.83s
+      input_tokens: 5481
+      output_tokens: 926
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.19296000
+      call_cnt: 1
+      latency: 19.69s
+      input_tokens: 3165
+      output_tokens: 2161
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.06330000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.12966000
+      call_cnt: 1
+      latency: 19.69s
+      input_tokens: 3165
+      output_tokens: 2161
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: 'if (!(finite(z) || isnan(z)) && finite(x)) -> true in w_scalb.c: scalb'
+target_file_lines: w_scalb.c:36-36
+target_lines_content: "\t\treturn __kernel_standard(x,(double)fn,32); "
+justification: 'This branch guards the overflow handling path in scalb and has zero
+  historical coverage (line cov: 0/1 (0%)). Exercising it will cover error-handling
+  logic that is currently untested. The current run used finite inputs (1.0, 1.0),
+  so z remained finite and this branch was not taken. Driving inputs to force the
+  scaled result to overflow (become ±infinity) while keeping the original input finite
+  will trigger new behavior and improve coverage in a core math routine.'
+target_path_constraint: |-
+  Chronological, self-contained constraints to reach: if (!(finite(z) || isnan(z)) && finite(x)) -> true in scalb.
+
+  Context summary for constraints-only consumer:
+  - The executable is invoked via a shell command that passes two command-line arguments to main: argv[1] and argv[2]. These are parsed as decimal floating-point numbers using atof into a0 and a1, then passed to a math routine that computes a scaled result r = scalb(a0, a1).
+  - We must choose argv[1] (x) and argv[2] (fn) such that:
+    1) x is a finite double (not NaN, not ±infinity), and
+    2) The computed result z = scalb(x, fn) is not finite and not NaN (i.e., z is ±infinity). That is, an overflow must occur during scaling while x is finite.
+
+  Inputs and environment constraints:
+  1. Command-line invocation constraints:
+     - The program must be executed with exactly two arguments after the program name. The harness already supplies two arguments, so no change is needed to argument count.
+     - Both argv[1] and argv[2] must be provided as strings that atof can parse into double-precision values.
+
+  2. Parsing constraints (ensuring atof parses as intended):
+     - argv[1] must be a valid textual representation of a finite IEEE-754 double (e.g., a decimal number within finite range; exclude "inf", "+inf", "-inf", "nan").
+     - argv[2] must be a valid textual representation of a finite IEEE-754 double OR a large-magnitude value that causes scaling overflow according to the library’s scalb semantics. Do not use "nan" for argv[2] for this path; we need overflow, not NaN handling.
+
+  3. Mathematical overflow constraint to force z to ±infinity while x is finite:
+     - Define x = atof(argv[1]) and fn = atof(argv[2]).
+     - Let z = scalb(x, fn), which multiplies x by 2 raised to the power fn (i.e., z = x * 2^fn under typical scalb semantics; some library variants round fn to integer). We need z to overflow to ±infinity and not be NaN.
+     - Constraints:
+       a) x is finite and non-zero: isfinite(x) == true and x != 0.0.
+       b) The sign of z equals the sign of x (since scaling by a positive factor preserves sign). If x > 0, z = +infinity; if x < 0, z = -infinity.
+       c) The magnitude after scaling exceeds the maximum finite double (DBL_MAX): |x| * 2^fn > DBL_MAX.
+       d) Avoid NaN: Do not set x to NaN and do not combine values that would produce NaN (e.g., x = 0 and fn = -infinity is not applicable here since fn is parsed by atof and should be finite for this path). Ensure the operation leads to overflow, not undefined signaling NaN.
+
+     Equivalent SMT-style constraints:
+     - isfinite(x)
+     - x != 0
+     - isfinite(fn)
+     - |x| * 2^fn > DBL_MAX
+
+  4. Edge-condition compatibility with library variants:
+     - If the library variant treats fn as an integer (due to _SCALB_INT), ensure fn parses to a value whose integer part (or rounded value) satisfies the overflow condition when used as the exponent k where z = x * 2^k.
+     - If the library variant treats fn as a double exponent (non-integer), the same overflow inequality applies with fn as real.
+
+  5. Environment constraints:
+     - No special environment variables or files are required. Ensure standard IEEE-754 behavior and default locale for atof (period as decimal separator). Avoid locales where comma is the decimal separator.
+
+  These constraints together ensure the branch condition evaluates to true: z becomes ±infinity (not finite, not NaN) while x is finite, satisfying !(finite(z) || isnan(z)) && finite(x).
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import os
+      import signal
+      import subprocess
+
+      # Choose inputs:
+      # x = 1.0 (finite, non-zero)
+      # fn = 2048 (large positive exponent to ensure |x| * 2^fn > DBL_MAX, causing overflow to +/-inf)
+      # This satisfies: finite(x) == True, x != 0, finite(fn) == True, and overflow to infinity
+      cmd = "./temp_executable 1.0 2048"
+
+      # Ensure standard C locale so atof parses decimal dot consistently
+      env = os.environ.copy()
+      env["LC_ALL"] = "C"
+      env["LANG"] = "C"
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+              env=env,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // w_scalb.c (67 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+
+  #include <errno.h>
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  #ifdef _SCALB_INT
+  	double scalb(double x, int fn)		
+  #else
+  	double scalb(double x, double fn)	
+  #endif
+  #else
+  	double scalb(x,fn)			
+  #ifdef _SCALB_INT
+  	double x; int fn;
+  #else
+  	double x,fn;
+  #endif
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	return __ieee754_scalb(x,fn);
+  #else
+  	double z;
+  	z = __ieee754_scalb(x,fn);
+  	if(_LIB_VERSION == _IEEE_) {
+  		return z;
+  	}
+  	if(!(finite(z)||isnan(z))&&finite(x)) {
+  		// Unexecuted code (line 36) removed. Its line cov: 0/1 (0%)
+  	}
+  	if(z==0.0&&z!=x) {
+  		// Unexecuted code (line 39) removed. Its line cov: 0/1 (0%)
+  	} 
+  #ifndef _SCALB_INT
+  	if(!finite(fn)) {
+  		// Unexecuted code (line 43) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  	// Unexecuted code (line 46) removed. Its line cov: 0/1 (0%)
+  #endif 
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 3) {
+          // Unexecuted code (lines 56-57) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = scalb(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [w_scalb.c] enter main 3
+  [w_scalb.c] enter scalb 1
+  [w_scalb.c] enter scalb 2
+execution_summary: |2+
+
+  ```c
+  // w_scalb.c (67 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+
+  #include <errno.h>
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  #ifdef _SCALB_INT
+  	double scalb(double x, int fn)		
+  #else
+  	double scalb(double x, double fn)	
+  #endif
+  #else
+  	double scalb(x,fn)			
+  #ifdef _SCALB_INT
+  	double x; int fn;
+  #else
+  	double x,fn;
+  #endif
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	return __ieee754_scalb(x,fn);
+  #else
+  	double z;
+  	z = __ieee754_scalb(x,fn);
+  	if(_LIB_VERSION == _IEEE_) {
+  		return z;
+  	}
+  	if(!(finite(z)||isnan(z))&&finite(x)) {
+  		// Unexecuted code (line 36) removed. Its line cov: 0/1 (0%)
+  	}
+  	if(z==0.0&&z!=x) {
+  		// Unexecuted code (line 39) removed. Its line cov: 0/1 (0%)
+  	} 
+  #ifndef _SCALB_INT
+  	if(!finite(fn)) {
+  		// Unexecuted code (line 43) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  	// Unexecuted code (line 46) removed. Its line cov: 0/1 (0%)
+  #endif 
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 3) {
+          // Unexecuted code (lines 56-57) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = scalb(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [w_scalb.c] enter main 3
+  [w_scalb.c] enter scalb 1
+  [w_scalb.c] enter scalb 2

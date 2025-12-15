@@ -1,0 +1,435 @@
+id: 1
+src_id: 0
+create_time: '2025-12-14 17:18:16.773'
+time_taken: 249
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $1.33030000
+    call_cnt: 4
+    latency: 132.27s
+    input_tokens: 22163
+    output_tokens: 14784
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $1.20514000
+      call_cnt: 3
+      latency: 123.31s
+      input_tokens: 19259
+      output_tokens: 13666
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.11332000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.45724000
+      call_cnt: 1
+      latency: 53.02s
+      input_tokens: 5666
+      output_tokens: 5414
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.59582000
+      call_cnt: 1
+      latency: 62.45s
+      input_tokens: 6620
+      output_tokens: 7606
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03876000
+      call_cnt: 1
+      latency: 7.83s
+      input_tokens: 6973
+      output_tokens: 646
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.12516000
+      call_cnt: 1
+      latency: 8.96s
+      input_tokens: 2904
+      output_tokens: 1118
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05808000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.06708000
+      call_cnt: 1
+      latency: 8.96s
+      input_tokens: 2904
+      output_tokens: 1118
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: Nested branch in s_atan.c:atan — take the else-path of `if (ix < 0x3fe60000)`
+  inside the true-path of `if (ix < 0x3ff30000)` (i.e., `if (ix < 0x3ff30000)` ->
+  true and `if (ix < 0x3fe60000)` -> false)
+target_file_lines: s_atan.c:91-92
+target_lines_content: |-
+  		id = 1; x  = (x-one)/(x+one); 
+  	    }
+justification: This selection targets the medium-range argument reduction path of
+  fdlibm’s atan, specifically the id=1 transform `x = (x-one)/(x+one)`. The protected
+  lines 88-92 have 0% historical coverage, and reaching them will also force execution
+  of the polynomial approximation block (lines 101-105, currently 0%) and the id>=0
+  return path (lines 111-112, currently 0%). Compared to the already-executed small-argument
+  path, this branch explores distinct logic, increasing test coverage of untested
+  transformations and approximations.
+target_path_constraint: |-
+  Environment and invocation:
+  1. Use the provided harness, which invokes the executable via a shell with a single command-line argument string. Ensure the program is executed as: shell runs: "./temp_executable <arg>". No environment variables or files are read; only argv[1] is parsed.
+
+  Command-line argument and parsing:
+  2. The program expects exactly one argument (aside from the program name). The shell command already supplies one; ensure no extra arguments or embedded spaces that would create multiple argv entries when not using shell quoting. The argument must be a valid textual representation of a floating-point number that atof can parse in C locale (digits, optional decimal point, optional sign).
+
+  Value range constraints to hit the targeted atan branches (expressed on the numeric value a0 parsed by atof):
+  3. a0 must be finite (not NaN, not ±Infinity). This guarantees ix < 0x44100000 path is taken without triggering the special-case early returns for infinities/NaNs.
+  4. |a0| must be greater than or equal to the threshold corresponding to ix >= 0x3fe60000, and strictly less than the threshold corresponding to ix < 0x3ff30000, after accounting for how ix = (__HI(x) & 0x7fffffff) maps to IEEE-754 double exponents/mantissa. In plain numeric terms:
+     - Require |a0| ≥ 1.796875 and
+     - Require |a0| < 2.375
+     Rationale: 0x3fe60000 is the high-word boundary for approximately 1.796875, and 0x3ff30000 corresponds to approximately 2.375. These bounds ensure the outer condition `ix < 0x3ff30000` is true while the inner `ix < 0x3fe60000` is false, selecting the id=1 path.
+  5. Additionally, ensure a0 is not negative in a way that would change the selected id path: hx = __HI(x) captures sign separately, but the branch block for id selection uses x = fabs(x) only when ix ≥ 0x3fdc0000 (outer else). Since we need ix ≥ 0x3fdc0000 for medium range, the code will take the else and then execute `x = fabs(x)`. Therefore either sign is acceptable; no constraint on sign is required, but keep a0 finite.
+
+  Resulting path effects:
+  6. With the above numeric range, the function will set id = 1 and perform the transform x = (x - 1.0) / (x + 1.0), then proceed to compute z, w, s1, s2 and return via the id>=0 path using atanhi[1]/atanlo[1]. This guarantees execution of lines 91-92 inside the id=1 else-branch and reaches the polynomial block and the id>=0 return block.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Chosen concrete input:
+      # a0 = 2.0 satisfies: finite, and 1.796875 <= |a0| < 2.375
+      # This ensures the id=1 path is taken in the targeted atan implementation.
+      cmd = "./temp_executable 2.0"
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // s_atan.c (131 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double atanhi[] = {
+  #else
+  static double atanhi[] = {
+  #endif
+    4.63647609000806093515e-01, 
+    7.85398163397448278999e-01, 
+    9.82793723247329054082e-01, 
+    1.57079632679489655800e+00, 
+  };
+
+  #ifdef __STDC__
+  static const double atanlo[] = {
+  #else
+  static double atanlo[] = {
+  #endif
+    2.26987774529616870924e-17, 
+    3.06161699786838301793e-17, 
+    1.39033110312309984516e-17, 
+    6.12323399573676603587e-17, 
+  };
+
+  #ifdef __STDC__
+  static const double aT[] = {
+  #else
+  static double aT[] = {
+  #endif
+    3.33333333333329318027e-01, 
+   -1.99999999998764832476e-01, 
+    1.42857142725034663711e-01, 
+   -1.11111104054623557880e-01, 
+    9.09088713343650656196e-02, 
+   -7.69187620504482999495e-02, 
+    6.66107313738753120669e-02, 
+   -5.83357013379057348645e-02, 
+    4.97687799461593236017e-02, 
+   -3.65315727442169155270e-02, 
+    1.62858201153657823623e-02, 
+  };
+
+  #ifdef __STDC__
+  	static const double 
+  #else
+  	static double 
+  #endif
+  one   = 1.0,
+  huge   = 1.0e300;
+
+  #ifdef __STDC__
+  	double atan(double x)
+  #else
+  	double atan(x)
+  	double x;
+  #endif
+  {
+  	double w,s1,s2,z;
+  	int ix,hx,id;
+
+  	hx = __HI(x);
+  	ix = hx&0x7fffffff;
+  	
+  	if(ix>=0x44100000) {	
+  	    // Unexecuted code (lines 72-76) removed. Its line cov: 0/5 (0%)
+  	}
+  	
+  	if (ix < 0x3fdc0000) {	
+  	    if (ix < 0x3e200000) {	
+  		if(huge+x>one) return x;	
+  	    }
+  	    id = -1;
+  	} else {
+  	// Unexecuted code (line 85) removed. Its line cov: 0/1 (0%)
+  	
+  	if (ix < 0x3ff30000) {		
+  	    // Unexecuted code (lines 88-92) removed. Its line cov: 0/5 (0%)
+  	} else {
+  	    // Unexecuted code (lines 94-98) removed. Its line cov: 0/5 (0%)
+  	}}
+      
+  	// Unexecuted code (lines 101-105) removed. Its line cov: 0/4 (0%)
+  	
+  	if (id<0) {
+  	// Unexecuted code (line 108) removed. Its line cov: 0/1 (0%)
+  	}
+  	else {
+  	    // Unexecuted code (lines 111-112) removed. Its line cov: 0/2 (0%)
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      if (argc != 2) {
+          // Unexecuted code (lines 121-122) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = atan(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [s_atan.c] enter main 1
+  [s_atan.c] enter main 3
+  [s_atan.c] enter atan 1
+  [s_atan.c] enter atan 3
+  [s_atan.c] enter atan 4
+execution_summary: |2+
+
+  ```c
+  // s_atan.c (131 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double atanhi[] = {
+  #else
+  static double atanhi[] = {
+  #endif
+    4.63647609000806093515e-01, 
+    7.85398163397448278999e-01, 
+    9.82793723247329054082e-01, 
+    1.57079632679489655800e+00, 
+  };
+
+  #ifdef __STDC__
+  static const double atanlo[] = {
+  #else
+  static double atanlo[] = {
+  #endif
+    2.26987774529616870924e-17, 
+    3.06161699786838301793e-17, 
+    1.39033110312309984516e-17, 
+    6.12323399573676603587e-17, 
+  };
+
+  #ifdef __STDC__
+  static const double aT[] = {
+  #else
+  static double aT[] = {
+  #endif
+    3.33333333333329318027e-01, 
+   -1.99999999998764832476e-01, 
+    1.42857142725034663711e-01, 
+   -1.11111104054623557880e-01, 
+    9.09088713343650656196e-02, 
+   -7.69187620504482999495e-02, 
+    6.66107313738753120669e-02, 
+   -5.83357013379057348645e-02, 
+    4.97687799461593236017e-02, 
+   -3.65315727442169155270e-02, 
+    1.62858201153657823623e-02, 
+  };
+
+  #ifdef __STDC__
+  	static const double 
+  #else
+  	static double 
+  #endif
+  one   = 1.0,
+  huge   = 1.0e300;
+
+  #ifdef __STDC__
+  	double atan(double x)
+  #else
+  	double atan(x)
+  	double x;
+  #endif
+  {
+  	double w,s1,s2,z;
+  	int ix,hx,id;
+
+  	hx = __HI(x);
+  	ix = hx&0x7fffffff;
+  	
+  	if(ix>=0x44100000) {	
+  	    // Unexecuted code (lines 72-76) removed. Its line cov: 0/5 (0%)
+  	}
+  	
+  	if (ix < 0x3fdc0000) {	
+  	    if (ix < 0x3e200000) {	
+  		if(huge+x>one) return x;	
+  	    }
+  	    id = -1;
+  	} else {
+  	// Unexecuted code (line 85) removed. Its line cov: 0/1 (0%)
+  	
+  	if (ix < 0x3ff30000) {		
+  	    // Unexecuted code (lines 88-92) removed. Its line cov: 0/5 (0%)
+  	} else {
+  	    // Unexecuted code (lines 94-98) removed. Its line cov: 0/5 (0%)
+  	}}
+      
+  	// Unexecuted code (lines 101-105) removed. Its line cov: 0/4 (0%)
+  	
+  	if (id<0) {
+  	// Unexecuted code (line 108) removed. Its line cov: 0/1 (0%)
+  	}
+  	else {
+  	    // Unexecuted code (lines 111-112) removed. Its line cov: 0/2 (0%)
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      if (argc != 2) {
+          // Unexecuted code (lines 121-122) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = atan(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [s_atan.c] enter main 1
+  [s_atan.c] enter main 3
+  [s_atan.c] enter atan 1
+  [s_atan.c] enter atan 3
+  [s_atan.c] enter atan 4

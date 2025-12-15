@@ -1,0 +1,309 @@
+id: 1
+src_id: 0
+create_time: '2025-12-14 21:01:06.466'
+time_taken: 208
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $1.07494000
+    call_cnt: 4
+    latency: 130.50s
+    input_tokens: 19421
+    output_tokens: 11442
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.82932000
+      call_cnt: 3
+      latency: 100.20s
+      input_tokens: 16674
+      output_tokens: 8264
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10188000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.25790000
+      call_cnt: 1
+      latency: 31.04s
+      input_tokens: 5094
+      output_tokens: 2406
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.43936000
+      call_cnt: 1
+      latency: 62.85s
+      input_tokens: 5677
+      output_tokens: 5355
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03018000
+      call_cnt: 1
+      latency: 6.32s
+      input_tokens: 5903
+      output_tokens: 503
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.24562000
+      call_cnt: 1
+      latency: 30.30s
+      input_tokens: 2747
+      output_tokens: 3178
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05494000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.19068000
+      call_cnt: 1
+      latency: 30.30s
+      input_tokens: 2747
+      output_tokens: 3178
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (fabs(x) > 7.10475860073943863426e+02) -> true in w_cosh.c:cosh
+target_file_lines: w_cosh.c:26-26
+target_lines_content: "\t        return __kernel_standard(x,x,5); "
+justification: This branch guards the overflow/exception-handling path of the cosh
+  wrapper and currently has 0% historical coverage on its body (line 26). Exercising
+  it will validate non-IEEE error handling via __kernel_standard and cover a distinct
+  behavior different from the current execution, which returned early in IEEE mode.
+  It is reachable provided the runtime math library is configured to a non-IEEE mode
+  so the wrapper does not early-return, and the input magnitude is sufficiently large.
+target_path_constraint: |-
+  Chronological, self-contained constraints to reach: if (fabs(x) > 7.10475860073943863426e+02) -> true inside cosh wrapper in w_cosh.c.
+
+  1. Process invocation constraint:
+     - The program must be executed via a shell with exactly one command-line argument string after the executable name. The harness invokes: shell command "./temp_executable 1.0". To steer the path, replace the numeric token "1.0" with a decimal-encoded floating-point number whose absolute value strictly exceeds 710.475860073943863426. The shell passes it as argv[1]. No quotes or additional tokens are allowed; it must remain a single whitespace-separated argument.
+
+  2. Argument count constraint:
+     - There must be exactly two arguments seen by main: argv[0] is the program path; argv[1] is the numeric string. This ensures the argc != 2 branch remains false so execution proceeds to parse and call cosh.
+
+  3. Argument parsing (string-to-double) constraint:
+     - argv[1] must be a valid C locale numeric literal that atof can parse into a finite double value x.
+     - The parsed double x must satisfy: |x| > 7.10475860073943863426e+02.
+     - Examples are disallowed; only the inequality must be satisfied. Scientific notation or decimal notation is acceptable as long as atof interprets it as a finite double strictly greater in magnitude than the threshold.
+
+  4. Library configuration/environment constraint (to avoid early IEEE-return):
+     - The runtime must execute the non-IEEE path in the cosh wrapper. Specifically, the build/runtime configuration must not define _IEEE_LIBM at compile-time, and at runtime the global _LIB_VERSION must NOT equal _IEEE_. Also, the input must NOT be NaN (already ensured by parsing constraint). These conditions ensure the wrapper does not return early at line 23 and reaches the threshold check.
+
+  5. Overflow/standard-kernel path trigger:
+     - With constraints above, when cosh(x) evaluates the condition fabs(x) > 710.475860073943863426, the condition evaluates to true, selecting the branch body that calls the standard error handler path (verified line 26 execution).
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+      import os
+
+      try:
+          # Ensure C locale so atof parses the numeric string predictably
+          env = os.environ.copy()
+          env["LC_ALL"] = "C"
+          env["LANG"] = "C"
+
+          # Execute with a single whitespace-separated numeric argument whose |x| > 710.475860073943863426
+          # Here we use 711, which is safely above the threshold.
+          result = subprocess.run(
+              ["./temp_executable 711"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+              env=env,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // w_cosh.c (50 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double cosh(double x)		
+  #else
+  	double cosh(x)			
+  	double x;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	// Unexecuted code (line 18) removed. Its line cov: 0/1 (0%)
+  #else
+  	double z;
+  	z = __ieee754_cosh(x);
+  	if(_LIB_VERSION == _IEEE_ || isnan(x)) {
+  		return z;
+  	}
+  	if(fabs(x)>7.10475860073943863426e+02) {	
+  	        // Unexecuted code (line 26) removed. Its line cov: 0/1 (0%)
+  	} else {
+  	    // Unexecuted code (line 28) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+
+      if (argc != 2) {
+          // Unexecuted code (lines 40-41) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = cosh(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [w_cosh.c] enter main 3
+  [w_cosh.c] enter cosh 2
+  [w_cosh.c] enter cosh 3
+execution_summary: |2+
+
+  ```c
+  // w_cosh.c (50 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double cosh(double x)		
+  #else
+  	double cosh(x)			
+  	double x;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	// Unexecuted code (line 18) removed. Its line cov: 0/1 (0%)
+  #else
+  	double z;
+  	z = __ieee754_cosh(x);
+  	if(_LIB_VERSION == _IEEE_ || isnan(x)) {
+  		return z;
+  	}
+  	if(fabs(x)>7.10475860073943863426e+02) {	
+  	        // Unexecuted code (line 26) removed. Its line cov: 0/1 (0%)
+  	} else {
+  	    // Unexecuted code (line 28) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+
+      if (argc != 2) {
+          // Unexecuted code (lines 40-41) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = cosh(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [w_cosh.c] enter main 3
+  [w_cosh.c] enter cosh 2
+  [w_cosh.c] enter cosh 3

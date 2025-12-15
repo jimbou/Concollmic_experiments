@@ -1,0 +1,327 @@
+id: 3
+src_id: 1
+create_time: '2025-12-14 18:30:48.164'
+time_taken: 464
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $1.18620000
+    call_cnt: 4
+    latency: 109.31s
+    input_tokens: 19824
+    output_tokens: 13162
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $1.01594000
+      call_cnt: 3
+      latency: 93.49s
+      input_tokens: 17017
+      output_tokens: 11260
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10258000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.38006000
+      call_cnt: 1
+      latency: 36.33s
+      input_tokens: 5129
+      output_tokens: 4391
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.50324000
+      call_cnt: 1
+      latency: 51.30s
+      input_tokens: 5830
+      output_tokens: 6368
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03006000
+      call_cnt: 1
+      latency: 5.86s
+      input_tokens: 6058
+      output_tokens: 501
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.17026000
+      call_cnt: 1
+      latency: 15.82s
+      input_tokens: 2807
+      output_tokens: 1902
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05614000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.11412000
+      call_cnt: 1
+      latency: 15.82s
+      input_tokens: 2807
+      output_tokens: 1902
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: else branch of `else if (hx < 0x7ff00000)` -> take the `else` path
+  returning `0x7fffffff` in s_ilogb.c:ilogb(double)
+target_file_lines: s_ilogb.c:37-37
+target_lines_content: "\t    return 0x7fffffff;"
+justification: This branch handles non-finite inputs (Infinity/NaN) and currently
+  has 0% historical coverage (line 37). Exercising it will validate edge-case handling
+  in a core math routine (ilogb) and substantially improve coverage of untested behavior.
+  It is reachable via the existing harness by controlling the single command-line
+  argument parsed with atof.
+target_path_constraint: |-
+  The program executes a single binary with one command-line argument; that argument is parsed to a double using the standard C function atof, then passed to a function that branches based on whether the double is finite or not. To force execution into the non-finite branch (returning 0x7fffffff), the constraints must ensure the parsed double is Not-a-Number (NaN) or Infinity.
+
+  Chronological, external input/environment constraints:
+
+  1) Process invocation constraints:
+  - The program must be invoked with exactly one command-line argument beyond the program name (argc == 2). No environment changes are required beyond standard execution permissions.
+
+  2) Argument parsing constraints (atof behavior):
+  - The single argument string must be such that atof, under the C locale, parses it to a non-finite double value. Acceptable categories:
+    a) Positive Infinity
+    b) Negative Infinity
+    c) Not-a-Number (quiet or signaling NaN)
+  - Do not rely on implementation-specific spellings outside common atof-recognized tokens. The string must be one of the commonly recognized forms producing non-finite:
+    • "inf" or "infinity" (case-insensitive) for Infinity
+    • With optional leading sign '+' or '-' for positive/negative infinity
+    • "nan" optionally followed by parentheses with an identifier (e.g., "nan", "nan()", "nan(foo)") for NaN
+
+  3) Numeric range/format constraints (to avoid finite interpretations):
+  - The argument must not be a finite numeric literal (decimal, hexadecimal, or scientific notation) and must not include trailing valid digits that could cause atof to accept a finite prefix. The entire string, after leading whitespace and optional sign, must match a non-finite token (inf/infinity/nan forms) so that the resulting parsed double is non-finite.
+
+  4) Locale/encoding constraints:
+  - The execution environment should use the default C/POSIX locale where atof recognizes the above tokens. The input string must be plain ASCII/UTF-8 without non-ASCII characters.
+
+  These constraints ensure the parsed double is non-finite, causing the ilogb function to take the else path corresponding to hx >= 0x7ff00000 and return 0x7fffffff.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+      import os
+
+      # Provide a single non-finite atof-parsable token as the sole argument.
+      # "nan" is recognized by standard C atof/strtod under the C/POSIX locale.
+      cmd = "./temp_executable nan"
+
+      # Ensure C/POSIX locale so atof recognizes non-finite tokens reliably
+      env = os.environ.copy()
+      env["LC_ALL"] = "C"
+      env["LANG"] = "C"
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+              env=env,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // s_ilogb.c (57 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	int ilogb(double x)
+  #else
+  	int ilogb(x)
+  	double x;
+  #endif
+  {
+  	int hx,lx,ix;
+
+  	hx  = (__HI(x))&0x7fffffff;	
+  	if(hx<0x00100000) {
+  	    // Unexecuted code (lines 21-31) removed. Its line cov: 10/11 (91%)
+  	}
+  	else if (hx<0x7ff00000) {
+  	    return (hx>>20)-1023;
+  	}
+  	else {
+  	    // Unexecuted code (line 37) removed. Its line cov: 0/1 (0%)
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 47-48) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      int r = ilogb(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [s_ilogb.c] enter main 3
+  [s_ilogb.c] enter ilogb 1
+  [s_ilogb.c] enter ilogb 2
+  [s_ilogb.c] enter ilogb 4
+  [s_ilogb.c] enter ilogb 5
+execution_summary: |2+
+
+  ```c
+  // s_ilogb.c (57 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	int ilogb(double x)
+  #else
+  	int ilogb(x)
+  	double x;
+  #endif
+  {
+  	int hx,lx,ix;
+
+  	hx  = (__HI(x))&0x7fffffff;	
+  	if(hx<0x00100000) {
+  	    lx = __LO(x);
+  	    if((hx|lx)==0) {
+  		// Unexecuted code (line 23) removed. Its line cov: 1/1 (100%)
+  	    } else {
+  		if(hx==0) {
+  		    for (ix = -1043; lx>0; lx<<=1) ix -=1;
+  		} else {
+  		    // Unexecuted code (line 28) removed. Its line cov: 0/1 (0%)
+  		}
+  	    return ix;
+  	    }
+  	}
+  	else if (hx<0x7ff00000) {
+  	    // Unexecuted code (line 34) removed. Its line cov: 1/1 (100%)
+  	}
+  	else {
+  	    // Unexecuted code (line 37) removed. Its line cov: 0/1 (0%)
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 47-48) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      int r = ilogb(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Use a single, valid atof-parsable double that is finite, normal, and non-zero.
+      # 1e-300 satisfies: non-zero, not subnormal (>= 2^-1022), finite, not NaN/Inf.
+      cmd = "./temp_executable 1e-300"
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [s_ilogb.c] enter main 3
+  [s_ilogb.c] enter ilogb 1
+  [s_ilogb.c] enter ilogb 7

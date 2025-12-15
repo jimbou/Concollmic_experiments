@@ -1,0 +1,373 @@
+id: 3
+src_id: 1
+create_time: '2025-12-14 19:53:49.261'
+time_taken: 434
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: true
+newly_covered_lines: 1
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.89074000
+    call_cnt: 3
+    latency: 85.19s
+    input_tokens: 14231
+    output_tokens: 10102
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.71334000
+      call_cnt: 2
+      latency: 70.09s
+      input_tokens: 11184
+      output_tokens: 8161
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.11006000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.55546000
+      call_cnt: 1
+      latency: 61.33s
+      input_tokens: 5503
+      output_tokens: 7364
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.04782000
+      call_cnt: 1
+      latency: 8.76s
+      input_tokens: 5681
+      output_tokens: 797
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.17740000
+      call_cnt: 1
+      latency: 15.10s
+      input_tokens: 3047
+      output_tokens: 1941
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.06094000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.11646000
+      call_cnt: 1
+      latency: 15.10s
+      input_tokens: 3047
+      output_tokens: 1941
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (k > 0x7fe) -> true in s_scalbn.c:scalbn
+target_file_lines: s_scalbn.c:44-44
+target_lines_content: "\t\treturn huge*copysign(huge,x);"
+justification: 'This branch (overflow handling when scaling a finite double by 2^n)
+  has 0% historical coverage and represents a distinct, important behavior of scalbn:
+  overflow to extremely large values. Reaching it will exercise code paths different
+  from the currently covered underflow path and provide meaningful coverage of boundary
+  conditions for exponent growth.'
+target_path_constraint: |-
+  Chronological, external-input-level constraints to reach branch: if (k > 0x7fe) -> true in s_scalbn.c:scalbn
+
+  Program invocation and argument structure:
+  1. Command-line usage must supply exactly two whitespace-separated arguments after the executable name. The harness uses a shell form, but the program itself reads argc/argv normally. Therefore ensure:
+     - argc == 3 inside main (program name + 2 arguments).
+
+  Argument encoding and semantics:
+  2. First argument (argv[1]) is parsed as a decimal floating-point in C using atof. It defines input double x.
+     - x must be a finite, normalized double (i.e., not zero, subnormal, infinity, or NaN) to avoid early special-case branches.
+     - This implies its binary exponent field k0 = ((HI(x) & 0x7ff00000) >> 20) is in [1, 0x7fe]. If x is subnormal (k0 == 0) the function rescales by 2^54 before adjusting n; we must avoid that path for simplicity.
+  3. Second argument (argv[2]) is parsed as a base-10 integer using atoi. It defines scaling exponent n.
+
+  Core numeric relationship to trigger the target branch:
+  4. In scalbn, after reading x and n, the code computes k = exponent(x) then sets k = k + n. The target branch is if (k > 0x7fe). To satisfy this:
+     - Let k0 be the initial exponent of x (1 <= k0 <= 0x7fe). Require: k0 + n > 0x7fe.
+     - Because k0 <= 0x7fe, this reduces to: n > 0x7fe - k0.
+
+  Supporting constraints to bypass other branches and ensure the target branch is reached directly:
+  5. Avoid k == 0 (subnormal or zero): ensure x’s decimal representation corresponds to a normalized finite double; e.g., magnitude in [2^-1022, 2^1024) and not exactly 0.0.
+  6. Avoid k == 0x7ff (Infinity or NaN): ensure the first argument is not a string that atof recognizes as infinity or NaN, and its numeric magnitude is finite.
+  7. Avoid underflow/denormal pathways: choose n such that k + n is not <= -54 when combined with any rescaling. Since we already require x normalized and k0 >= 1, we only need: k0 + n > 0x7fe (to hit the target) and thus not <= -54.
+  8. Maintain standard environment: no special files or permissions are used; standard locale must allow atof/atoi to parse with '.' as decimal separator.
+
+  Formal SMT-like summary:
+  - Inputs: s1, s2 are strings.
+  - Parse: x = atof(s1); n = atoi(s2).
+  - Constraints:
+    a) isfinite(x) && x != 0.0 && is_normalized_double(x) // exponent in [1, 0x7fe]
+    b) n ∈ Z
+    c) ((exponent(x)) + n) > 0x7fe
+    d) s1 not in {"inf", "infinity", "nan", case-insensitive variants}
+    e) Locale uses '.' for decimal point
+
+  Outcome:
+  - With these constraints, scalbn proceeds through the normalized path, computes k = exponent(x) + n, and the condition (k > 0x7fe) evaluates true, reaching the overflow-handling branch.
+selected_cnt: 1
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+      import os
+
+      # Use normalized finite double for argv[1]: 1.0 (exponent bits = 0x3ff)
+      # Choose integer n for argv[2]: 1024 so k0 + n = 1023 + 1024 = 2047 > 0x7fe
+      # Ensure locale uses '.' as decimal separator
+      env = os.environ.copy()
+      env["LC_ALL"] = "C"
+      env["LANG"] = "C"
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0 1024"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+              env=env,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // s_scalbn.c (80 lines total)
+  #include <stdio.h>
+
+  #include "fdlibm.h"
+
+  #ifdef __STDC__
+  static const double
+  #else
+  static double
+  #endif
+  two54   =  1.80143985094819840000e+16, 
+  twom54  =  5.55111512312578270212e-17, 
+  huge   = 1.0e+300,
+  tiny   = 1.0e-300;
+
+  #ifdef __STDC__
+  	double scalbn (double x, int n)
+  #else
+  	double scalbn (x,n)
+  	double x; int n;
+  #endif
+  {
+  	fprintf(stderr, "\n");
+  	int  k,hx,lx;
+  	hx = __HI(x);
+  	lx = __LO(x);
+          k = (hx&0x7ff00000)>>20;		
+          if (k==0) {				
+              if ((lx|(hx&0x7fffffff))==0) {
+  		// Unexecuted code (line 29) removed. Its line cov: 0/1 (0%)
+  	    }
+  	    x *= two54; 
+  	    hx = __HI(x);
+  	    k = ((hx&0x7ff00000)>>20) - 54; 
+              if (n< -50000) {
+  		// Unexecuted code (line 35) removed. Its line cov: 0/1 (0%)
+  	    }
+          }
+          if (k==0x7ff) {
+  		// Unexecuted code (line 39) removed. Its line cov: 0/1 (0%)
+  	}
+          fprintf(stderr, "\n");
+          k = k+n; 
+          if (k >  0x7fe) {
+  		// Unexecuted code (line 44) removed. Its line cov: 0/1 (0%)
+  	}
+          if (k > 0) 				
+  	    {
+  		// Unexecuted code (line 48) removed. Its line cov: 0/1 (0%)
+  	    }
+          if (k <= -54)
+              if (n > 50000) 	
+  		{
+  			// Unexecuted code (line 53) removed. Its line cov: 0/1 (0%)
+  		}
+  	    else {
+  		return tiny*copysign(tiny,x);
+  	    }
+          // Unexecuted code (lines 58-60) removed. Its line cov: 3/3 (100%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 3) {
+          // Unexecuted code (lines 69-70) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      int a1 = atoi(argv[2]);
+
+      double r = scalbn(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [s_scalbn.c] enter main 3
+
+  [s_scalbn.c] enter scalbn 3
+
+  [s_scalbn.c] enter scalbn 8
+execution_summary: |2+
+
+  ```c
+  // s_scalbn.c (80 lines total)
+  #include <stdio.h>
+
+  #include "fdlibm.h"
+
+  #ifdef __STDC__
+  static const double
+  #else
+  static double
+  #endif
+  two54   =  1.80143985094819840000e+16, 
+  twom54  =  5.55111512312578270212e-17, 
+  huge   = 1.0e+300,
+  tiny   = 1.0e-300;
+
+  #ifdef __STDC__
+  	double scalbn (double x, int n)
+  #else
+  	double scalbn (x,n)
+  	double x; int n;
+  #endif
+  {
+  	fprintf(stderr, "\n");
+  	int  k,hx,lx;
+  	hx = __HI(x);
+  	lx = __LO(x);
+          k = (hx&0x7ff00000)>>20;		
+          if (k==0) {				
+              if ((lx|(hx&0x7fffffff))==0) {
+  		// Unexecuted code (line 29) removed. Its line cov: 0/1 (0%)
+  	    }
+  	    x *= two54; 
+  	    hx = __HI(x);
+  	    k = ((hx&0x7ff00000)>>20) - 54; 
+              if (n< -50000) {
+  		// Unexecuted code (line 35) removed. Its line cov: 0/1 (0%)
+  	    }
+          }
+          if (k==0x7ff) {
+  		// Unexecuted code (line 39) removed. Its line cov: 0/1 (0%)
+  	}
+          fprintf(stderr, "\n");
+          k = k+n; 
+          if (k >  0x7fe) {
+  		// Unexecuted code (line 44) removed. Its line cov: 0/1 (0%)
+  	}
+          if (k > 0) 				
+  	    {
+  		__HI(x) = (hx&0x800fffff)|(k<<20); return x;
+  	    }
+          if (k <= -54)
+              if (n > 50000) 	
+  		{
+  			// Unexecuted code (line 53) removed. Its line cov: 0/1 (0%)
+  		}
+  	    else {
+  		// Unexecuted code (line 56) removed. Its line cov: 1/1 (100%)
+  	    }
+          // Unexecuted code (lines 58-60) removed. Its line cov: 3/3 (100%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 3) {
+          // Unexecuted code (lines 69-70) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      int a1 = atoi(argv[2]);
+
+      double r = scalbn(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # We pass two arguments: first is a double token recognized as Infinity ("inf"),
+      # second is a valid decimal integer ("0"). This ensures scalbn sees x with
+      # exponent all ones so that (k == 0x7ff) is true.
+      try:
+          result = subprocess.run(
+              ["./temp_executable inf 0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          raise e
+src_execution_trace: |2
+
+  [s_scalbn.c] enter main 3
+
+  [s_scalbn.c] enter scalbn 3
+
+  [s_scalbn.c] enter scalbn 10

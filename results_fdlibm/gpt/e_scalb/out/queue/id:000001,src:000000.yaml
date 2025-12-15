@@ -1,0 +1,333 @@
+id: 1
+src_id: 0
+create_time: '2025-12-14 15:53:08.821'
+time_taken: 93
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 4
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.63118000
+    call_cnt: 3
+    latency: 54.36s
+    input_tokens: 13583
+    output_tokens: 5992
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.49376000
+      call_cnt: 2
+      latency: 42.67s
+      input_tokens: 10735
+      output_tokens: 4651
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10550000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.35190000
+      call_cnt: 1
+      latency: 33.57s
+      input_tokens: 5275
+      output_tokens: 4045
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03636000
+      call_cnt: 1
+      latency: 9.11s
+      input_tokens: 5460
+      output_tokens: 606
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.13742000
+      call_cnt: 1
+      latency: 11.69s
+      input_tokens: 2848
+      output_tokens: 1341
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05696000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.08046000
+      call_cnt: 1
+      latency: 11.69s
+      input_tokens: 2848
+      output_tokens: 1341
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: 'if (!finite(fn)) -> true in e_scalb.c: __ieee754_scalb'
+target_file_lines: e_scalb.c:28-29
+target_lines_content: |-
+  		if(fn>0.0) {
+  			return x*fn;
+justification: This branch has zero historical coverage (lines 28-32 show 0/5). It
+  guards special-case handling when the exponent argument is non-finite (infinite),
+  which exercises distinct error/edge-path logic not covered by normal inputs. Reaching
+  it will increase coverage within a 5-line block and test robustness for IEEE-754
+  infinities—important for numerical libraries.
+target_path_constraint: |-
+  Chronological, environment-level constraints to force the branch `if (!finite(fn))` to evaluate to true inside __ieee754_scalb:
+
+  1) Process invocation via shell must preserve the fixed harness command structure:
+     - The program is executed exactly as a single shell command string with arguments: `./temp_executable <arg1> <arg2>`.
+     - No additional arguments are permitted, since the harness expects exactly two numeric arguments after the program path.
+
+  2) Argument count constraint at program entry:
+     - The process must receive exactly three argv entries from the shell-parsed command line: argv[0] = program path, argv[1] = first numeric string, argv[2] = second numeric string.
+     - This ensures the `argc == 3` check passes, allowing the program to proceed.
+
+  3) String-to-double parsing constraints for both arguments (C standard atof behavior):
+     - argv[1] must be a valid textual representation of a finite IEEE-754 double. Its exact value is unconstrained besides finiteness (e.g., any finite number), so that x is finite.
+     - argv[2] must be a textual representation of a non-finite IEEE-754 double so that `fn` is not finite. Acceptable non-finite textual forms per atof include case-insensitive variants of: "inf", "+inf", "-inf", "infinity", "+infinity", "-infinity". Trailing whitespace is allowed; no additional non-whitespace trailing characters are allowed.
+     - Both strings must be encoded in ASCII/UTF-8 and contain no embedded NUL characters before the final terminator.
+
+  4) Numerical property to trigger the target branch inside __ieee754_scalb:
+     - Let fn = atof(argv[2]). Require: fn is not finite (i.e., is +∞ or -∞). This satisfies the predicate `!finite(fn)` as true.
+     - No additional numeric relationships are required. The first argument x = atof(argv[1]) can be any finite double to avoid early special-casing by isnan(x) or isnan(fn). Avoid NaN for either argument because the prior check `isnan(x) || isnan(fn)` would short-circuit before the `!finite(fn)` branch.
+
+  5) Platform/environment assumptions:
+     - Standard C locale for atof, so that the recognized tokens for infinity are the usual English tokens above.
+     - No environment variables interfere with locale or parsing (or ensure locale uses '.' as decimal separator and recognizes "inf"/"infinity").
+
+  These constraints ensure program flow reaches __ieee754_scalb with fn parsed as an infinity, making `!finite(fn)` evaluate to true and executing the target branch body.
+selected_cnt: 2
+successful_generation_cnt: 2
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+      import os
+
+      try:
+          # Ensure standard C locale so atof recognizes "inf" as infinity
+          env = os.environ.copy()
+          env["LC_ALL"] = "C"
+          env["LANG"] = "C"
+          env["LC_NUMERIC"] = "C"
+
+          # Execute the original harness structure with revised concrete arguments:
+          # argv[1] = "1.0" (finite), argv[2] = "inf" (non-finite infinity)
+          result = subprocess.run(
+              ["./temp_executable 1.0 inf"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+              env=env,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // e_scalb.c (64 lines total)
+  #include <stdio.h>
+  #include "fdlibm.h"
+
+  #ifdef _SCALB_INT
+  #ifdef __STDC__
+  	double __ieee754_scalb(double x, int fn)
+  #else
+  	double __ieee754_scalb(x,fn)
+  	double x; int fn;
+  #endif
+  #else
+  #ifdef __STDC__
+  	double __ieee754_scalb(double x, double fn)
+  #else
+  	double __ieee754_scalb(x,fn)
+  	double x, fn;
+  #endif
+  #endif
+  {
+  #ifdef _SCALB_INT
+  	// Unexecuted code (line 21) removed. Its line cov: 0/1 (0%)
+  #else
+  	fprintf(stderr, "\n");
+  	if (isnan(x)||isnan(fn)) {
+  		// Unexecuted code (line 25) removed. Its line cov: 0/1 (0%)
+  	}
+  	if (!finite(fn)) {
+  		// Unexecuted code (lines 28-32) removed. Its line cov: 0/5 (0%)
+  	}
+  	if (rint(fn)!=fn) {
+  		// Unexecuted code (line 35) removed. Its line cov: 0/1 (0%)
+  	}
+  	if ( fn > 65000.0) {
+  		// Unexecuted code (line 38) removed. Its line cov: 0/1 (0%)
+  	}
+  	if (-fn > 65000.0) {
+  		// Unexecuted code (line 41) removed. Its line cov: 0/1 (0%)
+  	}
+  	return scalbn(x,(int)fn);
+  #endif
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 3) {
+          // Unexecuted code (lines 53-54) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = __ieee754_scalb(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [e_scalb.c] enter main 3
+
+  [e_scalb.c] enter __ieee754_scalb 4
+  [e_scalb.c] enter __ieee754_scalb 5
+execution_summary: |2+
+
+  ```c
+  // e_scalb.c (64 lines total)
+  #include <stdio.h>
+  #include "fdlibm.h"
+
+  #ifdef _SCALB_INT
+  #ifdef __STDC__
+  	double __ieee754_scalb(double x, int fn)
+  #else
+  	double __ieee754_scalb(x,fn)
+  	double x; int fn;
+  #endif
+  #else
+  #ifdef __STDC__
+  	double __ieee754_scalb(double x, double fn)
+  #else
+  	double __ieee754_scalb(x,fn)
+  	double x, fn;
+  #endif
+  #endif
+  {
+  #ifdef _SCALB_INT
+  	// Unexecuted code (line 21) removed. Its line cov: 0/1 (0%)
+  #else
+  	fprintf(stderr, "\n");
+  	if (isnan(x)||isnan(fn)) {
+  		// Unexecuted code (line 25) removed. Its line cov: 0/1 (0%)
+  	}
+  	if (!finite(fn)) {
+  		if(fn>0.0) {
+  			return x*fn;
+  		} else {
+  			// Unexecuted code (line 31) removed. Its line cov: 0/1 (0%)
+  		}
+  	}
+  	if (rint(fn)!=fn) {
+  		// Unexecuted code (line 35) removed. Its line cov: 0/1 (0%)
+  	}
+  	if ( fn > 65000.0) {
+  		// Unexecuted code (line 38) removed. Its line cov: 0/1 (0%)
+  	}
+  	if (-fn > 65000.0) {
+  		// Unexecuted code (line 41) removed. Its line cov: 0/1 (0%)
+  	}
+  	// Unexecuted code (line 43) removed. Its line cov: 1/1 (100%)
+  #endif
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 3) {
+          // Unexecuted code (lines 53-54) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = __ieee754_scalb(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [e_scalb.c] enter main 3
+
+  [e_scalb.c] enter __ieee754_scalb 10

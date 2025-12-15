@@ -1,0 +1,354 @@
+id: 1
+src_id: 0
+create_time: '2025-12-14 17:32:09.819'
+time_taken: 332
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $1.51464000
+    call_cnt: 5
+    latency: 174.74s
+    input_tokens: 26214
+    output_tokens: 16506
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $1.27464000
+      call_cnt: 4
+      latency: 144.68s
+      input_tokens: 23166
+      output_tokens: 13522
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10460000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.62100000
+      call_cnt: 2
+      latency: 69.35s
+      input_tokens: 10864
+      output_tokens: 6476
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.50146000
+      call_cnt: 1
+      latency: 65.21s
+      input_tokens: 5988
+      output_tokens: 6253
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.04758000
+      call_cnt: 1
+      latency: 10.12s
+      input_tokens: 6314
+      output_tokens: 793
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.24000000
+      call_cnt: 1
+      latency: 30.05s
+      input_tokens: 3048
+      output_tokens: 2984
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.06096000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.17904000
+      call_cnt: 1
+      latency: 30.05s
+      input_tokens: 3048
+      output_tokens: 2984
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: 'In s_ceil.c: ceil(double x): within the j0 < 20 and j0 >= 0 block
+  (lines 35-42), take the inner branch `if(((i0&i)|i1)==0)` -> true, which performs
+  an early `return x;` for integer-valued inputs.'
+target_file_lines: s_ceil.c:37-37
+target_lines_content: "\t\t    return x; "
+justification: This region (lines 35-42) has 0% historical coverage and represents
+  core behavior of ceil for magnitudes >= 1 but less than 2^20. Exercising the true
+  branch of `if(((i0&i)|i1)==0)` tests the case where the input is already an exact
+  integer, triggering an early return. This is both important behavior and guaranteed
+  to execute new lines compared to the current run. It is reachable with the existing
+  harness because the program is invoked with a single numeric argument that can represent
+  such an integer (the provided argument "1.0" already meets the high-level condition).
+target_path_constraint: |
+  Chronological constraints to reach the specified branch (early return inside ceil for j0>=0 and j0<20, with ((i0 & i) | i1) == 0):
+
+  1. Program invocation (command-line and process environment):
+     - The program must be started with exactly one command-line argument in addition to the program name. Under the given harness, this is already satisfied because the shell executes: "./temp_executable 1.0".
+     - No special environment variables or files are required. Standard C library functions must be available.
+
+  2. Argument parsing:
+     - The single command-line argument must be a valid textual representation of a finite double-precision floating-point number in the C locale. The program uses atof(argv[1]) to parse it. Therefore:
+       - The argument’s leading/trailing whitespace is permitted but optional.
+       - Decimal or exponential notation is permitted; NaN or Infinity textual forms must NOT be used because they lead to non-finite values.
+
+  3. Magnitude class selection for ceil’s internal branching (to ensure j0 >= 0 and j0 < 20):
+     - Let x be the parsed double value. The internal branch computes j0 = exponent(x) − 1023, where exponent(x) is the unbiased exponent field of IEEE 754 double.
+     - To force j0 >= 0 and j0 < 20, x must satisfy: 1.0 ≤ |x| < 2^20, and x must be finite and not subnormal.
+     - This ensures execution enters the "j0 >= 0" else-block inside j0<20, rather than the j0<0 block or the j0>=20 path.
+
+  4. Early return condition for integer-valued inputs within the j0-range:
+     - Within that block, the code constructs a bitmask i = (0x000fffff) >> j0 and checks if ((i0 & i) | i1) == 0, where i0/i1 are the high/low 32-bit words of x’s IEEE 754 representation and i masks fractional mantissa bits for j0<20.
+     - The condition ((i0 & i) | i1) == 0 is exactly the predicate that x has no fractional bits in its mantissa at positions below the binary point; i.e., x is an exact integer in IEEE 754 representation.
+     - Therefore, require: x is an exact integer representable as double. Formally:
+       - There exists an integer k such that x = k, and k is within the range of finite doubles with 1 ≤ |k| < 2^20 (to keep j0 in [0,19]).
+       - Equivalently, x’s fractional part must be zero when represented in binary; no rounding artifacts are allowed. Avoid decimal strings that parse to a non-exact double if they are meant to represent an integer plus a tiny fraction.
+
+  5. Sign handling (to avoid other side-effects):
+     - The code path for j0>=0 does not flip sign on the early return; it simply returns x. Hence both positive and negative integers are acceptable as long as they meet step 3.
+
+  Summary of required input property for argv[1]:
+  - argv[1] must be a textual double encoding of an exact integer k with 1 ≤ |k| < 2^20, and k finite. This guarantees j0 ∈ [0,19] and the integer-check branch ((i0 & i) | i1) == 0 evaluates to true, causing an immediate return from ceil.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import os
+      import signal
+      import subprocess
+
+      # Concrete value selection satisfying constraints:
+      # - Single CLI arg is an exact integer k with 1 <= |k| < 2^20
+      # - Choose k = 1048575 (2^20 - 1), which is exactly representable in double,
+      #   yields j0 = 19 (in [0, 19]), and has no fractional bits.
+      cmd = "./temp_executable 1048575"
+
+      # Ensure C numeric locale semantics for atof (decimal point '.')
+      env = os.environ.copy()
+      env["LC_ALL"] = "C"
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+              env=env,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // s_ceil.c (88 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double huge = 1.0e300;
+  #else
+  static double huge = 1.0e300;
+  #endif
+
+  #ifdef __STDC__
+  	double ceil(double x)
+  #else
+  	double ceil(x)
+  	double x;
+  #endif
+  {
+  	int i0,i1,j0;
+  	unsigned i,j;
+  	i0 =  __HI(x);
+  	i1 =  __LO(x);
+  	j0 = ((i0>>20)&0x7ff)-0x3ff;
+  	if(j0<20) {
+  	    if(j0<0) { 	
+  		if(huge+x>0.0) {
+  		    if(i0<0) {i0=0x80000000;i1=0;} 
+  		    else if((i0|i1)!=0) { i0=0x3ff00000;i1=0;}
+  		}
+  	    } else {
+  		// Unexecuted code (lines 35-42) removed. Its line cov: 0/8 (0%)
+  	    }
+  	} else if (j0>51) {
+  	    // Unexecuted code (lines 45-49) removed. Its line cov: 0/5 (0%)
+  	} else {
+  	    // Unexecuted code (lines 51-65) removed. Its line cov: 0/15 (0%)
+  	}
+  	__HI(x) = i0;
+  	__LO(x) = i1;
+  	return x;
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 78-79) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = ceil(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [s_ceil.c] enter main 3
+  [s_ceil.c] enter ceil 1
+  [s_ceil.c] enter ceil 2
+  [s_ceil.c] enter ceil 3
+  [s_ceil.c] enter ceil 4
+  [s_ceil.c] enter ceil 16
+execution_summary: |2+
+
+  ```c
+  // s_ceil.c (88 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double huge = 1.0e300;
+  #else
+  static double huge = 1.0e300;
+  #endif
+
+  #ifdef __STDC__
+  	double ceil(double x)
+  #else
+  	double ceil(x)
+  	double x;
+  #endif
+  {
+  	int i0,i1,j0;
+  	unsigned i,j;
+  	i0 =  __HI(x);
+  	i1 =  __LO(x);
+  	j0 = ((i0>>20)&0x7ff)-0x3ff;
+  	if(j0<20) {
+  	    if(j0<0) { 	
+  		if(huge+x>0.0) {
+  		    if(i0<0) {i0=0x80000000;i1=0;} 
+  		    else if((i0|i1)!=0) { i0=0x3ff00000;i1=0;}
+  		}
+  	    } else {
+  		// Unexecuted code (lines 35-42) removed. Its line cov: 0/8 (0%)
+  	    }
+  	} else if (j0>51) {
+  	    // Unexecuted code (lines 45-49) removed. Its line cov: 0/5 (0%)
+  	} else {
+  	    // Unexecuted code (lines 51-65) removed. Its line cov: 0/15 (0%)
+  	}
+  	__HI(x) = i0;
+  	__LO(x) = i1;
+  	return x;
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 78-79) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = ceil(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [s_ceil.c] enter main 3
+  [s_ceil.c] enter ceil 1
+  [s_ceil.c] enter ceil 2
+  [s_ceil.c] enter ceil 3
+  [s_ceil.c] enter ceil 4
+  [s_ceil.c] enter ceil 16

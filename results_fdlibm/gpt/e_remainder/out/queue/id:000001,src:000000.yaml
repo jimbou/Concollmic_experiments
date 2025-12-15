@@ -1,0 +1,357 @@
+id: 1
+src_id: 0
+create_time: '2025-12-14 15:34:34.487'
+time_taken: 128
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 1
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.73136000
+    call_cnt: 3
+    latency: 83.87s
+    input_tokens: 13849
+    output_tokens: 7573
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.54812000
+      call_cnt: 2
+      latency: 66.30s
+      input_tokens: 10939
+      output_tokens: 5489
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10734000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.40112000
+      call_cnt: 1
+      latency: 56.21s
+      input_tokens: 5367
+      output_tokens: 4828
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03966000
+      call_cnt: 1
+      latency: 10.09s
+      input_tokens: 5572
+      output_tokens: 661
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.18324000
+      call_cnt: 1
+      latency: 17.57s
+      input_tokens: 2910
+      output_tokens: 2084
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05820000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.12504000
+      call_cnt: 1
+      latency: 17.57s
+      input_tokens: 2910
+      output_tokens: 2084
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if ((hp | lp) == 0) -> true in e_remainder.c:__ieee754_remainder
+target_file_lines: e_remainder.c:38-38
+target_lines_content: "\t\treturn (x*p)/(x*p);"
+justification: 'This branch handles the divisor-equals-zero case for IEEE remainder
+  and has zero historical coverage (line cov: 0/1 at line 38). Exercising it will
+  cover a distinct exceptional path that never runs under normal arguments. It is
+  reachable via command-line inputs by making the second argument parse to 0.0, which
+  is compatible with the current harness. Covering this branch increases robustness
+  testing around edge-case numeric inputs.'
+target_path_constraint: |-
+  To reach the branch (hp | lp) == 0 -> true inside __ieee754_remainder(x, p), the program must call this function with a divisor p that is exactly +0.0 or -0.0 at the IEEE-754 binary64 representation level. The execution is controlled solely via command-line arguments and standard C library parsing.
+
+  Chronological input and environment constraints:
+  1) Process invocation via shell must supply exactly two whitespace-separated arguments (besides the program name), as the harness already does. Concretely, ensure argc == 3 after the C runtime parses the command line.
+
+  2) The second command-line token (argv[2]) must convert, via the C function atof, to a floating-point value whose IEEE-754 double representation is zero (either +0.0 or -0.0). Requirements for this token:
+     - It must be a valid textual representation that atof parses as zero. Examples of textual patterns that parse to zero include representations consisting only of zeros and optional sign and decimal/exponent parts that evaluate to zero. Do not rely on locale-specific decimal separators; assume the C locale with '.' as the decimal point.
+     - The result after parsing must satisfy both 32-bit words of the double being zero except the sign bit, i.e., the high 32 bits with all magnitude bits 0 and the low 32 bits 0. In terms of hexadecimal words used in the code: hp == 0x00000000 and lp == 0x00000000 for +0.0, or hp == 0x80000000 and lp == 0x00000000 for -0.0. This ensures (hp | lp) == 0 for +0.0 and (hp | lp) == 0x80000000 for -0.0; therefore, to strictly satisfy (hp | lp) == 0, the textual form must parse to +0.0 specifically, not -0.0.
+
+  3) The first command-line token (argv[1]) must convert via atof to any finite double value (not NaN or Infinity). This avoids triggering the subsequent early-exit branch that checks for NaNs/Infinities and ensures execution proceeds to the (hp | lp) == 0 check. There is no further restriction from this target branch on argv[1].
+
+  4) No special environment variables or files are used. Default C locale with '.' as the decimal separator is assumed.
+
+  Summary of mathematical constraints:
+  - Let parse_double(s) denote atof(s) under the C locale.
+  - Require: p = parse_double(argv2); p == +0.0 exactly (bitwise), not -0.0.
+  - Require: x = parse_double(argv1); x is finite (|x| < INF) and not NaN.
+
+  These constraints guarantee that inside __ieee754_remainder(x, p), the variables hp and lp (the high/low 32-bit words of p) satisfy (hp | lp) == 0, making the target branch true.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # We provide two whitespace-separated arguments:
+      # argv[1] = "1.0" (finite double)
+      # argv[2] = "+0.0" (parses via atof to positive zero, ensuring (hp | lp) == 0)
+      # This yields argc == 3 and meets the target constraint inside __ieee754_remainder(x, p).
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0 +0.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // e_remainder.c (93 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double zero = 0.0;
+  #else
+  static double zero = 0.0;
+  #endif
+
+
+  #ifdef __STDC__
+  	double __ieee754_remainder(double x, double p)
+  #else
+  	double __ieee754_remainder(x,p)
+  	double x,p;
+  #endif
+  {
+  	int hx,hp;
+  	unsigned sx,lx,lp;
+  	double p_half;
+
+  	hx = __HI(x);		
+  	lx = __LO(x);		
+  	hp = __HI(p);		
+  	lp = __LO(p);		
+  	sx = hx&0x80000000;
+  	hp &= 0x7fffffff;
+  	hx &= 0x7fffffff;
+
+      
+  	if((hp|lp)==0) {
+  		// Unexecuted code (line 38) removed. Its line cov: 0/1 (0%)
+  	}
+  	if((hx>=0x7ff00000)||			
+  	  ((hp>=0x7ff00000)&&			
+  	  (((hp-0x7ff00000)|lp)!=0))) {
+  	    // Unexecuted code (line 43) removed. Its line cov: 0/1 (0%)
+  	}
+
+
+  	if (hp<=0x7fdfffff) {
+  		x = __ieee754_fmod(x,p+p);
+  	}
+  	if (((hx-hp)|(lx-lp))==0) {
+  		return zero*x;
+  	}
+  	// Unexecuted code (lines 53-54) removed. Its line cov: 0/2 (0%)
+  	if (hp<0x00200000) {
+  	    // Unexecuted code (lines 56-61) removed. Its line cov: 0/6 (0%)
+  	} else {
+  	    // Unexecuted code (lines 63-69) removed. Its line cov: 0/7 (0%)
+  	}
+  	// Unexecuted code (lines 71-72) removed. Its line cov: 0/2 (0%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+
+      if (argc != 3) {
+          // Unexecuted code (lines 82-83) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = __ieee754_remainder(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [e_remainder.c] enter main 3
+  [e_remainder.c] enter __ieee754_remainder 1
+  [e_remainder.c] enter __ieee754_remainder 2
+execution_summary: |2+
+
+  ```c
+  // e_remainder.c (93 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double zero = 0.0;
+  #else
+  static double zero = 0.0;
+  #endif
+
+
+  #ifdef __STDC__
+  	double __ieee754_remainder(double x, double p)
+  #else
+  	double __ieee754_remainder(x,p)
+  	double x,p;
+  #endif
+  {
+  	int hx,hp;
+  	unsigned sx,lx,lp;
+  	double p_half;
+
+  	hx = __HI(x);		
+  	lx = __LO(x);		
+  	hp = __HI(p);		
+  	lp = __LO(p);		
+  	sx = hx&0x80000000;
+  	hp &= 0x7fffffff;
+  	hx &= 0x7fffffff;
+
+      
+  	if((hp|lp)==0) {
+  		return (x*p)/(x*p);
+  	}
+  	if((hx>=0x7ff00000)||			
+  	  ((hp>=0x7ff00000)&&			
+  	  (((hp-0x7ff00000)|lp)!=0))) {
+  	    // Unexecuted code (line 43) removed. Its line cov: 0/1 (0%)
+  	}
+
+
+  	if (hp<=0x7fdfffff) {
+  		// Unexecuted code (line 48) removed. Its line cov: 1/1 (100%)
+  	}
+  	if (((hx-hp)|(lx-lp))==0) {
+  		// Unexecuted code (line 51) removed. Its line cov: 1/1 (100%)
+  	}
+  	// Unexecuted code (lines 53-54) removed. Its line cov: 0/2 (0%)
+  	if (hp<0x00200000) {
+  	    // Unexecuted code (lines 56-61) removed. Its line cov: 0/6 (0%)
+  	} else {
+  	    // Unexecuted code (lines 63-69) removed. Its line cov: 0/7 (0%)
+  	}
+  	// Unexecuted code (lines 71-72) removed. Its line cov: 0/2 (0%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+
+      if (argc != 3) {
+          // Unexecuted code (lines 82-83) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = __ieee754_remainder(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [e_remainder.c] enter main 3
+  [e_remainder.c] enter __ieee754_remainder 1
+  [e_remainder.c] enter __ieee754_remainder 4
+  [e_remainder.c] enter __ieee754_remainder 5

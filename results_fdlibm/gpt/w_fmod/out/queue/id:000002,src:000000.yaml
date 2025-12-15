@@ -1,0 +1,354 @@
+id: 2
+src_id: 0
+create_time: '2025-12-14 21:09:53.197'
+time_taken: 297
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.98842000
+    call_cnt: 3
+    latency: 115.98s
+    input_tokens: 13457
+    output_tokens: 11988
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.63434000
+      call_cnt: 2
+      latency: 72.91s
+      input_tokens: 10552
+      output_tokens: 7055
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10302000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.49250000
+      call_cnt: 1
+      latency: 63.94s
+      input_tokens: 5151
+      output_tokens: 6408
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03882000
+      call_cnt: 1
+      latency: 8.97s
+      input_tokens: 5401
+      output_tokens: 647
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.35408000
+      call_cnt: 1
+      latency: 43.08s
+      input_tokens: 2905
+      output_tokens: 4933
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05810000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.29598000
+      call_cnt: 1
+      latency: 43.08s
+      input_tokens: 2905
+      output_tokens: 4933
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (y == 0.0) -> false (take the else-branch) in w_fmod.c:fmod
+target_file_lines: w_fmod.c:23-23
+target_lines_content: "\t    return z;"
+justification: This branch within the fmod wrapper has 0% historical coverage (line
+  23). Reaching the else-branch will exercise non-IEEE error-handling/reporting logic
+  that is currently untested, improving coverage beyond the already-taken early-return
+  path. The previously attempted y==0.0 true-branch was not reached due to the early-return
+  gate controlled by the runtime math library mode. By instead targeting the else-branch
+  (y != 0.0) and disabling the early-return via environment-level constraints (non-IEEE
+  mode), we can reach this unexecuted code using the existing harness inputs (two
+  numeric arguments).
+target_path_constraint: |-
+  Chronological, external-input constraints to reach: w_fmod.c:fmod -> if (y == 0.0) evaluates to false (else-branch executes), ensuring execution of line 23.
+
+  1) Program invocation via shell with exactly two command-line arguments (as strings) representing finite double-precision numbers:
+     - The test harness already invokes: ./temp_executable 1.0 1.0
+     - Maintain argc == 3 at program entry (argv[0] is program path; argv[1], argv[2] exist).
+
+  2) Command-line argument parsing constraints:
+     - argv[1] must be a valid string parseable by strtod/atof into a finite double a0 (not NaN, not ±Inf).
+     - argv[2] must be a valid string parseable by strtod/atof into a finite double a1 (not NaN, not ±Inf).
+
+  3) Library mode/environment constraint to bypass the early return path in fmod wrapper (so that the y==0.0 branch is evaluated):
+     - Ensure the C math wrapper is NOT compiled/linked with _IEEE_LIBM defined at runtime (i.e., wrapper code path with #else is active). This is an environment/build configuration prerequisite; no runtime input can alter it.
+     - Additionally, ensure the library variable/mode _LIB_VERSION is NOT equal to _IEEE_ at runtime, and both inputs are NOT NaN. This avoids the early return: if (_LIB_VERSION == _IEEE_ || isnan(y) || isnan(x)) return z;
+       • Constraint: _LIB_VERSION != _IEEE_ (environmental; e.g., set matherr/errno behavior mode accordingly).
+       • Constraint: a0 is a finite number (not NaN), a1 is a finite number (not NaN).
+
+  4) Target branch direction in fmod:
+     - To take else-branch, require: a1 != 0.0 numerically after parsing (y != 0.0). No further relation between a0 and a1 is required for reaching line 23.
+
+  5) Platform and execution environment:
+     - Execution environment must allow standard floating-point IEEE-754 doubles and provide libm behavior where _LIB_VERSION is configurable and not set to _IEEE_.
+
+  Summary (SMT-style):
+     let a0 = strtod(argv1), a1 = strtod(argv2)
+     constraints:
+       argc = 3
+       isFinite(a0) ∧ isFinite(a1)
+       ¬isNaN(a0) ∧ ¬isNaN(a1)
+       a1 ≠ 0.0
+       buildFlag(_IEEE_LIBM) = false
+       runtimeMode(_LIB_VERSION) ≠ _IEEE_
+
+  These constraints ensure the function does not exit early, evaluates the y==0.0 check, and takes the else-branch (false).
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import os
+      import signal
+      import subprocess
+      import tempfile
+
+      # We keep two finite double command-line arguments and ensure a1 != 0.0.
+      # Using the same values as the original harness: 1.0 1.0
+      # To satisfy the library-mode constraint (_LIB_VERSION != _IEEE_), we preload
+      # a small shared library that sets the global _LIB_VERSION to a non-IEEE mode.
+      # This enables the wrapper path that evaluates (y == 0.0) and takes the else-branch
+      # when y != 0.0.
+
+      # Build a tiny LD_PRELOAD library that sets _LIB_VERSION to 1 (typically _SVID_)
+      # via dlsym on the global symbol. This avoids needing headers or compile-time constants.
+      preload_c = r"""
+      #define _GNU_SOURCE
+      #include <dlfcn.h>
+      __attribute__((constructor)) static void init(void) {
+          void *sym = dlsym(RTLD_DEFAULT, "_LIB_VERSION");
+          if (sym) {
+              int *p = (int*)sym;
+              *p = 1; // set non-IEEE mode so wrappers do not early-return
+          }
+      }
+      """
+
+      try:
+          with tempfile.TemporaryDirectory() as td:
+              c_path = os.path.join(td, "preload_libm_mode.c")
+              so_path = os.path.join(td, "preload_libm_mode.so")
+              with open(c_path, "w", encoding="utf-8") as f:
+                  f.write(preload_c)
+              # Compile the shared object. Requires gcc and libdl.
+              compile_cmd = [
+                  "bash",
+                  "-lc",
+                  f"gcc -shared -fPIC -o '{so_path}' '{c_path}' -ldl"
+              ]
+              compile_res = subprocess.run(
+                  compile_cmd,
+                  capture_output=True,
+                  encoding="utf-8",
+                  errors="replace",
+                  timeout=30,
+              )
+              if compile_res.returncode != 0:
+                  raise RuntimeError(
+                      "Failed to compile LD_PRELOAD library for _LIB_VERSION override.\n"
+                      f"STDOUT:\n{compile_res.stdout}\nSTDERR:\n{compile_res.stderr}"
+                  )
+
+              # Prepare environment: set LD_PRELOAD (Linux) and DYLD_* (macOS fallback)
+              env = os.environ.copy()
+              existing = env.get("LD_PRELOAD", "")
+              env["LD_PRELOAD"] = f"{so_path} {existing}".strip()
+              # macOS attempt (may be ignored if SIP is active; harmless otherwise)
+              env["DYLD_INSERT_LIBRARIES"] = so_path
+              env["DYLD_FORCE_FLAT_NAMESPACE"] = "1"
+
+              # Execute the original test harness structure with concrete values
+              try:
+                  result = subprocess.run(
+                      ["./temp_executable 1.0 1.0"],
+                      capture_output=True,
+                      encoding="utf-8",
+                      errors="replace",
+                      shell=True,
+                      timeout=timeout,
+                      env=env,
+                  )
+                  return result.stderr, result.returncode
+              except subprocess.TimeoutExpired as e:
+                  return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // w_fmod.c (45 lines total)
+  #include <stdio.h>
+  #include "fdlibm.h"
+
+
+  #ifdef __STDC__
+  	double fmod(double x, double y)	
+  #else
+  	double fmod(x,y)		
+  	double x,y;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	// Unexecuted code (line 13) removed. Its line cov: 0/1 (0%)
+  #else
+  	double z;
+  	z = __ieee754_fmod(x,y);
+  	if(_LIB_VERSION == _IEEE_ ||isnan(y)||isnan(x)) {
+  		return z;
+  	}
+  	if(y==0.0) {
+  	        // Unexecuted code (line 21) removed. Its line cov: 0/1 (0%)
+  	} else {
+  	    // Unexecuted code (line 23) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 3) {
+          // Unexecuted code (lines 34-35) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = fmod(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [w_fmod.c] enter main 3
+  [w_fmod.c] enter fmod 2
+  [w_fmod.c] enter fmod 3
+execution_summary: |2+
+
+  ```c
+  // w_fmod.c (45 lines total)
+  #include <stdio.h>
+  #include "fdlibm.h"
+
+
+  #ifdef __STDC__
+  	double fmod(double x, double y)	
+  #else
+  	double fmod(x,y)		
+  	double x,y;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	// Unexecuted code (line 13) removed. Its line cov: 0/1 (0%)
+  #else
+  	double z;
+  	z = __ieee754_fmod(x,y);
+  	if(_LIB_VERSION == _IEEE_ ||isnan(y)||isnan(x)) {
+  		return z;
+  	}
+  	if(y==0.0) {
+  	        // Unexecuted code (line 21) removed. Its line cov: 0/1 (0%)
+  	} else {
+  	    // Unexecuted code (line 23) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 3) {
+          // Unexecuted code (lines 34-35) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = fmod(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [w_fmod.c] enter main 3
+  [w_fmod.c] enter fmod 2
+  [w_fmod.c] enter fmod 3

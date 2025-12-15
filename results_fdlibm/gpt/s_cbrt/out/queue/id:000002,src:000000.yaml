@@ -1,0 +1,425 @@
+id: 2
+src_id: 0
+create_time: '2025-12-14 17:26:35.480'
+time_taken: 328
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $1.06272000
+    call_cnt: 4
+    latency: 113.74s
+    input_tokens: 19938
+    output_tokens: 11066
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.88408000
+      call_cnt: 3
+      latency: 89.83s
+      input_tokens: 17114
+      output_tokens: 9030
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10896000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.39310000
+      call_cnt: 1
+      latency: 50.73s
+      input_tokens: 5448
+      output_tokens: 4647
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.34926000
+      call_cnt: 1
+      latency: 31.53s
+      input_tokens: 5714
+      output_tokens: 3837
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03276000
+      call_cnt: 1
+      latency: 7.57s
+      input_tokens: 5952
+      output_tokens: 546
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.17864000
+      call_cnt: 1
+      latency: 23.91s
+      input_tokens: 2824
+      output_tokens: 2036
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05648000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.12216000
+      call_cnt: 1
+      latency: 23.91s
+      input_tokens: 2824
+      output_tokens: 2036
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (hx < 0x00100000) -> false in s_cbrt.c:cbrt(double)
+target_file_lines: s_cbrt.c:62-62
+target_lines_content: "\t  \t__HI(t)=hx/3+B1;"
+justification: The else-branch at line 62 (normal-number initialization path) has
+  0% historical coverage per the provided coverage snippet. Exercising this branch
+  will cover the core path for normal finite inputs, which is likely the most common
+  execution route of cbrt and therefore important for overall coverage. This branch
+  is reachable with the current harness (single command-line argument parsed via atof)
+  by ensuring the input is a normal, finite, non-zero double. It does not require
+  modifying the harness and will drive execution through an alternative path compared
+  to the current trace, which took the subnormal branch.
+target_path_constraint: |-
+  Environment and invocation constraints (chronological):
+
+  1) Program invocation via shell must pass exactly one command-line argument (besides the program name), ensuring argc == 2 in main. The harness already uses: ./temp_executable 1.0 (shell=True), which satisfies the argument count requirement. Do not change the invocation format, only the numeric value of the single argument if needed.
+
+  2) Argument parseability: The sole command-line argument must be a textual representation of a finite, non-zero decimal number in a format accepted by C’s atof, using the process locale’s default conventions (ASCII digits, optional leading sign, optional decimal point, optional exponent). There must be no surrounding quotes that would reach the program (shell strips them), and no trailing non-numeric characters that would cause atof to return 0.0.
+
+  3) Finite and non-zero value requirement: The parsed double value x must be finite (not NaN, not ±Inf) and non-zero: x ∈ ℝ \ {0}, and |x| < DBL_MAX, with no NaN or Inf token. This avoids the early returns guarded by hx >= 0x7ff00000 (Inf/NaN) and (hx|__LO(x)) == 0 (±0).
+
+  4) Normal (not subnormal) magnitude requirement at the double-precision bit level: The absolute value |x| must be a normal double, i.e., its unbiased exponent must be in [−1022, +1023], excluding the denormal/subnormal range. Equivalently in textual terms: choose |x| such that it is not extremely small; specifically, ensure |x| ≥ DBL_MIN (approximately 2.2250738585072014e−308) and still finite. This ensures the internal condition (hx < 0x00100000) is false and the code takes the else branch where __HI(t)=hx/3+B1 is executed.
+
+  5) No additional environment requirements: The program does not read files or environment variables; standard floating-point environment should be default IEEE-754 double without altered rounding modes.
+
+  Summary (SMT-style predicates over the parsed double x):
+  - isfinite(x)
+  - x ≠ 0.0
+  - |x| ≥ DBL_MIN
+  - |x| ≤ DBL_MAX
+
+  Any input string satisfying these will drive cbrt down the normal-number initialization branch (if (hx < 0x00100000) is false).
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Chosen argument: "1.0"
+      # Justification:
+      # - isfinite(1.0) == True
+      # - 1.0 != 0.0
+      # - |1.0| >= DBL_MIN and <= DBL_MAX (normal, finite double)
+      # - Cleanly parsed by C's atof under default locale (ASCII digits, decimal point)
+      # - Satisfies the path predicate to take the normal-number initialization branch
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // s_cbrt.c (103 lines total)
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+
+  #ifdef __STDC__
+  static const unsigned 
+  #else
+  static unsigned 
+  #endif
+  	B1 = 715094163, 
+  	B2 = 696219795; 
+
+  #ifdef __STDC__
+  static const double
+  #else
+  static double
+  #endif
+  C =  5.42857142857142815906e-01, 
+  D = -7.05306122448979611050e-01, 
+  E =  1.41428571428571436819e+00, 
+  F =  1.60714285714285720630e+00, 
+  G =  3.57142857142857150787e-01; 
+
+  #ifdef __STDC__
+  	double cbrt(double x) 
+  #else
+  	double cbrt(x) 
+  	double x;
+  #endif
+  {
+  	fprintf(stderr, "\n");
+  	int	hx;
+  	double r,s,t=0.0,w;
+  	unsigned sign;
+
+
+  	hx = __HI(x);		
+  	sign=hx&0x80000000; 		
+  	hx  ^=sign;
+  	if(hx>=0x7ff00000) 
+  	{
+  		// Unexecuted code (line 46) removed. Its line cov: 0/1 (0%)
+  	}
+  	if((hx|__LO(x))==0) 
+  	{
+  	    // Unexecuted code (line 50) removed. Its line cov: 0/1 (0%)
+  	}
+
+  	__HI(x) = hx;	
+      
+  	if(hx<0x00100000) 		
+  	{
+  	  	__HI(t)=0x43500000; 		
+  	   	t*=x; __HI(t)=__HI(t)/3+B2;
+  	}
+  	else
+  	{
+  	  	// Unexecuted code (line 62) removed. Its line cov: 0/1 (0%)
+  	}
+
+
+      
+  	r=t*t/x;
+  	s=C+r*t;
+  	t*=G+F/(s+E+D/s);	
+
+       
+  	__LO(t)=0; __HI(t)+=0x00000001;
+
+
+      
+  	s=t*t;		
+  	r=x/s;
+  	w=t+t;
+  	r=(r-t)/(w+r);	
+  	t=t+t*r;
+
+      
+  	__HI(t) |= sign;
+  	return(t);
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 93-94) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = cbrt(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [s_cbrt.c] enter main 3
+
+  [s_cbrt.c] enter cbrt 4
+  [s_cbrt.c] enter cbrt 6
+  [s_cbrt.c] enter cbrt 7
+  [s_cbrt.c] enter cbrt 8
+  [s_cbrt.c] enter cbrt 9
+execution_summary: |2+
+
+  ```c
+  // s_cbrt.c (103 lines total)
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+
+  #ifdef __STDC__
+  static const unsigned 
+  #else
+  static unsigned 
+  #endif
+  	B1 = 715094163, 
+  	B2 = 696219795; 
+
+  #ifdef __STDC__
+  static const double
+  #else
+  static double
+  #endif
+  C =  5.42857142857142815906e-01, 
+  D = -7.05306122448979611050e-01, 
+  E =  1.41428571428571436819e+00, 
+  F =  1.60714285714285720630e+00, 
+  G =  3.57142857142857150787e-01; 
+
+  #ifdef __STDC__
+  	double cbrt(double x) 
+  #else
+  	double cbrt(x) 
+  	double x;
+  #endif
+  {
+  	fprintf(stderr, "\n");
+  	int	hx;
+  	double r,s,t=0.0,w;
+  	unsigned sign;
+
+
+  	hx = __HI(x);		
+  	sign=hx&0x80000000; 		
+  	hx  ^=sign;
+  	if(hx>=0x7ff00000) 
+  	{
+  		// Unexecuted code (line 46) removed. Its line cov: 0/1 (0%)
+  	}
+  	if((hx|__LO(x))==0) 
+  	{
+  	    // Unexecuted code (line 50) removed. Its line cov: 0/1 (0%)
+  	}
+
+  	__HI(x) = hx;	
+      
+  	if(hx<0x00100000) 		
+  	{
+  	  	__HI(t)=0x43500000; 		
+  	   	t*=x; __HI(t)=__HI(t)/3+B2;
+  	}
+  	else
+  	{
+  	  	// Unexecuted code (line 62) removed. Its line cov: 0/1 (0%)
+  	}
+
+
+      
+  	r=t*t/x;
+  	s=C+r*t;
+  	t*=G+F/(s+E+D/s);	
+
+       
+  	__LO(t)=0; __HI(t)+=0x00000001;
+
+
+      
+  	s=t*t;		
+  	r=x/s;
+  	w=t+t;
+  	r=(r-t)/(w+r);	
+  	t=t+t*r;
+
+      
+  	__HI(t) |= sign;
+  	return(t);
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 93-94) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = cbrt(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [s_cbrt.c] enter main 3
+
+  [s_cbrt.c] enter cbrt 4
+  [s_cbrt.c] enter cbrt 6
+  [s_cbrt.c] enter cbrt 7
+  [s_cbrt.c] enter cbrt 8
+  [s_cbrt.c] enter cbrt 9

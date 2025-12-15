@@ -1,0 +1,298 @@
+id: 1
+src_id: 0
+create_time: '2025-12-14 19:11:56.414'
+time_taken: 104
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.61882000
+    call_cnt: 3
+    latency: 63.97s
+    input_tokens: 13157
+    output_tokens: 5928
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.45388000
+      call_cnt: 2
+      latency: 47.63s
+      input_tokens: 10391
+      output_tokens: 4101
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10204000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.32166000
+      call_cnt: 1
+      latency: 38.74s
+      input_tokens: 5102
+      output_tokens: 3598
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03018000
+      call_cnt: 1
+      latency: 8.90s
+      input_tokens: 5289
+      output_tokens: 503
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.16494000
+      call_cnt: 1
+      latency: 16.34s
+      input_tokens: 2766
+      output_tokens: 1827
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05532000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.10962000
+      call_cnt: 1
+      latency: 16.34s
+      input_tokens: 2766
+      output_tokens: 1827
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if ((ix | lx) == 0) -> true in s_logb.c:logb
+target_file_lines: s_logb.c:21-21
+target_lines_content: "\t\treturn -1.0/fabs(x);"
+justification: 'This branch handles the zero input case for logb and currently has
+  0% historical coverage (line cov: 0/1). It represents a critical edge case for floating-point
+  functions and will exercise distinct behavior in the math library. It is reachable
+  via command-line input by providing a value that parses to IEEE-754 zero through
+  atof, which is compatible with the existing harness.'
+target_path_constraint: |-
+  Chronological, program-input-level constraints to reach: if ((ix | lx) == 0) -> true in s_logb.c:logb
+
+  1) Process invocation via shell must supply exactly one command-line argument to the executable:
+     - The program is launched as a single shell command string; argc observed by the C program must be 2 (program name + one argument). No additional arguments or spaces that would be parsed into extra argv entries after shell splitting.
+
+  2) Argument formatting and parsing constraints so that atof(argv[1]) yields IEEE-754 double-precision +0.0 or -0.0:
+     - argv[1] must be a valid decimal or hexadecimal floating literal that the standard C library atof parses successfully as zero. Examples of acceptable lexical categories (without enumerating specific strings): strings consisting solely of optional leading/trailing whitespace, an optional sign (+ or -), followed by either:
+       a) One or more zeros with optional decimal point and optional fractional zeros; or
+       b) A decimal point followed by one or more zeros; or
+       c) A signed zero in scientific notation with any exponent (e.g., mantissa zero times any exponent parses to zero); or
+       d) Any form that the C locale’s atof recognizes as zero (including “0x0p+0” in C99 hex-float form, if supported by atof on the platform).
+     - No nonzero digit may appear in the mantissa; any exponent part, if present, must not introduce nonzero magnitude because zero times any finite power remains zero. The result must be exactly +0.0 or -0.0 as a double.
+
+  3) Environment/locale assumptions:
+     - The execution environment must use a locale where atof recognizes the decimal point '.' and standard hex-float syntax, or else the provided string must conform to the current locale’s decimal separator so that parsing still yields zero.
+
+  4) File/system constraints:
+     - None; the program does not read files. Standard I/O and permissions must allow process startup and argument parsing.
+
+  Satisfaction of (2) guarantees the internal bitwise check (ix | lx) == 0 in logb receives x = ±0.0, making both high and low 32-bit words zero, thus the branch evaluates to true.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+      import os
+
+      try:
+          # Ensure a locale where '.' is the decimal separator and standard atof behavior applies
+          env = os.environ.copy()
+          env["LC_ALL"] = "C"
+          env["LANG"] = "C"
+
+          # Provide exactly one argument that atof parses as ±0.0; use -0.0 to satisfy ix|lx==0 via masked sign
+          result = subprocess.run(
+              ["./temp_executable -0.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+              env=env,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // s_logb.c (49 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double logb(double x)
+  #else
+  	double logb(x)
+  	double x;
+  #endif
+  {
+  	int lx,ix;
+  	ix = (__HI(x))&0x7fffffff;	
+  	lx = __LO(x);			
+  	if((ix|lx)==0) {
+  		// Unexecuted code (line 21) removed. Its line cov: 0/1 (0%)
+  	}
+  	if(ix>=0x7ff00000) {
+  		// Unexecuted code (line 24) removed. Its line cov: 0/1 (0%)
+  	}
+  	if((ix>>=20)==0) {
+  		return -1022.0;
+  	} else {
+  		// Unexecuted code (line 29) removed. Its line cov: 0/1 (0%)
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 39-40) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = logb(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [s_logb.c] enter main 3
+  [s_logb.c] enter logb 1
+  [s_logb.c] enter logb 4
+execution_summary: |2+
+
+  ```c
+  // s_logb.c (49 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double logb(double x)
+  #else
+  	double logb(x)
+  	double x;
+  #endif
+  {
+  	int lx,ix;
+  	ix = (__HI(x))&0x7fffffff;	
+  	lx = __LO(x);			
+  	if((ix|lx)==0) {
+  		// Unexecuted code (line 21) removed. Its line cov: 0/1 (0%)
+  	}
+  	if(ix>=0x7ff00000) {
+  		// Unexecuted code (line 24) removed. Its line cov: 0/1 (0%)
+  	}
+  	if((ix>>=20)==0) {
+  		return -1022.0;
+  	} else {
+  		// Unexecuted code (line 29) removed. Its line cov: 0/1 (0%)
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 39-40) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = logb(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [s_logb.c] enter main 3
+  [s_logb.c] enter logb 1
+  [s_logb.c] enter logb 4

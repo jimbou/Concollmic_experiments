@@ -1,0 +1,380 @@
+id: 1
+src_id: 0
+create_time: '2025-12-14 21:37:57.580'
+time_taken: 152
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.80986000
+    call_cnt: 3
+    latency: 111.34s
+    input_tokens: 13721
+    output_tokens: 8924
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.57182000
+      call_cnt: 2
+      latency: 70.70s
+      input_tokens: 10945
+      output_tokens: 5882
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10726000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.43318000
+      call_cnt: 1
+      latency: 62.38s
+      input_tokens: 5363
+      output_tokens: 5359
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03138000
+      call_cnt: 1
+      latency: 8.32s
+      input_tokens: 5582
+      output_tokens: 523
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.23804000
+      call_cnt: 1
+      latency: 40.64s
+      input_tokens: 2776
+      output_tokens: 3042
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05552000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.18252000
+      call_cnt: 1
+      latency: 40.64s
+      input_tokens: 2776
+      output_tokens: 3042
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (fabs(x) > X_TLOSS) -> true in w_j1.c:j1
+target_file_lines: w_j1.c:27-27
+target_lines_content: "\t        return __kernel_standard(x,x,36); "
+justification: This branch body (line 27) has 0% historical coverage and sits behind
+  the core range-check for the Bessel J1 wrapper. Exercising it will explore the library’s
+  loss-of-significance handling path, which is currently untested. Although multiple
+  branches are present, y1() is never called by main and main’s argc!=2 path is unreachable
+  under the current harness. Therefore, the X_TLOSS path in j1() is the most promising
+  reachable branch contingent on runtime library mode not being IEEE and the input
+  magnitude being large.
+target_path_constraint: |-
+  Constraints to reach j1 branch (fabs(x) > X_TLOSS) -> true:
+
+  1) Program invocation (command-line):
+  - The program must be launched with exactly one command-line argument after the program name (i.e., two argc entries total). Using a shell wrapper is acceptable as long as the resulting process sees argc == 2.
+
+  2) Argument parsing format:
+  - The single argument must be a valid textual representation of a finite double-precision floating-point number in the C locale (decimal point is '.', optional leading sign, optional exponent). The conversion uses atof, which accepts surrounding whitespace but stops at the first non-numeric token. Ensure the first token forms a valid number so that atof does not return 0.0 from an empty/invalid token.
+
+  3) Library configuration/environment assumptions (non-input, but required reachability conditions):
+  - The math library must be compiled/configured such that the wrapper j1(x) executes the non-IEEE path, i.e., _IEEE_LIBM is NOT defined at compile time, and the runtime _LIB_VERSION is NOT equal to _IEEE_. Otherwise the wrapper would return early and the target branch is unreachable. These are environmental/build-time conditions.
+
+  4) Numeric relational constraint to steer into the target branch:
+  - Let x be the double parsed from argv[1]. Require that x is not NaN (NaN would trigger the earlier return).
+  - Require fabs(x) > X_TLOSS, where X_TLOSS is the library-defined positive threshold constant used by fdlibm to guard large-argument total-loss-of-significance. This ensures execution enters the target branch body guarded by if (fabs(x) > X_TLOSS).
+
+  5) Domain sanity to avoid alternative earlier exits:
+  - Ensure the parsed double is finite (not ±Inf). If atof were to create ±Inf on overflow, behavior may vary across C libraries; to guarantee consistent path, choose a magnitude that is finite yet strictly greater than X_TLOSS.
+
+  Summary in SMT-like form (abstracting the library mode as preconditions):
+  - Precondition: BuildFlag(_IEEE_LIBM) = false ∧ Runtime(_LIB_VERSION) ≠ _IEEE_
+  - Input: argv = [prog, s]
+  - Parse: x = atof(s)
+  - Constraints: isFinite(x) ∧ ¬isNaN(x) ∧ |x| > X_TLOSS
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import os
+      import signal
+      import subprocess
+
+      # Choose a finite double much larger than typical fdlibm X_TLOSS (~1.41e16)
+      # to satisfy fabs(x) > X_TLOSS while staying finite and non-NaN.
+      arg_value = "1e20"
+
+      # Preserve original structure (shell=True and single command string element)
+      cmd = f"./temp_executable {arg_value}"
+
+      # Ensure C locale to match atof expectations
+      env = os.environ.copy()
+      env["LC_ALL"] = "C"
+      env["LANG"] = "C"
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+              env=env,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // w_j1.c (89 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include "stdio.h"
+
+  #ifdef __STDC__
+  	double j1(double x)		
+  #else
+  	double j1(x)			
+  	double x;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	// Unexecuted code (line 18) removed. Its line cov: 0/1 (0%)
+  #else
+  	double z;
+  	z = __ieee754_j1(x);
+  	if(_LIB_VERSION == _IEEE_ || isnan(x) )
+  	{
+  		return z;
+  	}
+  	if(fabs(x)>X_TLOSS) {
+  	        // Unexecuted code (line 27) removed. Its line cov: 0/1 (0%)
+  	} else
+  	{
+  	    // Unexecuted code (line 30) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  }
+
+  #ifdef __STDC__
+  	double y1(double x)		
+  #else
+  	double y1(x)			
+  	double x;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	// Unexecuted code (line 43) removed. Its line cov: 0/1 (0%)
+  #else
+  	// Unexecuted code (lines 45-46) removed. Its line cov: 0/2 (0%)
+  	if(_LIB_VERSION == _IEEE_ || isnan(x) )
+  	{
+  		// Unexecuted code (line 49) removed. Its line cov: 0/1 (0%)
+  	}
+          if(x <= 0.0){
+                  if(x==0.0)
+                  {
+                      // Unexecuted code (lines 54-55) removed. Its line cov: 0/1 (0%)
+                  }
+                  else
+                  {
+                      // Unexecuted code (lines 59-60) removed. Its line cov: 0/1 (0%)
+                  }
+          }
+  	if(x>X_TLOSS) {
+  	        // Unexecuted code (line 64) removed. Its line cov: 0/1 (0%)
+  	} else
+  	{
+  	    // Unexecuted code (line 67) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+
+      if (argc != 2) {
+          // Unexecuted code (lines 79-80) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = j1(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [w_j1.c] enter main 3
+  [w_j1.c] enter j1 2
+  [w_j1.c] enter j1 3
+execution_summary: |2+
+
+  ```c
+  // w_j1.c (89 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include "stdio.h"
+
+  #ifdef __STDC__
+  	double j1(double x)		
+  #else
+  	double j1(x)			
+  	double x;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	// Unexecuted code (line 18) removed. Its line cov: 0/1 (0%)
+  #else
+  	double z;
+  	z = __ieee754_j1(x);
+  	if(_LIB_VERSION == _IEEE_ || isnan(x) )
+  	{
+  		return z;
+  	}
+  	if(fabs(x)>X_TLOSS) {
+  	        // Unexecuted code (line 27) removed. Its line cov: 0/1 (0%)
+  	} else
+  	{
+  	    // Unexecuted code (line 30) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  }
+
+  #ifdef __STDC__
+  	double y1(double x)		
+  #else
+  	double y1(x)			
+  	double x;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	// Unexecuted code (line 43) removed. Its line cov: 0/1 (0%)
+  #else
+  	// Unexecuted code (lines 45-46) removed. Its line cov: 0/2 (0%)
+  	if(_LIB_VERSION == _IEEE_ || isnan(x) )
+  	{
+  		// Unexecuted code (line 49) removed. Its line cov: 0/1 (0%)
+  	}
+          if(x <= 0.0){
+                  if(x==0.0)
+                  {
+                      // Unexecuted code (lines 54-55) removed. Its line cov: 0/1 (0%)
+                  }
+                  else
+                  {
+                      // Unexecuted code (lines 59-60) removed. Its line cov: 0/1 (0%)
+                  }
+          }
+  	if(x>X_TLOSS) {
+  	        // Unexecuted code (line 64) removed. Its line cov: 0/1 (0%)
+  	} else
+  	{
+  	    // Unexecuted code (line 67) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+
+      if (argc != 2) {
+          // Unexecuted code (lines 79-80) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = j1(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [w_j1.c] enter main 3
+  [w_j1.c] enter j1 2
+  [w_j1.c] enter j1 3

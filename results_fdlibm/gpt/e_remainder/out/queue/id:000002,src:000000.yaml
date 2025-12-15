@@ -1,0 +1,375 @@
+id: 2
+src_id: 0
+create_time: '2025-12-14 15:36:48.115'
+time_taken: 279
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: true
+newly_covered_lines: 9
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.78966000
+    call_cnt: 3
+    latency: 98.08s
+    input_tokens: 13911
+    output_tokens: 8524
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.59026000
+      call_cnt: 2
+      latency: 63.41s
+      input_tokens: 11036
+      output_tokens: 6159
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10734000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.44530000
+      call_cnt: 1
+      latency: 55.13s
+      input_tokens: 5367
+      output_tokens: 5532
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03762000
+      call_cnt: 1
+      latency: 8.29s
+      input_tokens: 5669
+      output_tokens: 627
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.19940000
+      call_cnt: 1
+      latency: 34.67s
+      input_tokens: 2875
+      output_tokens: 2365
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05750000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.14190000
+      call_cnt: 1
+      latency: 34.67s
+      input_tokens: 2875
+      output_tokens: 2365
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if ((hx >= 0x7ff00000) || ((hp >= 0x7ff00000) && (((hp - 0x7ff00000)
+  | lp) != 0))) -> true in e_remainder.c:__ieee754_remainder
+target_file_lines: e_remainder.c:43-43
+target_lines_content: "\t    return (x*p)/(x*p);"
+justification: 'This branch handles IEEE-754 special cases when the dividend is Inf/NaN
+  or the divisor is NaN. It has zero historical coverage (line cov: 0/1 (0%)) in the
+  trace, and reaching it will exercise important error/special-case handling that
+  is currently untested. It is encountered early in __ieee754_remainder, so triggering
+  it guarantees executing code in the protected block and improves coverage in a core
+  math routine. The harness can reach it by providing command-line arguments that
+  parse to NaN/Inf via atof, without requiring code changes.'
+target_path_constraint: |-
+  Program entry and invocation:
+  1. The program is invoked exactly as compiled, taking two command-line arguments that are parsed as double-precision floating-point values using the C library function atof.
+     - Requirement: The executed command line must contain exactly three tokens: the executable path and two argument strings, ensuring argc == 3 inside main.
+
+  Argument parsing and value domains:
+  2. The first argument string (argv[1]) and/or the second argument string (argv[2]) must represent special IEEE-754 values when converted by atof, to satisfy the special-case predicate in __ieee754_remainder.
+     - Define x = atof(argv[1]) and p = atof(argv[2]).
+     - The target branch becomes true if any of the following holds:
+       a) x is NaN or ±Infinity; formally, the high 32 bits of x interpreted as IEEE-754 double have exponent bits all ones (0x7ff) (hx >= 0x7ff00000 after masking sign), i.e., x is Inf or NaN.
+       b) p is NaN; formally, the high 32 bits of p have exponent all ones (hp >= 0x7ff00000) and at least one of the combined high/low mantissa bits is nonzero: (((hp - 0x7ff00000) | lp) != 0).
+
+  Constraints to reach the branch (expressed at the input level):
+  3. Provide inputs so that either condition 2a or 2b holds after atof conversion:
+     - Option 2a (simplest): argv[1] parses to ±Infinity or NaN under atof. Examples of acceptable textual forms include implementation-standard spellings for infinity or NaN as recognized by atof (case-insensitive is typical). This ensures hx >= 0x7ff00000.
+     - Option 2b: argv[2] parses to a NaN value under atof (a quiet or signaling NaN). This ensures (hp >= 0x7ff00000) and the mantissa is nonzero, so (((hp - 0x7ff00000) | lp) != 0) holds.
+
+  Environmental/format constraints:
+  4. The shell must pass the arguments without truncation or quoting side effects so that atof receives them exactly as intended. No locale changes should interfere with atof parsing (decimal point remains '.').
+  5. Both arguments must be present; otherwise argc != 3 and the program may exit early. Ensure the second argument is not omitted.
+
+  Summary of sufficient input conditions:
+  - Satisfy argc == 3 and successful parsing by atof.
+  - Either: the first numeric argument is ±Infinity or NaN; or: the second numeric argument is NaN.
+  These ensure the special-case conditional in __ieee754_remainder evaluates to true, reaching the targeted branch.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Use argv[1] = "inf" to ensure atof parses it as +Infinity, satisfying hx >= 0x7ff00000
+      # Keep argv[2] as a normal finite number to preserve argc == 3 and successful parsing
+      cmd = "./temp_executable inf 1.0"
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, return captured stderr (if any) and a negative signal code
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # Propagate unexpected execution errors
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // e_remainder.c (93 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double zero = 0.0;
+  #else
+  static double zero = 0.0;
+  #endif
+
+
+  #ifdef __STDC__
+  	double __ieee754_remainder(double x, double p)
+  #else
+  	double __ieee754_remainder(x,p)
+  	double x,p;
+  #endif
+  {
+  	int hx,hp;
+  	unsigned sx,lx,lp;
+  	double p_half;
+
+  	hx = __HI(x);		
+  	lx = __LO(x);		
+  	hp = __HI(p);		
+  	lp = __LO(p);		
+  	sx = hx&0x80000000;
+  	hp &= 0x7fffffff;
+  	hx &= 0x7fffffff;
+
+      
+  	if((hp|lp)==0) {
+  		// Unexecuted code (line 38) removed. Its line cov: 1/1 (100%)
+  	}
+  	if((hx>=0x7ff00000)||			
+  	  ((hp>=0x7ff00000)&&			
+  	  (((hp-0x7ff00000)|lp)!=0))) {
+  	    // Unexecuted code (line 43) removed. Its line cov: 0/1 (0%)
+  	}
+
+
+  	if (hp<=0x7fdfffff) {
+  		x = __ieee754_fmod(x,p+p);
+  	}
+  	if (((hx-hp)|(lx-lp))==0) {
+  		return zero*x;
+  	}
+  	// Unexecuted code (lines 53-54) removed. Its line cov: 0/2 (0%)
+  	if (hp<0x00200000) {
+  	    // Unexecuted code (lines 56-61) removed. Its line cov: 0/6 (0%)
+  	} else {
+  	    // Unexecuted code (lines 63-69) removed. Its line cov: 0/7 (0%)
+  	}
+  	// Unexecuted code (lines 71-72) removed. Its line cov: 0/2 (0%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+
+      if (argc != 3) {
+          // Unexecuted code (lines 82-83) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = __ieee754_remainder(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [e_remainder.c] enter main 3
+  [e_remainder.c] enter __ieee754_remainder 1
+  [e_remainder.c] enter __ieee754_remainder 4
+  [e_remainder.c] enter __ieee754_remainder 6
+  [e_remainder.c] enter __ieee754_remainder 7
+  [e_remainder.c] enter __ieee754_remainder 8
+  [e_remainder.c] enter __ieee754_remainder 13
+execution_summary: |2+
+
+  ```c
+  // e_remainder.c (93 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double zero = 0.0;
+  #else
+  static double zero = 0.0;
+  #endif
+
+
+  #ifdef __STDC__
+  	double __ieee754_remainder(double x, double p)
+  #else
+  	double __ieee754_remainder(x,p)
+  	double x,p;
+  #endif
+  {
+  	int hx,hp;
+  	unsigned sx,lx,lp;
+  	double p_half;
+
+  	hx = __HI(x);		
+  	lx = __LO(x);		
+  	hp = __HI(p);		
+  	lp = __LO(p);		
+  	sx = hx&0x80000000;
+  	hp &= 0x7fffffff;
+  	hx &= 0x7fffffff;
+
+      
+  	if((hp|lp)==0) {
+  		// Unexecuted code (line 38) removed. Its line cov: 1/1 (100%)
+  	}
+  	if((hx>=0x7ff00000)||			
+  	  ((hp>=0x7ff00000)&&			
+  	  (((hp-0x7ff00000)|lp)!=0))) {
+  	    // Unexecuted code (line 43) removed. Its line cov: 0/1 (0%)
+  	}
+
+
+  	if (hp<=0x7fdfffff) {
+  		x = __ieee754_fmod(x,p+p);
+  	}
+  	if (((hx-hp)|(lx-lp))==0) {
+  		// Unexecuted code (line 51) removed. Its line cov: 1/1 (100%)
+  	}
+  	x  = fabs(x);
+  	p  = fabs(p);
+  	if (hp<0x00200000) {
+  	    if(x+x>p) {
+  		x-=p;
+  		if(x+x>=p) {
+  			// Unexecuted code (line 59) removed. Its line cov: 0/1 (0%)
+  		}
+  	    }
+  	} else {
+  	    // Unexecuted code (lines 63-69) removed. Its line cov: 0/7 (0%)
+  	}
+  	__HI(x) ^= sx;
+  	return x;
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+
+      if (argc != 3) {
+          // Unexecuted code (lines 82-83) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = __ieee754_remainder(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [e_remainder.c] enter main 3
+  [e_remainder.c] enter __ieee754_remainder 1
+  [e_remainder.c] enter __ieee754_remainder 4
+  [e_remainder.c] enter __ieee754_remainder 5

@@ -1,0 +1,280 @@
+id: 2
+src_id: 0
+create_time: '2025-12-14 18:40:05.740'
+time_taken: 442
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $1.13362000
+    call_cnt: 4
+    latency: 133.47s
+    input_tokens: 19121
+    output_tokens: 12520
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $1.00284000
+      call_cnt: 3
+      latency: 119.59s
+      input_tokens: 16386
+      output_tokens: 11252
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10038000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.30562000
+      call_cnt: 1
+      latency: 36.33s
+      input_tokens: 5019
+      output_tokens: 3238
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.56894000
+      call_cnt: 1
+      latency: 74.44s
+      input_tokens: 5567
+      output_tokens: 7549
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.02790000
+      call_cnt: 1
+      latency: 8.81s
+      input_tokens: 5800
+      output_tokens: 465
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.13078000
+      call_cnt: 1
+      latency: 13.88s
+      input_tokens: 2735
+      output_tokens: 1268
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05470000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.07608000
+      call_cnt: 1
+      latency: 13.88s
+      input_tokens: 2735
+      output_tokens: 1268
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: Condition “x is NaN” -> true within s_isnan.c:isnan(double x)
+target_file_lines: s_isnan.c:21-22
+target_lines_content: |-
+  	hx = 0x7ff00000 - hx;
+  	return ((unsigned)(hx))>>31;
+justification: 'This is the core behavioral branch of the program: determining whether
+  the input parses to a NaN. The implementation body of isnan (lines 17-22) shows
+  0% historical coverage and was not executed in the current trace, indicating this
+  path has never been exercised. Hitting the NaN case will execute previously untested
+  logic and yield a distinct output behavior (returning 1), increasing coverage on
+  the math classification routine. Other uncovered branches (e.g., argc != 2) are
+  effectively unreachable given the fixed harness that always provides one argument,
+  so this NaN-path is the most valuable target.'
+target_path_constraint: |-
+  Inputs and environment constraints to drive main → isnan(x) with x being NaN (thus taking the “x is NaN” → true branch):
+
+  1) Process invocation via the fixed harness
+  - The program is executed as a shell command with one string argument appended: ./temp_executable 1.0
+  - We must preserve: exactly one non-empty command-line argument (excluding argv[0]) is passed to main, so that main observes argc == 2.
+
+  2) File system and environment
+  - No file I/O is required. The process must have standard C library available; environment variables are irrelevant.
+
+  3) Argument parsing behavior
+  - main converts argv[1] to a double using the C standard library function atof, which performs conversion in the current C locale using strtod-like rules.
+  - Therefore, argv[1] must be a byte string that atof interprets as a quiet or signaling NaN. Per C library conventions, strings such as those matching the grammar for NaN literals are converted to a NaN double.
+  - Formal requirement: Let s = argv[1] (as a sequence of bytes in the active locale). When passed to atof(s), the returned double value a0 satisfies IEEE-754 isNaN predicate: a0 is a NaN (its exponent bits are all 1s and the fraction is non-zero). No other constraints on sign or payload.
+
+  4) Robustness to leading/trailing whitespace
+  - atof skips leading whitespace and stops at the first non-number character after a valid NaN token. To avoid relying on undefined vendor extensions, ensure s contains a valid NaN token optionally surrounded by ASCII whitespace only.
+
+  5) Summary as SMT-style predicate on the sole external input argv[1]
+  - Domain: argv[1] ∈ ByteString
+  - Predicate: is_nan(atof(argv[1])) == true
+
+  Any argv[1] satisfying the above will cause: argc == 2 holds; atof(argv[1]) returns a NaN double; isnan(a0) returns non-zero; thus the selected branch “x is NaN” → true is taken.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # We pass exactly one non-empty command-line argument that atof parses as NaN: "nan"
+      # The harness executes via the shell with a single string, preserving argc == 2 in main
+      cmd = "./temp_executable nan"
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, return stderr captured before timeout and return code -SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // s_isnan.c (41 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	int isnan(double x)
+  #else
+  	int isnan(x)
+  	double x;
+  #endif
+  {
+  	// Unexecuted code (lines 17-22) removed. Its line cov: 0/6 (0%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+  	if (argc != 2) {
+  		// Unexecuted code (lines 31-32) removed. Its line cov: 0/2 (0%)
+  	}
+
+  	double a0 = atof(argv[1]);
+
+  	int r = isnan(a0);
+  	printf("%f\n", r);
+
+  	return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [s_isnan.c] enter main 3
+execution_summary: |2+
+
+  ```c
+  // s_isnan.c (41 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	int isnan(double x)
+  #else
+  	int isnan(x)
+  	double x;
+  #endif
+  {
+  	// Unexecuted code (lines 17-22) removed. Its line cov: 0/6 (0%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+  	if (argc != 2) {
+  		// Unexecuted code (lines 31-32) removed. Its line cov: 0/2 (0%)
+  	}
+
+  	double a0 = atof(argv[1]);
+
+  	int r = isnan(a0);
+  	printf("%f\n", r);
+
+  	return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [s_isnan.c] enter main 3

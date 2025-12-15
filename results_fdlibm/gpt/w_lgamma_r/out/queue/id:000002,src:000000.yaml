@@ -1,0 +1,372 @@
+id: 2
+src_id: 0
+create_time: '2025-12-14 21:56:39.630'
+time_taken: 481
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $1.32976000
+    call_cnt: 4
+    latency: 150.23s
+    input_tokens: 20174
+    output_tokens: 15438
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.99558000
+      call_cnt: 3
+      latency: 106.62s
+      input_tokens: 17271
+      output_tokens: 10836
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10310000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.36450000
+      call_cnt: 1
+      latency: 38.98s
+      input_tokens: 5155
+      output_tokens: 4096
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.48862000
+      call_cnt: 1
+      latency: 60.03s
+      input_tokens: 5937
+      output_tokens: 6084
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03936000
+      call_cnt: 1
+      latency: 7.61s
+      input_tokens: 6179
+      output_tokens: 656
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.33418000
+      call_cnt: 1
+      latency: 43.61s
+      input_tokens: 2903
+      output_tokens: 4602
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05806000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.27612000
+      call_cnt: 1
+      latency: 43.61s
+      input_tokens: 2903
+      output_tokens: 4602
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (!finite(y) && finite(x)) -> true in w_lgamma_r.c:lgamma_r
+target_file_lines: w_lgamma_r.c:28-28
+target_lines_content: '                return __kernel_standard(x,x,15); '
+justification: 'This branch protects the error-handling path of lgamma for non-finite
+  results while the input x is finite (e.g., poles at nonpositive integers). It has
+  zero historical coverage (lines 26-34: 0/9, 0%), so exercising it would unlock new
+  behavior via __kernel_standard and significantly improve coverage beyond the currently
+  taken fast-path return. Although the previously selected branch tried to make (_LIB_VERSION
+  == _IEEE_) false and failed, this branch remains the most valuable uncovered runtime
+  path in this file. We will include environment-level constraints to avoid the early
+  return and to drive y to be non-finite.'
+target_path_constraint: |-
+  Chronological, external-input/environment constraints to reach: if (!finite(y) && finite(x)) -> true in w_lgamma_r.c:lgamma_r
+
+  1) Process invocation and arguments
+  - The program must be launched such that it receives exactly one command-line argument beyond the program name: argc == 2. The harness already invokes the program with a single argument string; ensure no shell expansion or quoting changes introduce additional arguments.
+
+  2) Argument format and parsing
+  - The single command-line argument must be a textual representation of a finite real number in a format accepted by the C library function atof (ASCII digits with optional sign and decimal/exponent). This ensures finite(x) is true when x = atof(argv[1]).
+  - The textual number must correspond to a nonpositive integer value (e.g., ..., -2.0, -1.0, 0.0) so that the lgamma function hits a pole. Rationale: For such x, the mathematical gamma function has poles; standard lgamma implementations produce non-finite results (NaN or +/-Inf), making !finite(y) true while finite(x) remains true.
+
+  3) Library mode/environment to avoid early IEEE fast-path return
+  - The execution environment must ensure that the code path with the if(_LIB_VERSION == _IEEE_) { return y; } check does not short-circuit away from the error-handling branch. Concretely, the library mode macro _LIB_VERSION must not equal _IEEE_ at runtime. This is typically controlled by build configuration or global state within fdlibm; no command-line or file input directly changes it.
+  - If runtime environment variables or linker options influence _LIB_VERSION, configure them so that _LIB_VERSION != _IEEE_ during execution. Absent such control, this constraint is mandatory to make the target if (!finite(y) && finite(x)) reachable after computing y.
+
+  4) Result properties from lgamma core computation
+  - When computing y = __ieee754_lgamma_r(x, &sign), require that y is non-finite (NaN or Inf) while x from step 2 is finite. This follows from selecting x at a pole of gamma as specified in step 2.
+
+  5) Summary as SMT-style predicates over external inputs
+  - Input argument string s is parsed by atof into x.
+  - Constraints:
+    a) argc == 2.
+    b) x is finite.
+    c) x is an integer and x <= 0.
+    d) _LIB_VERSION != _IEEE_.
+    e) y = lgamma_core(x) is non-finite, where lgamma_core denotes the behavior of __ieee754_lgamma_r; require !finite(y).
+
+  Note: The implementer generating concrete tests must ensure (d) via environment/build configuration for fdlibm so the branch in w_lgamma_r.c is not bypassed. Steps (a)-(c) are achieved via the program’s single numeric argument; step (e) is a consequence of (c) for standard lgamma behavior.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import os
+      import signal
+      import subprocess
+      import tempfile
+      import shutil
+      from pathlib import Path
+
+      # We need x to be a finite nonpositive integer so that lgamma hits a pole.
+      # Choose x = -1.0 to satisfy:
+      #  - argc == 2 (single numeric argument)
+      #  - x is finite
+      #  - x is integer and x <= 0
+      #  - y = lgamma_r(x) becomes non-finite (Inf/NaN)
+      arg_value = "-1.0"
+
+      # To ensure the wrapper doesn't return early via the _IEEE_ fast-path,
+      # set _LIB_VERSION != _IEEE_ by LD_PRELOADing a tiny shared object that defines
+      # the global symbol `_LIB_VERSION` with a non-IEEE value (use 2, matching POSIX in fdlibm).
+      # If the platform/libm doesn't use this mechanism, this preload is harmless.
+      tmpdir = tempfile.mkdtemp(prefix="libm_preload_")
+      so_path = Path(tmpdir) / "liboverride_libm_version.so"
+      c_path = Path(tmpdir) / "override_libm_version.c"
+
+      c_src = (
+          """
+          // Minimal interposer to set fdlibm's _LIB_VERSION away from _IEEE_.
+          // Values in fdlibm: _IEEE_=-1, _SVID_=0, _XOPEN_=1, _POSIX_=2, _ISOC_=3.
+          // We set to 2 (POSIX), ensuring _LIB_VERSION != _IEEE_.
+          int _LIB_VERSION = 2;
+          """
+      )
+      try:
+          c_path.write_text(c_src)
+          # Compile the shared object. A C compiler is expected to be available in the environment.
+          # Use cc to maximize compatibility.
+          compile_cmd = [
+              "cc", "-shared", "-fPIC", "-o", str(so_path), str(c_path)
+          ]
+          compile_res = subprocess.run(
+              compile_cmd,
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              check=False,
+          )
+          if compile_res.returncode != 0:
+              raise RuntimeError(
+                  f"Failed to build LD_PRELOAD library (rc={compile_res.returncode}):\n"
+                  f"stdout:\n{compile_res.stdout}\nstderr:\n{compile_res.stderr}"
+              )
+
+          # Prepare environment with LD_PRELOAD set to our interposer
+          env = os.environ.copy()
+          env["LD_PRELOAD"] = str(so_path)
+
+          # Build command string exactly as the original harness style (shell=True)
+          cmd = f"./temp_executable {arg_value}"
+
+          try:
+              result = subprocess.run(
+                  [cmd],
+                  capture_output=True,
+                  encoding="utf-8",
+                  errors="replace",
+                  shell=True,
+                  timeout=timeout,
+                  env=env,
+              )
+              return result.stderr, result.returncode
+          except subprocess.TimeoutExpired as e:
+              return e.stderr, -signal.SIGKILL
+          except Exception:
+              raise
+      finally:
+          # Cleanup temporary files
+          try:
+              shutil.rmtree(tmpdir)
+          except Exception:
+              # Best-effort cleanup; ignore errors
+              pass
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // w_lgamma_r.c (56 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+
+  #ifdef __STDC__
+  	double lgamma_r(double x, int *signgamp) 
+  #else
+  	double lgamma_r(x,signgamp)              
+          double x; int *signgamp;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	// Unexecuted code (line 19) removed. Its line cov: 0/1 (0%)
+  #else
+          double y;
+          y = __ieee754_lgamma_r(x,signgamp);
+          if(_LIB_VERSION == _IEEE_) {
+              return y;
+          }
+          // Unexecuted code (lines 26-34) removed. Its line cov: 0/9 (0%)
+  #endif
+  }             
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 44-45) removed. Its line cov: 0/2 (0%)
+      }
+      double x = atof(argv[1]);
+      int sign = 0;
+
+      double r = lgamma_r(x, &sign);
+
+      printf("result = %f\n", r);
+      printf("signgamp = %d\n", sign);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [w_lgamma_r.c] enter main 3
+  [w_lgamma_r.c] enter main 4
+  [w_lgamma_r.c] enter lgamma_r 2
+  [w_lgamma_r.c] enter lgamma_r 3
+  [w_lgamma_r.c] enter main 5
+  [w_lgamma_r.c] enter main 6
+execution_summary: |2+
+
+  ```c
+  // w_lgamma_r.c (56 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+
+  #ifdef __STDC__
+  	double lgamma_r(double x, int *signgamp) 
+  #else
+  	double lgamma_r(x,signgamp)              
+          double x; int *signgamp;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	// Unexecuted code (line 19) removed. Its line cov: 0/1 (0%)
+  #else
+          double y;
+          y = __ieee754_lgamma_r(x,signgamp);
+          if(_LIB_VERSION == _IEEE_) {
+              return y;
+          }
+          // Unexecuted code (lines 26-34) removed. Its line cov: 0/9 (0%)
+  #endif
+  }             
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 44-45) removed. Its line cov: 0/2 (0%)
+      }
+      double x = atof(argv[1]);
+      int sign = 0;
+
+      double r = lgamma_r(x, &sign);
+
+      printf("result = %f\n", r);
+      printf("signgamp = %d\n", sign);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [w_lgamma_r.c] enter main 3
+  [w_lgamma_r.c] enter main 4
+  [w_lgamma_r.c] enter lgamma_r 2
+  [w_lgamma_r.c] enter lgamma_r 3
+  [w_lgamma_r.c] enter main 5
+  [w_lgamma_r.c] enter main 6

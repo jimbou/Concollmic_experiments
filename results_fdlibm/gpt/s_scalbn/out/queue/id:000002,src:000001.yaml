@@ -1,0 +1,351 @@
+id: 2
+src_id: 1
+create_time: '2025-12-14 19:51:20.172'
+time_taken: 284
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.86938000
+    call_cnt: 3
+    latency: 103.32s
+    input_tokens: 13817
+    output_tokens: 9884
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.72858000
+      call_cnt: 2
+      latency: 88.23s
+      input_tokens: 11091
+      output_tokens: 8446
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10914000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.59286000
+      call_cnt: 1
+      latency: 81.13s
+      input_tokens: 5457
+      output_tokens: 8003
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.02658000
+      call_cnt: 1
+      latency: 7.10s
+      input_tokens: 5634
+      output_tokens: 443
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.14080000
+      call_cnt: 1
+      latency: 15.09s
+      input_tokens: 2726
+      output_tokens: 1438
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05452000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.08628000
+      call_cnt: 1
+      latency: 15.09s
+      input_tokens: 2726
+      output_tokens: 1438
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (k == 0x7ff) -> true in s_scalbn.c:scalbn
+target_file_lines: s_scalbn.c:39-39
+target_lines_content: "\t\treturn x+x;"
+justification: This branch handles inputs where the first argument parses to an IEEE-754
+  Infinity or NaN (exponent all ones). It currently shows 0/1 (0%) historical coverage
+  (line 39). Exercising it will cover the special-value handling path, which is both
+  important and distinct from normal/subnormal paths.
+target_path_constraint: |-
+  Chronological, self-contained constraints to reach the branch `if (k == 0x7ff)` -> true in s_scalbn.c:scalbn
+
+  1. Command invocation shape
+  - The program must be executed with exactly two command-line arguments (excluding the program name): argc == 3. This ensures the argument-count check is satisfied.
+
+  2. Argument parsing semantics
+  - The first argument is interpreted as a floating-point number using a decimal-string parser (similar to strtod/atof). The parser recognizes standard tokens including special IEEE-754 values.
+  - The second argument is interpreted as a base-10 signed integer using a decimal-string parser (similar to atoi).
+
+  3. Special-value requirement for the first argument (to force k == 0x7ff)
+  - The first argument’s parsed double must have an IEEE-754 binary64 exponent field of all ones (2047), i.e., it must parse to either Infinity (positive or negative) or NaN.
+  - Acceptable strings include any representation that the parser maps to Infinity or NaN; examples are tokens like “inf”, “infinity”, “nan” (case-insensitive, optional signs allowed). Do not provide concrete examples; the key constraint is: parsed value is Infinity or NaN.
+  - Formally: Let x be the parsed double from argv[1]. Its exponent bits must equal 0x7ff, i.e., isinf(x) || isnan(x) must be true.
+
+  4. Integer argument validity
+  - The second argument must be a syntactically valid decimal integer string so it can be parsed without failure. There is no additional numeric constraint required to reach the target branch; any integer (including 0) is acceptable for triggering k == 0x7ff because k is derived solely from x.
+
+  5. Environment and I/O conditions
+  - Standard input is unused; only command-line arguments matter.
+  - No files need to exist; ensure the execution environment allows writing to stderr and stdout (used by the program).
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Use two command-line arguments:
+      #  - First: a NaN token to ensure exponent bits are all ones (k == 0x7ff)
+      #  - Second: a syntactically valid decimal integer ("0")
+      try:
+          result = subprocess.run(
+              ["./temp_executable nan 0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return (e.stderr if e.stderr is not None else ""), -signal.SIGKILL
+      except Exception as e:
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // s_scalbn.c (80 lines total)
+  #include <stdio.h>
+
+  #include "fdlibm.h"
+
+  #ifdef __STDC__
+  static const double
+  #else
+  static double
+  #endif
+  two54   =  1.80143985094819840000e+16, 
+  twom54  =  5.55111512312578270212e-17, 
+  huge   = 1.0e+300,
+  tiny   = 1.0e-300;
+
+  #ifdef __STDC__
+  	double scalbn (double x, int n)
+  #else
+  	double scalbn (x,n)
+  	double x; int n;
+  #endif
+  {
+  	fprintf(stderr, "\n");
+  	int  k,hx,lx;
+  	hx = __HI(x);
+  	lx = __LO(x);
+          k = (hx&0x7ff00000)>>20;		
+          if (k==0) {				
+              if ((lx|(hx&0x7fffffff))==0) {
+  		// Unexecuted code (line 29) removed. Its line cov: 0/1 (0%)
+  	    }
+  	    x *= two54; 
+  	    hx = __HI(x);
+  	    k = ((hx&0x7ff00000)>>20) - 54; 
+              if (n< -50000) {
+  		// Unexecuted code (line 35) removed. Its line cov: 0/1 (0%)
+  	    }
+          }
+          if (k==0x7ff) {
+  		// Unexecuted code (line 39) removed. Its line cov: 0/1 (0%)
+  	}
+          fprintf(stderr, "\n");
+          k = k+n; 
+          if (k >  0x7fe) {
+  		// Unexecuted code (line 44) removed. Its line cov: 0/1 (0%)
+  	}
+          if (k > 0) 				
+  	    {
+  		// Unexecuted code (line 48) removed. Its line cov: 0/1 (0%)
+  	    }
+          if (k <= -54)
+              if (n > 50000) 	
+  		{
+  			// Unexecuted code (line 53) removed. Its line cov: 0/1 (0%)
+  		}
+  	    else {
+  		return tiny*copysign(tiny,x);
+  	    }
+          // Unexecuted code (lines 58-60) removed. Its line cov: 3/3 (100%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 3) {
+          // Unexecuted code (lines 69-70) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      int a1 = atoi(argv[2]);
+
+      double r = scalbn(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [s_scalbn.c] enter main 3
+
+  [s_scalbn.c] enter scalbn 3
+
+  [s_scalbn.c] enter scalbn 10
+execution_summary: |2+
+
+  ```c
+  // s_scalbn.c (80 lines total)
+  #include <stdio.h>
+
+  #include "fdlibm.h"
+
+  #ifdef __STDC__
+  static const double
+  #else
+  static double
+  #endif
+  two54   =  1.80143985094819840000e+16, 
+  twom54  =  5.55111512312578270212e-17, 
+  huge   = 1.0e+300,
+  tiny   = 1.0e-300;
+
+  #ifdef __STDC__
+  	double scalbn (double x, int n)
+  #else
+  	double scalbn (x,n)
+  	double x; int n;
+  #endif
+  {
+  	fprintf(stderr, "\n");
+  	int  k,hx,lx;
+  	hx = __HI(x);
+  	lx = __LO(x);
+          k = (hx&0x7ff00000)>>20;		
+          if (k==0) {				
+              if ((lx|(hx&0x7fffffff))==0) {
+  		// Unexecuted code (line 29) removed. Its line cov: 0/1 (0%)
+  	    }
+  	    x *= two54; 
+  	    hx = __HI(x);
+  	    k = ((hx&0x7ff00000)>>20) - 54; 
+              if (n< -50000) {
+  		// Unexecuted code (line 35) removed. Its line cov: 0/1 (0%)
+  	    }
+          }
+          if (k==0x7ff) {
+  		// Unexecuted code (line 39) removed. Its line cov: 0/1 (0%)
+  	}
+          fprintf(stderr, "\n");
+          k = k+n; 
+          if (k >  0x7fe) {
+  		// Unexecuted code (line 44) removed. Its line cov: 0/1 (0%)
+  	}
+          if (k > 0) 				
+  	    {
+  		// Unexecuted code (line 48) removed. Its line cov: 0/1 (0%)
+  	    }
+          if (k <= -54)
+              if (n > 50000) 	
+  		{
+  			// Unexecuted code (line 53) removed. Its line cov: 0/1 (0%)
+  		}
+  	    else {
+  		return tiny*copysign(tiny,x);
+  	    }
+          // Unexecuted code (lines 58-60) removed. Its line cov: 3/3 (100%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 3) {
+          // Unexecuted code (lines 69-70) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      int a1 = atoi(argv[2]);
+
+      double r = scalbn(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # We pass two arguments: first is a double token recognized as Infinity ("inf"),
+      # second is a valid decimal integer ("0"). This ensures scalbn sees x with
+      # exponent all ones so that (k == 0x7ff) is true.
+      try:
+          result = subprocess.run(
+              ["./temp_executable inf 0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          raise e
+src_execution_trace: |2
+
+  [s_scalbn.c] enter main 3
+
+  [s_scalbn.c] enter scalbn 3
+
+  [s_scalbn.c] enter scalbn 10

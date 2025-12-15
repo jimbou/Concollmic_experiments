@@ -1,0 +1,356 @@
+id: 2
+src_id: 0
+create_time: '2025-12-14 20:22:59.406'
+time_taken: 307
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.74786000
+    call_cnt: 3
+    latency: 66.87s
+    input_tokens: 13981
+    output_tokens: 7804
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.52942000
+      call_cnt: 2
+      latency: 46.24s
+      input_tokens: 10925
+      output_tokens: 5182
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10618000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.37650000
+      call_cnt: 1
+      latency: 37.67s
+      input_tokens: 5309
+      output_tokens: 4403
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.04674000
+      call_cnt: 1
+      latency: 8.57s
+      input_tokens: 5616
+      output_tokens: 779
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.21844000
+      call_cnt: 1
+      latency: 20.63s
+      input_tokens: 3056
+      output_tokens: 2622
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.06112000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.15732000
+      call_cnt: 1
+      latency: 20.63s
+      input_tokens: 3056
+      output_tokens: 2622
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (ix >= 0x3ff00000) -> true inside tanh() in s_tanh.c (under the
+  outer condition if (ix < 0x40360000))
+target_file_lines: s_tanh.c:45-46
+target_lines_content: |-
+  		t = expm1(two*fabs(x));
+  		z = one - two/(t+two);
+justification: This branch has 0% historical coverage (lines 45-46) and guards the
+  core computation path of tanh for moderate-magnitude inputs (roughly |x| ≥ 1 and
+  < ~22). The existing harness invokes the program with the argument "1.0", which,
+  when parsed under a standard C locale, yields a value that should satisfy both ix
+  < 0x40360000 and ix >= 0x3ff00000. Exercising this path will add coverage to a central
+  part of the numerical routine. Although this branch was previously selected and
+  not reached, we are confident we can reach it by specifying precise environment-level
+  constraints (notably locale) ensuring atof parses "1.0" to a normal, finite IEEE-754
+  double value as intended.
+target_path_constraint: |-
+  Chronological, program-input and environment-level constraints to reach target branch (ix >= 0x3ff00000) true under (ix < 0x40360000) in tanh():
+
+  1. Process invocation and arguments
+  - The executed command must pass exactly one argument to the program (excluding the program name), so the process must be invoked such that argc == 2 inside main.
+  - The single argument string must represent a finite, non-NaN, non-infinite decimal numeric value that atof can parse, using the C standard library, into an IEEE-754 double.
+
+  2. Locale and parsing environment
+  - The program must run under a locale where the decimal point character in the argument is a period '.' and not a comma or other symbol. This ensures atof("1.0") parses to 1.0 and not fails or uses an unexpected thousands/decimal separator.
+  - No environment variables or locale settings (e.g., LC_NUMERIC, LANG) should alter atof’s interpretation of the '.' decimal point away from the C/POSIX default.
+
+  3. Input numeric value constraints (on the parsed double a0)
+  Let a0 be the IEEE-754 double produced by parsing argv[1] with atof under the locale above. Define ix = high 32-bit word of a0 (i.e., the upper half of the 64-bit double representation), masked by 0x7fffffff; the code’s conditions compare ix to hexadecimal thresholds.
+  We require both of the following to be true:
+  - Magnitude upper bound (to enter the outer branch): |a0| < approx 2^54 * 3.0? However, mapping the hex threshold 0x40360000 corresponds to double ~ 22.0. Concretely, satisfy ix < 0x40360000, which corresponds to |a0| < ~22.0.
+  - Magnitude lower bound (to enter the inner branch): ix >= 0x3ff00000, which corresponds to |a0| >= 1.0.
+  Thus, the numeric constraints on the parsed double are:
+    • a0 must be finite and normal
+    • 1.0 ≤ |a0| < ~22.0
+
+  4. Exclude special values
+  - argv[1] must not encode NaN or Infinity (e.g., "nan", "inf", "+inf", or values that overflow the double range). Ensure atof does not return NaN or ±∞.
+  - argv[1] must not encode subnormal magnitudes less than approximately 2^-56; specifically we do not want ix < 0x3c800000 (“very small”), so avoid values where |a0| < 2^-56. This is already implied by the lower bound |a0| ≥ 1.0 but stated for completeness.
+
+  5. String encoding and stability
+  - The argument string must be valid UTF-8 (or plain ASCII) to avoid encoding errors in subprocess handling; ensure no non-ASCII digits or separators are used.
+  - No leading/trailing characters that atof could ignore or misinterpret beyond an optional leading sign and decimal digits with an optional single '.' decimal point. Avoid exponent formats that could yield values outside the specified range.
+
+  Summary of numeric constraint on argv[1]: when parsed by atof under a C/POSIX locale, it must yield a finite double a0 satisfying 1.0 ≤ |a0| < 22.0 approximately, ensuring ix < 0x40360000 and ix ≥ 0x3ff00000 hold and the target branch is taken.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import os
+      import signal
+      import subprocess
+
+      try:
+          # Ensure POSIX/C locale so atof treats '.' as decimal point
+          env = os.environ.copy()
+          env["LC_ALL"] = "C"
+          env["LANG"] = "C"
+          env["LC_NUMERIC"] = "C"
+
+          # Pass exactly one numeric argument that satisfies 1.0 <= |a0| < 22.0
+          # Using 5.0 (finite, normal, ASCII, no exponent)
+          cmd = "./temp_executable 5.0"
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+              env=env,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // s_tanh.c (74 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double one=1.0, two=2.0, tiny = 1.0e-300;
+  #else
+  static double one=1.0, two=2.0, tiny = 1.0e-300;
+  #endif
+
+  #ifdef __STDC__
+  	double tanh(double x)
+  #else
+  	double tanh(x)
+  	double x;
+  #endif
+  {
+  	double t,z;
+  	int jx,ix;
+
+      
+  	jx = __HI(x);
+  	ix = jx&0x7fffffff;
+
+      
+  	if(ix>=0x7ff00000) { 
+  	    // Unexecuted code (lines 32-36) removed. Its line cov: 0/5 (0%)
+  	}
+
+      
+  	if (ix < 0x40360000) {		
+  	    if (ix<0x3c800000) {		
+  		return x*(one+x);
+  	    }
+  	    if (ix>=0x3ff00000) {	
+  		// Unexecuted code (lines 45-46) removed. Its line cov: 0/2 (0%)
+  	    } else {
+  	        // Unexecuted code (lines 48-49) removed. Its line cov: 0/2 (0%)
+  	    }
+      
+  	} else {
+  	    // Unexecuted code (line 53) removed. Its line cov: 0/1 (0%)
+  	}
+  	// Unexecuted code (line 55) removed. Its line cov: 0/1 (0%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 64-65) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = tanh(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [s_tanh.c] enter main 3
+  [s_tanh.c] enter tanh 1
+  [s_tanh.c] enter tanh 5
+  [s_tanh.c] enter tanh 6
+execution_summary: |2+
+
+  ```c
+  // s_tanh.c (74 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double one=1.0, two=2.0, tiny = 1.0e-300;
+  #else
+  static double one=1.0, two=2.0, tiny = 1.0e-300;
+  #endif
+
+  #ifdef __STDC__
+  	double tanh(double x)
+  #else
+  	double tanh(x)
+  	double x;
+  #endif
+  {
+  	double t,z;
+  	int jx,ix;
+
+      
+  	jx = __HI(x);
+  	ix = jx&0x7fffffff;
+
+      
+  	if(ix>=0x7ff00000) { 
+  	    // Unexecuted code (lines 32-36) removed. Its line cov: 0/5 (0%)
+  	}
+
+      
+  	if (ix < 0x40360000) {		
+  	    if (ix<0x3c800000) {		
+  		return x*(one+x);
+  	    }
+  	    if (ix>=0x3ff00000) {	
+  		// Unexecuted code (lines 45-46) removed. Its line cov: 0/2 (0%)
+  	    } else {
+  	        // Unexecuted code (lines 48-49) removed. Its line cov: 0/2 (0%)
+  	    }
+      
+  	} else {
+  	    // Unexecuted code (line 53) removed. Its line cov: 0/1 (0%)
+  	}
+  	// Unexecuted code (line 55) removed. Its line cov: 0/1 (0%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 64-65) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = tanh(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [s_tanh.c] enter main 3
+  [s_tanh.c] enter tanh 1
+  [s_tanh.c] enter tanh 5
+  [s_tanh.c] enter tanh 6

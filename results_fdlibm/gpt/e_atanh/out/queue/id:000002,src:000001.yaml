@@ -1,0 +1,349 @@
+id: 2
+src_id: 1
+create_time: '2025-12-14 13:46:37.618'
+time_taken: 312
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.85562000
+    call_cnt: 3
+    latency: 108.20s
+    input_tokens: 13963
+    output_tokens: 9606
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.70480000
+      call_cnt: 2
+      latency: 86.57s
+      input_tokens: 10961
+      output_tokens: 8093
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10614000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.55822000
+      call_cnt: 1
+      latency: 77.08s
+      input_tokens: 5307
+      output_tokens: 7419
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.04044000
+      call_cnt: 1
+      latency: 9.48s
+      input_tokens: 5654
+      output_tokens: 674
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.15082000
+      call_cnt: 1
+      latency: 21.64s
+      input_tokens: 3002
+      output_tokens: 1513
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.06004000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.09078000
+      call_cnt: 1
+      latency: 21.64s
+      input_tokens: 3002
+      output_tokens: 1513
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: 'In __ieee754_atanh (e_atanh.c): take the general-case computation
+  block by making the condition `if (ix < 0x3e300000 && (huge + x) > zero)` evaluate
+  to FALSE (and also avoid earlier special cases), so control flows into the unexecuted
+  block at lines 44-58.'
+target_file_lines: e_atanh.c:44-45
+target_lines_content: |-
+  	__HI(x) = ix;		
+  	if(ix<0x3fe00000) {		
+justification: This general-case path (lines 44-58) has 0/15 (0%) historical coverage
+  and represents the core algorithm for atanh when inputs are not tiny and have |x|
+  < 1. Exercising it will cover many new lines and behaviors. It is reachable through
+  the current harness by choosing a numeric argument string that parses to a finite
+  double x satisfying 2^-28 <= |x| < 1 and x != ±1, ensuring earlier special-case
+  branches are bypassed. Other unexecuted branches exist (e.g., |x| == 1), but they
+  guard only 1 line; this general block yields substantially more coverage.
+target_path_constraint: |-
+  Chronological, self-contained constraints to reach the general-case block (lines 44-58) in __ieee754_atanh:
+
+  1. Command invocation and argument count:
+     - The program must be executed with exactly one command-line argument beyond the program name (i.e., argc == 2). This is achieved by passing a single numeric string as the only argument.
+
+  2. Argument parsing into a double:
+     - The sole argument must be a string that the standard C function atof parses as a finite IEEE-754 double-precision number x.
+     - The string must not contain representations of NaN or infinity (e.g., "nan", "inf", "+inf", "-inf").
+
+  3. Avoid the |x| > 1 (and NaN/Inf) special case that returns NaN:
+     - Ensure |x| <= 1.0 so that the bit-pattern check `(ix | ((lx | (-lx)) >> 31)) > 0x3ff00000` evaluates to FALSE.
+       • Here, ix = high 32 bits of x with sign masked (ix = hx & 0x7fffffff), and lx = low 32 bits. The check is TRUE when x is NaN, ±Inf, or when |x| > 1.
+
+  4. Avoid the exact |x| == 1 branch:
+     - Ensure |x| != 1.0 so that `ix == 0x3ff00000` is FALSE.
+
+  5. Force the "not tiny" path by making the tiny-input condition FALSE:
+     - The branch `if (ix < 0x3e300000 && (huge + x) > zero)` must evaluate to FALSE. Because `(huge + x) > zero` is TRUE for any finite x, falsifying the conjunction requires `ix >= 0x3e300000`.
+     - Interpreting `ix < 0x3e300000`: this tests whether |x| < 2^-28 (approximately 3.725e-9). Therefore, to make the condition FALSE, require |x| >= 2^-28.
+
+  6. Summary of numeric constraints on x (as parsed from the argument string):
+     - x must be a finite double.
+     - 2^-28 <= |x| < 1.
+     - x != ±1.
+
+  7. Input string formatting constraints:
+     - Provide x in a standard decimal or scientific-notation string that atof recognizes (e.g., optional leading sign, digits with optional decimal point, optional exponent part like "e±k").
+     - The string must represent the value within the range specified above without trailing non-numeric characters.
+
+  These constraints ensure main parses the argument, __ieee754_atanh is called with a not-tiny, sub-unit finite x, skipping the earlier NaN/Inf and exact-±1 branches and causing the tiny-input check to be FALSE, thereby entering the unexecuted general-case block (lines 44-58).
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Use x = 0.00000001 (1e-8), which satisfies all constraints:
+      # - Finite IEEE-754 double
+      # - 2^-28 (~3.725e-9) <= |x| = 1e-8 < 1, and x != ±1
+      # - Standard decimal format parsable by atof
+      # - Exactly one command-line argument beyond the program name
+      try:
+          cmd = "./temp_executable 0.00000001"
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, return stderr captured before timeout and return code -SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // e_atanh.c (76 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double one = 1.0, huge = 1e300;
+  #else
+  static double one = 1.0, huge = 1e300;
+  #endif
+
+  static double zero = 0.0;
+
+  #ifdef __STDC__
+  	double __ieee754_atanh(double x)
+  #else
+  	double __ieee754_atanh(x)
+  	double x;
+  #endif
+  {
+  	fprintf(stderr, "\n");
+  	double t;
+  	int hx,ix;
+  	unsigned lx;
+  	hx = __HI(x);		
+  	lx = __LO(x);		
+  	ix = hx&0x7fffffff;
+  	if ((ix|((lx|(-lx))>>31))>0x3ff00000) 
+  	{
+  	    return (x-x)/(x-x);
+  	}
+  	if(ix==0x3ff00000) 
+  	{
+  	    // Unexecuted code (line 38) removed. Its line cov: 0/1 (0%)
+  	}
+  	if(ix<0x3e300000&&(huge+x)>zero)
+  	{
+  	    // Unexecuted code (line 42) removed. Its line cov: 1/1 (100%)
+  	}
+  	// Unexecuted code (lines 44-58) removed. Its line cov: 0/15 (0%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 67-68) removed. Its line cov: 0/2 (0%)
+      }
+      double a0 = atof(argv[1]);
+
+      double r = __ieee754_atanh(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [e_atanh.c] enter main 3
+  [e_atanh.c] enter main 4
+
+  [e_atanh.c] enter __ieee754_atanh 2
+  [e_atanh.c] enter main 5
+execution_summary: |2+
+
+  ```c
+  // e_atanh.c (76 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double one = 1.0, huge = 1e300;
+  #else
+  static double one = 1.0, huge = 1e300;
+  #endif
+
+  static double zero = 0.0;
+
+  #ifdef __STDC__
+  	double __ieee754_atanh(double x)
+  #else
+  	double __ieee754_atanh(x)
+  	double x;
+  #endif
+  {
+  	fprintf(stderr, "\n");
+  	double t;
+  	int hx,ix;
+  	unsigned lx;
+  	hx = __HI(x);		
+  	lx = __LO(x);		
+  	ix = hx&0x7fffffff;
+  	if ((ix|((lx|(-lx))>>31))>0x3ff00000) 
+  	{
+  	    return (x-x)/(x-x);
+  	}
+  	if(ix==0x3ff00000) 
+  	{
+  	    // Unexecuted code (line 38) removed. Its line cov: 0/1 (0%)
+  	}
+  	if(ix<0x3e300000&&(huge+x)>zero)
+  	{
+  	    // Unexecuted code (line 42) removed. Its line cov: 1/1 (100%)
+  	}
+  	// Unexecuted code (lines 44-58) removed. Its line cov: 0/15 (0%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 67-68) removed. Its line cov: 0/2 (0%)
+      }
+      double a0 = atof(argv[1]);
+
+      double r = __ieee754_atanh(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Choose x = 0.00000001 (1e-8):
+      # - finite double
+      # - within (-1, 1) and not equal to +/-1
+      # - |x| = 1e-8 >= 2^-28 (~3.725e-9), so it avoids the "very small x" fast-return branch
+      # - Parsed by atof in standard C format
+      try:
+          cmd = "./temp_executable 0.00000001"
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, return stderr captured before timeout and return code -SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [e_atanh.c] enter main 3
+  [e_atanh.c] enter main 4
+
+  [e_atanh.c] enter __ieee754_atanh 2
+  [e_atanh.c] enter main 5

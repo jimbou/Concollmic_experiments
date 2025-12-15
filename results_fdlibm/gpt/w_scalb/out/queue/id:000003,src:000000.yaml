@@ -1,0 +1,341 @@
+id: 3
+src_id: 0
+create_time: '2025-12-14 22:25:10.648'
+time_taken: 408
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.82154000
+    call_cnt: 3
+    latency: 89.65s
+    input_tokens: 13876
+    output_tokens: 9067
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.61032000
+      call_cnt: 2
+      latency: 61.97s
+      input_tokens: 10794
+      output_tokens: 6574
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10574000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.45454000
+      call_cnt: 1
+      latency: 49.42s
+      input_tokens: 5287
+      output_tokens: 5740
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.05004000
+      call_cnt: 1
+      latency: 12.55s
+      input_tokens: 5507
+      output_tokens: 834
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.21122000
+      call_cnt: 1
+      latency: 27.67s
+      input_tokens: 3082
+      output_tokens: 2493
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.06164000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.14958000
+      call_cnt: 1
+      latency: 27.67s
+      input_tokens: 3082
+      output_tokens: 2493
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: 'if (z == 0.0 && z != x) -> true in w_scalb.c: scalb'
+target_file_lines: w_scalb.c:39-39
+target_lines_content: "\t\treturn __kernel_standard(x,(double)fn,33); "
+justification: This branch has 0% historical coverage and represents the underflow-to-zero
+  path of the floating-point scaling operation. Exercising it will validate edge-case
+  behavior of scalb when the result flushes to exactly zero while the input is finite
+  and non-zero. The two branches previously attempted target NaN/Inf conditions; this
+  one explores a distinct, valuable corner case (underflow) not yet covered. It is
+  driven purely by the numeric inputs, making it a high-impact target for improving
+  coverage of math error handling.
+target_path_constraint: |-
+  Goal: Trigger the underflow branch in scalb so that the computed result z equals +0.0 or -0.0 while the input x is not exactly zero (i.e., z == 0.0 and z != x evaluates true).
+
+  Execution interface and environment constraints (chronological):
+  1) Program invocation via shell must pass exactly two command-line arguments (strings) after the executable name, since the program expects 3 argv entries total (argv[0], argv[1], argv[2]):
+     - The harness already invokes using a single shell-quoted string; ensure that, after shell parsing, the process argv contains exactly three entries: argv[0] is the program path, argv[1] is a textual floating-point representation for x, and argv[2] is a textual floating-point representation for fn.
+     - No environment variables need to be set; defaults are acceptable. The process must not be constrained by nonstandard floating-point environment modes.
+
+  2) Argument parseability:
+     - argv[1] must be a valid decimal floating-point literal accepted by C atof, representing a finite, nonzero double value x (not NaN, not ±Inf, not exactly 0.0). Examples are not provided; only the property is required.
+     - argv[2] must be a valid decimal floating-point literal accepted by C atof, representing a finite double value fn (not NaN, not ±Inf). It can be integer-valued or not, since this build uses the double overload (no _SCALB_INT defined in the trace), but it must be finite.
+
+  3) Mathematical relationship required to reach the target branch inside scalb:
+     - Let z = __ieee754_scalb(x, fn), i.e., z = x * 2^fn (IEEE-754 scaling by a power of two). To take the branch, require:
+       a) z equals signed zero: z == 0.0. In IEEE-754, this occurs if the magnitude |x| * 2^fn underflows to a subnormal magnitude that rounds to zero under the current rounding mode (assumed default round-to-nearest).
+       b) z != x: since x must be nonzero (see 2), this will automatically be true when z == 0.0.
+     - Combine as: x ≠ 0, fn ∈ R finite, and |x| * 2^fn is strictly smaller than the smallest positive subnormal double so that the computed result is ±0.0.
+
+  4) Numerical bounds (stated symbolically, not concretely):
+     - Denote DoubleMinSub = the smallest positive subnormal double (per IEEE-754 binary64). Require: |x| * 2^fn < DoubleMinSub.
+     - Additionally, x must be finite and nonzero; fn finite. No requirement on the sign of x; the resulting signed zero will inherit sign(x) under IEEE semantics.
+
+  5) Library/version guards consistent with reaching the branch body:
+     - The compilation must not define _IEEE_LIBM; otherwise scalb would return early and skip the checked branch. In the observed build, the non-IEEE path is compiled, as the branch appears in the trace; thus no action is needed, but the constraint is: program must execute a build where the non-IEEE path is active (i.e., runtime follows the code path showing the branch checks).
+
+  Summary of required input properties:
+  - argv[1] parses to a finite, nonzero double x.
+  - argv[2] parses to a finite double fn such that |x| * 2^fn < DoubleMinSub, causing z = scalb(x, fn) to underflow to exactly zero.
+  - No NaNs or Infs among inputs; no special environment settings that alter default IEEE rounding behavior.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # We choose x = 1.0 (finite, nonzero) and fn = -2000 (finite, large negative integer),
+      # so that |x| * 2^fn = 1.0 * 2^-2000 < 2^-1074 (DoubleMinSub), ensuring scalb underflows to signed zero.
+      # This satisfies: x != 0.0, fn finite, and z = scalb(x, fn) == +/-0.0 with z != x.
+      cmd = "./temp_executable 1.0 -2000"
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, return stderr captured before timeout and return code -SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # Ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // w_scalb.c (67 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+
+  #include <errno.h>
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  #ifdef _SCALB_INT
+  	double scalb(double x, int fn)		
+  #else
+  	double scalb(double x, double fn)	
+  #endif
+  #else
+  	double scalb(x,fn)			
+  #ifdef _SCALB_INT
+  	double x; int fn;
+  #else
+  	double x,fn;
+  #endif
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	return __ieee754_scalb(x,fn);
+  #else
+  	double z;
+  	z = __ieee754_scalb(x,fn);
+  	if(_LIB_VERSION == _IEEE_) {
+  		return z;
+  	}
+  	if(!(finite(z)||isnan(z))&&finite(x)) {
+  		// Unexecuted code (line 36) removed. Its line cov: 0/1 (0%)
+  	}
+  	if(z==0.0&&z!=x) {
+  		// Unexecuted code (line 39) removed. Its line cov: 0/1 (0%)
+  	} 
+  #ifndef _SCALB_INT
+  	if(!finite(fn)) {
+  		// Unexecuted code (line 43) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  	// Unexecuted code (line 46) removed. Its line cov: 0/1 (0%)
+  #endif 
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 3) {
+          // Unexecuted code (lines 56-57) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = scalb(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [w_scalb.c] enter main 3
+  [w_scalb.c] enter scalb 1
+  [w_scalb.c] enter scalb 2
+execution_summary: |2+
+
+  ```c
+  // w_scalb.c (67 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+
+  #include <errno.h>
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  #ifdef _SCALB_INT
+  	double scalb(double x, int fn)		
+  #else
+  	double scalb(double x, double fn)	
+  #endif
+  #else
+  	double scalb(x,fn)			
+  #ifdef _SCALB_INT
+  	double x; int fn;
+  #else
+  	double x,fn;
+  #endif
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	return __ieee754_scalb(x,fn);
+  #else
+  	double z;
+  	z = __ieee754_scalb(x,fn);
+  	if(_LIB_VERSION == _IEEE_) {
+  		return z;
+  	}
+  	if(!(finite(z)||isnan(z))&&finite(x)) {
+  		// Unexecuted code (line 36) removed. Its line cov: 0/1 (0%)
+  	}
+  	if(z==0.0&&z!=x) {
+  		// Unexecuted code (line 39) removed. Its line cov: 0/1 (0%)
+  	} 
+  #ifndef _SCALB_INT
+  	if(!finite(fn)) {
+  		// Unexecuted code (line 43) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  	// Unexecuted code (line 46) removed. Its line cov: 0/1 (0%)
+  #endif 
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 3) {
+          // Unexecuted code (lines 56-57) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = scalb(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [w_scalb.c] enter main 3
+  [w_scalb.c] enter scalb 1
+  [w_scalb.c] enter scalb 2

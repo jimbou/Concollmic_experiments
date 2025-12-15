@@ -1,0 +1,398 @@
+id: 2
+src_id: 0
+create_time: '2025-12-14 19:31:02.674'
+time_taken: 526
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: true
+newly_covered_lines: 29
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $1.28762000
+    call_cnt: 4
+    latency: 136.67s
+    input_tokens: 20857
+    output_tokens: 14508
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $1.13702000
+      call_cnt: 3
+      latency: 121.36s
+      input_tokens: 18019
+      output_tokens: 12944
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10332000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.43498000
+      call_cnt: 1
+      latency: 46.28s
+      input_tokens: 5166
+      output_tokens: 5158
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.56272000
+      call_cnt: 1
+      latency: 67.89s
+      input_tokens: 6275
+      output_tokens: 7186
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03600000
+      call_cnt: 1
+      latency: 7.20s
+      input_tokens: 6578
+      output_tokens: 600
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.15060000
+      call_cnt: 1
+      latency: 15.32s
+      input_tokens: 2838
+      output_tokens: 1564
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05676000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.09384000
+      call_cnt: 1
+      latency: 15.32s
+      input_tokens: 2838
+      output_tokens: 1564
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: In s_nextafter.c:nextafter, take the special-value check `if(((ix>=0x7ff00000)&&((ix-0x7ff00000)|lx)!=0)
+  || ((iy>=0x7ff00000)&&((iy-0x7ff00000)|ly)!=0))` -> true
+target_file_lines: s_nextafter.c:30-30
+target_lines_content: "\t\treturn x+y;"
+justification: This branch handles IEEE-754 NaN inputs and currently has 0% historical
+  coverage (line 30 is uncovered). Exercising it validates special-case behavior of
+  nextafter when either input is NaN, which is critical for numerical robustness and
+  expands coverage beyond the already-executed x==y path. It is directly reachable
+  by manipulating only the program’s command-line arguments (ensuring one argument
+  parses to NaN) and environment (locale), consistent with the fixed test harness.
+target_path_constraint: |-
+  Chronological constraints to trigger the special-value branch in nextafter (NaN handling):
+
+  1. Command-line invocation shape:
+     - The program must be invoked with exactly three tokens when parsed by the shell: the executable path, argv[1], and argv[2]. Given the harness uses shell=True with a single string "./temp_executable 1.0 1.0", ensure the executed command expands to a program path followed by two arguments. Do not alter the harness; constraints below focus on values of argv[1] and argv[2].
+
+  2. Argument count constraint:
+     - argc must equal 3 at program start so that the argc check does not trigger early termination. This implies argv[1] and argv[2] must be present and non-empty strings.
+
+  3. Parsing constraints (using C standard atof in the C locale):
+     - argv[1] and argv[2] are each parsed by atof into double values a0 and a1.
+     - atof accepts decimal representations, including special IEEE-754 literals "nan", "nan(...)" and case variations, as well as infinities "inf"/"infinity".
+     - Locale must be such that decimal point is '.', but this is typical for default C locale; no locale manipulation is required.
+
+  4. Special-value (NaN) requirement to satisfy the branch condition:
+     - At least one of a0 or a1 must be a NaN (Not-a-Number) value when parsed by atof.
+     - Formally: isNaN(a0) ∨ isNaN(a1) must hold after parsing.
+     - This ensures that ix>=0x7ff00000 and ((ix-0x7ff00000)|lx)!=0 for the NaN input (IEEE-754 double NaN has exponent 0x7ff and a nonzero mantissa), making the overall condition true.
+
+  5. Additional constraints to avoid other early returns overriding coverage:
+     - It is acceptable that x==y is false or true; however, when a NaN is present, x==y will be false (NaN is not equal to any value, including itself), so the function will not return at the x==y check. No extra constraint is needed.
+
+  6. Environment constraints:
+     - The executable must exist and be runnable in the current working directory.
+     - No files are read; standard environment should provide no interfering signals or timeouts beyond the harness timeout.
+
+  Sufficient input-level constraint summary:
+     - Provide two command-line arguments such that at least one parses via atof to a NaN double under the C locale. All other conditions (argc==3) must hold by ensuring two arguments are present.
+selected_cnt: 1
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import os
+      import signal
+      import subprocess
+
+      # Ensure the executable exists and is runnable
+      exe_path = "./temp_executable"
+      if not os.path.exists(exe_path):
+          raise FileNotFoundError(f"Executable not found at {exe_path}")
+      if not os.access(exe_path, os.X_OK):
+          raise PermissionError(f"Executable at {exe_path} is not marked as executable")
+
+      # Provide exactly two arguments so argc==3, with at least one NaN for atof parsing
+      # Using lower-case 'nan' ensures atof parses it as NaN in the C locale
+      cmd = f"{exe_path} nan 1.0"
+
+      # Force C locale to guarantee standard atof behavior
+      env = os.environ.copy()
+      env["LC_ALL"] = "C"
+      env["LANG"] = "C"
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+              env=env,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // s_nextafter.c (129 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double nextafter(double x, double y)
+  #else
+  	double nextafter(x,y)
+  	double x,y;
+  #endif
+  {
+  	int	hx,hy,ix,iy;
+  	unsigned lx,ly;
+
+  	hx = __HI(x);		
+  	lx = __LO(x);		
+  	hy = __HI(y);		
+  	ly = __LO(y);		
+  	ix = hx&0x7fffffff;		
+  	iy = hy&0x7fffffff;		
+
+  	if(((ix>=0x7ff00000)&&((ix-0x7ff00000)|lx)!=0) ||    
+  	   ((iy>=0x7ff00000)&&((iy-0x7ff00000)|ly)!=0))      
+  	{
+  		// Unexecuted code (line 30) removed. Its line cov: 0/1 (0%)
+  	}
+
+  	if(x==y) 
+  	{
+  		return x;
+  	}
+
+  	// Unexecuted code (lines 38-109) removed. Its line cov: 13/68 (19%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	if (argc != 3) 
+  	{
+  		// Unexecuted code (lines 118-119) removed. Its line cov: 0/2 (0%)
+  	}
+
+  	double a0 = atof(argv[1]);
+  	double a1 = atof(argv[2]);
+
+  	double r = nextafter(a0, a1);
+  	printf("%f\n", r);
+
+  	return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [s_nextafter.c] enter main 1
+  [s_nextafter.c] enter main 3
+  [s_nextafter.c] enter main 4
+  [s_nextafter.c] enter nextafter 1
+  [s_nextafter.c] enter nextafter 2
+  [s_nextafter.c] enter nextafter 4
+  [s_nextafter.c] enter nextafter 6
+  [s_nextafter.c] enter nextafter 10
+  [s_nextafter.c] enter nextafter 11
+  [s_nextafter.c] enter nextafter 12
+  [s_nextafter.c] enter nextafter 14
+  [s_nextafter.c] enter nextafter 23
+  [s_nextafter.c] enter nextafter 25
+  [s_nextafter.c] enter nextafter 26
+  [s_nextafter.c] enter nextafter 27
+  [s_nextafter.c] enter main 5
+execution_summary: |2+
+
+  ```c
+  // s_nextafter.c (129 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double nextafter(double x, double y)
+  #else
+  	double nextafter(x,y)
+  	double x,y;
+  #endif
+  {
+  	int	hx,hy,ix,iy;
+  	unsigned lx,ly;
+
+  	hx = __HI(x);		
+  	lx = __LO(x);		
+  	hy = __HI(y);		
+  	ly = __LO(y);		
+  	ix = hx&0x7fffffff;		
+  	iy = hy&0x7fffffff;		
+
+  	if(((ix>=0x7ff00000)&&((ix-0x7ff00000)|lx)!=0) ||    
+  	   ((iy>=0x7ff00000)&&((iy-0x7ff00000)|ly)!=0))      
+  	{
+  		// Unexecuted code (line 30) removed. Its line cov: 0/1 (0%)
+  	}
+
+  	if(x==y) 
+  	{
+  		// Unexecuted code (line 35) removed. Its line cov: 1/1 (100%)
+  	}
+
+  	if((ix|lx)==0) 
+  	{
+  		// Unexecuted code (lines 40-50) removed. Its line cov: 10/11 (91%)
+  	}
+
+  	if(hx>=0) 
+  	{
+  		if(hx>hy||((hx==hy)&&(lx>ly))) 
+  		{
+  			if(lx==0) 
+  			{
+  				// Unexecuted code (line 59) removed. Its line cov: 0/1 (0%)
+  			}
+  			lx -= 1;
+  		} 
+  		else 
+  		{
+  			// Unexecuted code (lines 65-69) removed. Its line cov: 0/5 (0%)
+  		}
+  	} 
+  	else 
+  	{
+  		// Unexecuted code (lines 74-89) removed. Its line cov: 0/16 (0%)
+  	}
+
+  	hy = hx&0x7ff00000;
+  	if(hy>=0x7ff00000) 
+  	{
+  		// Unexecuted code (line 95) removed. Its line cov: 0/1 (0%)
+  	}
+
+  	if(hy<0x00100000) 
+  	{
+  		y = x*x;
+  		if(y!=x) 
+  		{
+  			__HI(y) = hx; __LO(y) = lx;
+  			return y;
+  		}
+  	}
+
+  	// Unexecuted code (lines 108-109) removed. Its line cov: 0/2 (0%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	if (argc != 3) 
+  	{
+  		// Unexecuted code (lines 118-119) removed. Its line cov: 0/2 (0%)
+  	}
+
+  	double a0 = atof(argv[1]);
+  	double a1 = atof(argv[2]);
+
+  	double r = nextafter(a0, a1);
+  	printf("%f\n", r);
+
+  	return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [s_nextafter.c] enter main 1
+  [s_nextafter.c] enter main 3
+  [s_nextafter.c] enter main 4
+  [s_nextafter.c] enter nextafter 1
+  [s_nextafter.c] enter nextafter 2
+  [s_nextafter.c] enter nextafter 4
+  [s_nextafter.c] enter nextafter 5
+  [s_nextafter.c] enter main 5

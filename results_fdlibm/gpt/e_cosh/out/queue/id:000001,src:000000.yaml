@@ -1,0 +1,402 @@
+id: 1
+src_id: 0
+create_time: '2025-12-14 13:55:33.274'
+time_taken: 393
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $1.42012000
+    call_cnt: 4
+    latency: 256.54s
+    input_tokens: 21479
+    output_tokens: 16509
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $1.13560000
+      call_cnt: 3
+      latency: 221.56s
+      input_tokens: 18446
+      output_tokens: 12778
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10774000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.40716000
+      call_cnt: 1
+      latency: 39.73s
+      input_tokens: 5387
+      output_tokens: 4646
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.57300000
+      call_cnt: 1
+      latency: 174.69s
+      input_tokens: 6420
+      output_tokens: 7337
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.04770000
+      call_cnt: 1
+      latency: 7.14s
+      input_tokens: 6639
+      output_tokens: 795
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.28452000
+      call_cnt: 1
+      latency: 34.98s
+      input_tokens: 3033
+      output_tokens: 3731
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.06066000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.22386000
+      call_cnt: 1
+      latency: 34.98s
+      input_tokens: 3033
+      output_tokens: 3731
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (ix < 0x40360000) -> true in e_cosh.c:__ieee754_cosh
+target_file_lines: e_cosh.c:48-49
+target_lines_content: |-
+  		t = __ieee754_exp(fabs(x));
+  		return half*t+half/t;
+justification: 'This branch guards the core mid-range computation path of cosh(x)
+  and has zero historical coverage on its body (lines 48-49: 0/2, 0%). Exercising
+  it will cover the computation that uses t = exp(|x|) and returns half*t + half/t,
+  which is a distinct behavior from the already-covered tiny-x and other ranges. It
+  is reachable by varying the single command-line argument (the numeric input), which
+  the harness supports conceptually.'
+target_path_constraint: |-
+  Chronological constraints to reach the branch body at e_cosh.c:48-49 (if (ix < 0x40360000) -> true):
+
+  1. Command invocation and argument count:
+  - The program must be invoked via a shell command that results in exactly two arguments to main: argv[0] (program name) and argv[1] (a single numeric string). The harness already uses shell=True with a single quoted command string; ensure the command line does not introduce extra tokens. Environment should not modify argument parsing (no alias/wrapper adding args).
+
+  2. Argument format and parsing:
+  - argv[1] must be a valid decimal ASCII representation of a finite double-precision floating-point number (IEEE-754 binary64) that atof can parse. It must not contain leading/trailing non-numeric characters that would cause atof to return 0 unintentionally. No locale-dependent thousands separators; decimal point as '.'
+  - The parsed value a0 must be finite (not NaN, not ±inf). This avoids the early branch ix >= 0x7ff00000 which returns x*x.
+
+  3. Magnitude range to force the mid-range path (ix < 0x40360000) true while skipping earlier tiny/small-x returns:
+  - Let x be the parsed double value; ix is the high 32 bits of x with sign masked. The condition ix < 0x40360000 corresponds to |x| in the interval where exp(|x|) is used symmetrically. To ensure we execute lines 48-49 specifically, additionally require that the earlier small-x block at ix < 0x3fd62e43 does NOT return, and its inner tiny check ix < 0x3c800000 is false. Therefore, constrain |x| such that:
+    a) ix >= 0x3fd62e43 (to avoid lines 37-44 path), and
+    b) ix < 0x40360000 (to enter lines 48-49).
+  - These bounds in terms of |x| map to IEEE-754 double magnitude thresholds roughly between lower_bound and upper_bound; the solver should treat them as constraints on the bit-level representation of |x| so that the high 32-bit word (with sign masked) of x satisfies: 0x3fd62e43 <= hi_word(|x|) < 0x40360000.
+
+  4. Non-extreme large range avoidance:
+  - Ensure ix < 0x40862E42 is not considered yet; our chosen range already satisfies ix < 0x40360000, so later branches (lines 54, 58) are bypassed and line 48-49 executes.
+
+  5. No subnormal/tiny values:
+  - The constraint in step 3a inherently excludes tiny/subnormal magnitudes (ix < 0x3c800000), guaranteeing we do not return at line 41.
+
+  6. Summary as SMT-style constraints over the input string S and parsed double X:
+  - ParseDouble(S) = X, where ParseDouble is standard C atof with C locale.
+  - isFinite(X) = true.
+  - abs(X) > 0.
+  - hi = High32Bits(abs(X)) & 0x7fffffff.
+  - 0x3fd62e43 <= hi < 0x40360000.
+
+  Any input string S that parses to a finite double X whose absolute-value high word meets the above inequality will cause the program to reach and execute e_cosh.c lines 48-49: computing t = exp(|X|) and returning 0.5*t + 0.5/t.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+      import os
+
+      try:
+          # Ensure a C locale so '.' is the decimal point and no thousands separators
+          env = os.environ.copy()
+          env["LC_ALL"] = "C"
+          env["LANG"] = "C"
+
+          # Choose X = 10.0:
+          # - finite, non-zero
+          # - hi_word(|10.0|) = 0x40240000 which satisfies 0x3fd62e43 <= hi < 0x40360000
+          # - ensures mid-range branch (ix < 0x40360000) is true and small-x return is skipped
+          cmd = "./temp_executable 10.0"
+
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+              env=env,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, return captured stderr and -SIGKILL as return code
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # Propagate other errors
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // e_cosh.c (90 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double one = 1.0, half=0.5, huge = 1.0e300;
+  #else
+  static double one = 1.0, half=0.5, huge = 1.0e300;
+  #endif
+
+  #ifdef __STDC__
+  	double __ieee754_cosh(double x)
+  #else
+  	double __ieee754_cosh(x)
+  	double x;
+  #endif
+  {	
+  	double t,w;
+  	int ix;
+  	unsigned lx;
+
+      
+  	ix = __HI(x);
+  	ix &= 0x7fffffff;
+
+      
+  	if(ix>=0x7ff00000) {
+  		// Unexecuted code (line 33) removed. Its line cov: 0/1 (0%)
+  	}	
+
+      
+  	if(ix<0x3fd62e43) {
+  	    t = expm1(fabs(x));
+  	    w = one+t;
+  	    if (ix<0x3c800000) {
+  			return w;
+  		}	
+  	    // Unexecuted code (line 43) removed. Its line cov: 0/1 (0%)
+  	}
+
+      
+  	if (ix < 0x40360000) {
+  		// Unexecuted code (lines 48-49) removed. Its line cov: 0/2 (0%)
+  	}
+
+      
+  	if (ix < 0x40862E42) {
+  		// Unexecuted code (line 54) removed. Its line cov: 0/1 (0%)
+  	}
+
+      
+  	if (ix < 0x40862E42)  return half*__ieee754_exp(fabs(x));
+
+      
+  	lx = *( (((*(unsigned*)&one)>>29)) + (unsigned*)&x);
+  	if (ix<0x408633CE || 
+  	      (ix==0x408633ce)&&(lx<=(unsigned)0x8fb9f87d)) {
+  	    // Unexecuted code (lines 64-66) removed. Its line cov: 0/3 (0%)
+  	}
+
+      
+  	// Unexecuted code (line 70) removed. Its line cov: 0/1 (0%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+
+      if (argc != 2) {
+          // Unexecuted code (lines 80-81) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = __ieee754_cosh(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [e_cosh.c] enter main 3
+  [e_cosh.c] enter __ieee754_cosh 1
+  [e_cosh.c] enter __ieee754_cosh 3
+  [e_cosh.c] enter __ieee754_cosh 4
+execution_summary: |2+
+
+  ```c
+  // e_cosh.c (90 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double one = 1.0, half=0.5, huge = 1.0e300;
+  #else
+  static double one = 1.0, half=0.5, huge = 1.0e300;
+  #endif
+
+  #ifdef __STDC__
+  	double __ieee754_cosh(double x)
+  #else
+  	double __ieee754_cosh(x)
+  	double x;
+  #endif
+  {	
+  	double t,w;
+  	int ix;
+  	unsigned lx;
+
+      
+  	ix = __HI(x);
+  	ix &= 0x7fffffff;
+
+      
+  	if(ix>=0x7ff00000) {
+  		// Unexecuted code (line 33) removed. Its line cov: 0/1 (0%)
+  	}	
+
+      
+  	if(ix<0x3fd62e43) {
+  	    t = expm1(fabs(x));
+  	    w = one+t;
+  	    if (ix<0x3c800000) {
+  			return w;
+  		}	
+  	    // Unexecuted code (line 43) removed. Its line cov: 0/1 (0%)
+  	}
+
+      
+  	if (ix < 0x40360000) {
+  		// Unexecuted code (lines 48-49) removed. Its line cov: 0/2 (0%)
+  	}
+
+      
+  	if (ix < 0x40862E42) {
+  		// Unexecuted code (line 54) removed. Its line cov: 0/1 (0%)
+  	}
+
+      
+  	if (ix < 0x40862E42)  return half*__ieee754_exp(fabs(x));
+
+      
+  	lx = *( (((*(unsigned*)&one)>>29)) + (unsigned*)&x);
+  	if (ix<0x408633CE || 
+  	      (ix==0x408633ce)&&(lx<=(unsigned)0x8fb9f87d)) {
+  	    // Unexecuted code (lines 64-66) removed. Its line cov: 0/3 (0%)
+  	}
+
+      
+  	// Unexecuted code (line 70) removed. Its line cov: 0/1 (0%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+
+      if (argc != 2) {
+          // Unexecuted code (lines 80-81) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = __ieee754_cosh(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [e_cosh.c] enter main 3
+  [e_cosh.c] enter __ieee754_cosh 1
+  [e_cosh.c] enter __ieee754_cosh 3
+  [e_cosh.c] enter __ieee754_cosh 4

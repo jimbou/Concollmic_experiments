@@ -1,0 +1,692 @@
+id: 3
+src_id: 0
+create_time: '2025-12-14 16:19:52.220'
+time_taken: 469
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $1.17010000
+    call_cnt: 4
+    latency: 125.20s
+    input_tokens: 24257
+    output_tokens: 11416
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $1.02212000
+      call_cnt: 3
+      latency: 109.93s
+      input_tokens: 21301
+      output_tokens: 9935
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.11834000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.43414000
+      call_cnt: 1
+      latency: 50.73s
+      input_tokens: 5917
+      output_tokens: 4710
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.42746000
+      call_cnt: 1
+      latency: 48.14s
+      input_tokens: 7577
+      output_tokens: 4522
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.04218000
+      call_cnt: 1
+      latency: 11.05s
+      input_tokens: 7807
+      output_tokens: 703
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.14798000
+      call_cnt: 1
+      latency: 15.27s
+      input_tokens: 2956
+      output_tokens: 1481
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05912000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.08886000
+      call_cnt: 1
+      latency: 15.27s
+      input_tokens: 2956
+      output_tokens: 1481
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: else if (ix0 < 0) -> true within the `if (ix0 <= 0)` block in e_sqrt.c:__ieee754_sqrt
+target_file_lines: e_sqrt.c:34-34
+target_lines_content: "\t\treturn (x-x)/(x-x);"
+justification: This branch handles the square-root of negative (non-zero) inputs,
+  producing a NaN via (x-x)/(x-x). It has zero historical coverage (line 34 marked
+  with '-') and was not executed in the current trace. It is directly controllable
+  via the single command-line argument parsed by atof, so it is reachable with our
+  harness. Covering this error/special-case path meaningfully increases behavioral
+  coverage of the core math routine.
+target_path_constraint: |-
+  Goal: Reach the branch `else if (ix0 < 0)` within the `if (ix0 <= 0)` block of the IEEE-754 sqrt routine, which corresponds to passing a finite, strictly negative double-precision value to the sqrt implementation.
+
+  Program entry and invocation constraints:
+  1) Command invocation must pass exactly one command-line argument (besides the program name), because the program checks argc == 2 implicitly by using argv[1] and will proceed only if there is one numeric argument. Under the provided harness, this is already satisfied by invoking the executable with a single argument string.
+
+  2) Command-line argument parsing uses C’s atof on argv[1] to obtain a double a0. Therefore, argv[1] must be a valid textual representation of a finite IEEE-754 double-precision floating-point number (in standard C locale) so that atof returns a numeric value and not 0 due to an unparsable string.
+
+  Core numerical constraints to trigger the target branch:
+  3) The parsed double value a0 must be strictly less than 0 (a0 < 0). This ensures its high word (ix0) represents a negative finite number so that ix0 < 0 holds inside the routine while also satisfying the enclosing check ix0 <= 0.
+
+  4) The value must not be -0.0. In IEEE-754, -0.0 compares equal to 0.0 and is treated as zero here. Concretely, avoid the exact bit pattern of negative zero; equivalently, require a0 ≠ 0.0 in numerical comparison and the magnitude |a0| > 0. This guarantees the branch taken is the negative non-zero path, not the zero return path handled by `if(((ix0 & ~sign) | ix1) == 0) return x;`.
+
+  5) The value must not be NaN or ±Infinity. The code has an earlier special-case for exponent all-ones (ix0 & 0x7ff00000 == 0x7ff00000) which catches NaNs/Infinities; we must avoid that to reach our target. Therefore, require a0 to be finite: -DBL_MAX ≤ a0 ≤ DBL_MAX and not NaN.
+
+  Encoding/format constraints for argv[1]:
+  6) The argument must be encoded in UTF-8 (the harness sets encoding="utf-8") and represent the numeric token with optional leading/trailing spaces as allowed by atof, optional leading sign '-', and digits, optionally with a decimal point and/or exponent. Locale must be the default "C" or any locale where '.' is the decimal separator.
+
+  Summary (SMT-style):
+  - Input is a string s parsed by atof producing double a0.
+  - Constraints:
+    a) parse_ok(s) = true and isfinite(a0).
+    b) a0 < 0.
+    c) a0 ≠ -0.0 and a0 ≠ 0.0.
+    d) not isinf(a0) and not isnan(a0).
+
+  Any string s satisfying these constraints will lead execution into the `else if (ix0 < 0)` branch inside __ieee754_sqrt.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Provide a finite, strictly negative double value (not -0.0), parsed by atof
+      # This will trigger the `else if (ix0 < 0)` path in the IEEE-754 sqrt routine
+      # The command-line invocation maintains exactly one argument to the program
+      cmd = ["./temp_executable -1"]
+
+      try:
+          result = subprocess.run(
+              cmd,
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // e_sqrt.c (137 lines total)
+  #include <stdio.h>
+  #include "fdlibm.h"
+
+  #ifdef __STDC__
+  static	const double	one	= 1.0, tiny=1.0e-300;
+  #else
+  static	double	one	= 1.0, tiny=1.0e-300;
+  #endif
+
+  #ifdef __STDC__
+  	double __ieee754_sqrt(double x)
+  #else
+  	double __ieee754_sqrt(x)
+  	double x;
+  #endif
+  {
+  	double z;
+  	int 	sign = (int)0x80000000; 
+  	unsigned r,t1,s1,ix1,q1;
+  	int ix0,s0,q,m,t,i;
+
+  	ix0 = __HI(x);			
+  	ix1 = __LO(x);		
+
+      
+  	if((ix0&0x7ff00000)==0x7ff00000) {	
+  	    // Unexecuted code (line 27) removed. Its line cov: 0/1 (0%)
+  	} 
+      
+  	if(ix0<=0) {
+  	    if(((ix0&(~sign))|ix1)==0) return x;
+  	    else if(ix0<0)
+  	    {
+  		// Unexecuted code (line 34) removed. Its line cov: 0/1 (0%)
+  	    }
+  	}
+      
+  	m = (ix0>>20);
+  	if(m==0) {				
+  	    while(ix0==0) {
+  		m -= 21;
+  		ix0 |= (ix1>>11); ix1 <<= 21;
+  	    }
+  	    for(i=0;(ix0&0x00100000)==0;i++) {
+  		ix0<<=1;
+  	    }
+  	    m -= i-1;
+  	    ix0 |= (ix1>>(32-i));
+  	    ix1 <<= i;
+  	}
+  	m -= 1023;	
+  	ix0 = (ix0&0x000fffff)|0x00100000;
+  	if(m&1){	
+  	    ix0 += ix0 + ((ix1&sign)>>31);
+  	    ix1 += ix1;
+  	}
+  	m >>= 1;	
+
+      
+  	ix0 += ix0 + ((ix1&sign)>>31);
+  	ix1 += ix1;
+  	q = q1 = s0 = s1 = 0;	
+  	r = 0x00200000;		
+
+  	while(r!=0) {
+  	    t = s0+r; 
+  	    if(t<=ix0) { 
+  		s0   = t+r; 
+  		ix0 -= t; 
+  		q   += r; 
+  	    } 
+  	    ix0 += ix0 + ((ix1&sign)>>31);
+  	    ix1 += ix1;
+  	    r>>=1;
+  	}
+
+  	r = sign;
+  	while(r!=0) {
+  	    t1 = s1+r; 
+  	    t  = s0;
+  	    if((t<ix0)||((t==ix0)&&(t1<=ix1))) { 
+  		s1  = t1+r;
+  		if(((t1&sign)==sign)&&(s1&sign)==0) s0 += 1;
+  		ix0 -= t;
+  		if (ix1 < t1) ix0 -= 1;
+  		ix1 -= t1;
+  		q1  += r;
+  	    }
+  	    ix0 += ix0 + ((ix1&sign)>>31);
+  	    ix1 += ix1;
+  	    r>>=1;
+  	}
+
+      
+  	if((ix0|ix1)!=0) {
+  	    z = one-tiny; 
+  	    if (z>=one) {
+  	        z = one+tiny;
+  	        if (q1==(unsigned)0xffffffff) { q1=0; q += 1;}
+  		else if (z>one) {
+  		    // Unexecuted code (lines 101-102) removed. Its line cov: 0/2 (0%)
+  		} else
+  		{
+  	            q1 += (q1&1);
+  		}
+  	    }
+  	}
+  	ix0 = (q>>1)+0x3fe00000;
+  	ix1 =  q1>>1;
+  	if ((q&1)==1) ix1 |= sign;
+  	ix0 += (m <<20);
+  	__HI(z) = ix0;
+  	__LO(z) = ix1;
+  	return z;
+  }
+
+
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+
+      if (argc != 2) {
+          // Unexecuted code (lines 127-128) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = __ieee754_sqrt(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [e_sqrt.c] enter main 3
+  [e_sqrt.c] enter __ieee754_sqrt 1
+  [e_sqrt.c] enter __ieee754_sqrt 3
+  [e_sqrt.c] enter __ieee754_sqrt 5
+  [e_sqrt.c] enter __ieee754_sqrt 7
+  [e_sqrt.c] enter __ieee754_sqrt 8
+  [e_sqrt.c] enter __ieee754_sqrt 9
+  [e_sqrt.c] enter __ieee754_sqrt 10
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 12
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 12
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 12
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 12
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 12
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 12
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 12
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 12
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 12
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 12
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 12
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 12
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 12
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 15
+  [e_sqrt.c] enter __ieee754_sqrt 16
+  [e_sqrt.c] enter __ieee754_sqrt 18
+  [e_sqrt.c] enter __ieee754_sqrt 19
+execution_summary: |2+
+
+  ```c
+  // e_sqrt.c (137 lines total)
+  #include <stdio.h>
+  #include "fdlibm.h"
+
+  #ifdef __STDC__
+  static	const double	one	= 1.0, tiny=1.0e-300;
+  #else
+  static	double	one	= 1.0, tiny=1.0e-300;
+  #endif
+
+  #ifdef __STDC__
+  	double __ieee754_sqrt(double x)
+  #else
+  	double __ieee754_sqrt(x)
+  	double x;
+  #endif
+  {
+  	double z;
+  	int 	sign = (int)0x80000000; 
+  	unsigned r,t1,s1,ix1,q1;
+  	int ix0,s0,q,m,t,i;
+
+  	ix0 = __HI(x);			
+  	ix1 = __LO(x);		
+
+      
+  	if((ix0&0x7ff00000)==0x7ff00000) {	
+  	    // Unexecuted code (line 27) removed. Its line cov: 0/1 (0%)
+  	} 
+      
+  	if(ix0<=0) {
+  	    if(((ix0&(~sign))|ix1)==0) return x;
+  	    else if(ix0<0)
+  	    {
+  		// Unexecuted code (line 34) removed. Its line cov: 0/1 (0%)
+  	    }
+  	}
+      
+  	m = (ix0>>20);
+  	if(m==0) {				
+  	    while(ix0==0) {
+  		m -= 21;
+  		ix0 |= (ix1>>11); ix1 <<= 21;
+  	    }
+  	    for(i=0;(ix0&0x00100000)==0;i++) {
+  		// Unexecuted code (line 45) removed. Its line cov: 1/1 (100%)
+  	    }
+  	    m -= i-1;
+  	    ix0 |= (ix1>>(32-i));
+  	    ix1 <<= i;
+  	}
+  	m -= 1023;	
+  	ix0 = (ix0&0x000fffff)|0x00100000;
+  	if(m&1){	
+  	    ix0 += ix0 + ((ix1&sign)>>31);
+  	    ix1 += ix1;
+  	}
+  	m >>= 1;	
+
+      
+  	ix0 += ix0 + ((ix1&sign)>>31);
+  	ix1 += ix1;
+  	q = q1 = s0 = s1 = 0;	
+  	r = 0x00200000;		
+
+  	while(r!=0) {
+  	    t = s0+r; 
+  	    if(t<=ix0) { 
+  		s0   = t+r; 
+  		ix0 -= t; 
+  		q   += r; 
+  	    } 
+  	    ix0 += ix0 + ((ix1&sign)>>31);
+  	    ix1 += ix1;
+  	    r>>=1;
+  	}
+
+  	r = sign;
+  	while(r!=0) {
+  	    t1 = s1+r; 
+  	    t  = s0;
+  	    if((t<ix0)||((t==ix0)&&(t1<=ix1))) { 
+  		s1  = t1+r;
+  		if(((t1&sign)==sign)&&(s1&sign)==0) s0 += 1;
+  		ix0 -= t;
+  		if (ix1 < t1) ix0 -= 1;
+  		ix1 -= t1;
+  		q1  += r;
+  	    }
+  	    ix0 += ix0 + ((ix1&sign)>>31);
+  	    ix1 += ix1;
+  	    r>>=1;
+  	}
+
+      
+  	if((ix0|ix1)!=0) {
+  	    z = one-tiny; 
+  	    if (z>=one) {
+  	        z = one+tiny;
+  	        if (q1==(unsigned)0xffffffff) { q1=0; q += 1;}
+  		else if (z>one) {
+  		    // Unexecuted code (lines 101-102) removed. Its line cov: 0/2 (0%)
+  		} else
+  		{
+  	            q1 += (q1&1);
+  		}
+  	    }
+  	}
+  	ix0 = (q>>1)+0x3fe00000;
+  	ix1 =  q1>>1;
+  	if ((q&1)==1) ix1 |= sign;
+  	ix0 += (m <<20);
+  	__HI(z) = ix0;
+  	__LO(z) = ix1;
+  	return z;
+  }
+
+
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+
+      if (argc != 2) {
+          // Unexecuted code (lines 127-128) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = __ieee754_sqrt(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [e_sqrt.c] enter main 3
+  [e_sqrt.c] enter __ieee754_sqrt 1
+  [e_sqrt.c] enter __ieee754_sqrt 3
+  [e_sqrt.c] enter __ieee754_sqrt 5
+  [e_sqrt.c] enter __ieee754_sqrt 6
+  [e_sqrt.c] enter __ieee754_sqrt 6
+  [e_sqrt.c] enter __ieee754_sqrt 7
+  [e_sqrt.c] enter __ieee754_sqrt 8
+  [e_sqrt.c] enter __ieee754_sqrt 9
+  [e_sqrt.c] enter __ieee754_sqrt 10
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 12
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 12
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 12
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 12
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 12
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 12
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 12
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 12
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 12
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 12
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 12
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 12
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 12
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 12
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 12
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 12
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 12
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 12
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 12
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 12
+  [e_sqrt.c] enter __ieee754_sqrt 11
+  [e_sqrt.c] enter __ieee754_sqrt 12
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 13
+  [e_sqrt.c] enter __ieee754_sqrt 14
+  [e_sqrt.c] enter __ieee754_sqrt 15
+  [e_sqrt.c] enter __ieee754_sqrt 16
+  [e_sqrt.c] enter __ieee754_sqrt 18
+  [e_sqrt.c] enter __ieee754_sqrt 19

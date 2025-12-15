@@ -1,0 +1,313 @@
+id: 4
+src_id: 0
+create_time: '2025-12-14 18:47:52.469'
+time_taken: 459
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 1
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.76456000
+    call_cnt: 3
+    latency: 78.44s
+    input_tokens: 13559
+    output_tokens: 8223
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.55956000
+      call_cnt: 2
+      latency: 60.91s
+      input_tokens: 10512
+      output_tokens: 5822
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10238000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.40894000
+      call_cnt: 1
+      latency: 50.73s
+      input_tokens: 5119
+      output_tokens: 5018
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.04824000
+      call_cnt: 1
+      latency: 10.18s
+      input_tokens: 5393
+      output_tokens: 804
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.20500000
+      call_cnt: 1
+      latency: 17.54s
+      input_tokens: 3047
+      output_tokens: 2401
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.06094000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.14406000
+      call_cnt: 1
+      latency: 17.54s
+      input_tokens: 3047
+      output_tokens: 2401
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (!finite(value) || value == 0.0) -> true (the second check, after
+  scaling) in s_ldexp.c:ldexp
+target_file_lines: s_ldexp.c:21-21
+target_lines_content: "\t\terrno = ERANGE;"
+justification: This branch’s body has 0/1 (0%) historical coverage, making it the
+  highest-priority uncovered path visible in the current trace. Reaching it exercises
+  the overflow/underflow handling after scaling (value * 2^exp), a behavior not yet
+  covered by tests. Although a previous attempt failed, this branch is reachable by
+  appropriate command-line inputs (a finite, non-zero double and an integer exponent
+  that drives the scaled result to infinity or zero). The alternative argc!=3 branch
+  in main also has 0% coverage but is unreachable under the fixed harness that always
+  supplies two arguments. The first pre-scaling check in ldexp already has 100% historical
+  coverage and is lower priority.
+target_path_constraint: |-
+  Inputs and environment requirements to reach the target branch (post-scaling check true in ldexp):
+
+  1) Process invocation and arguments
+  - The program is launched via a shell command that is fixed by the harness: ./temp_executable <arg1> <arg2>
+  - Exactly two command-line arguments must be supplied (argc == 3 including program name). This is already ensured by the harness, so no additional constraint is required here.
+
+  2) Argument parsing semantics
+  - arg1 is parsed as a double-precision floating-point value using standard decimal notation rules (C atof). It must be a finite, non-NaN, non-infinite, non-zero numeric string so that:
+    a) The pre-scaling check (!finite(value) || value == 0.0) evaluates to false.
+  - arg2 is parsed as a base-10 integer (C atoi) representing the exponent.
+
+  3) File system and locale
+  - No files are read; locale must permit decimal point '.' to be parsed by atof (standard "C" locale assumption). If locale differs, ensure arg1 uses the correct decimal separator recognized by atof.
+
+  4) Core mathematical relationship to trigger the target branch after scaling
+  - Let V be the finite, non-zero double parsed from arg1, and E be the integer parsed from arg2.
+  - The function computes S = scalbn(V, E) = V × 2^E.
+  - The target branch triggers when either:
+    (T1) S is not finite (i.e., S is +INF or -INF due to overflow), or
+    (T2) S equals 0.0 (underflow to signed zero) while V is finite and non-zero.
+
+  5) Constraints ensuring pre-check passes and post-check triggers
+  - Pre-check pass:
+    C1: V is finite and V ≠ 0.0.
+  - Post-check trigger (choose either overflow or underflow path):
+    Overflow path:
+    C2a: S overflows to infinity in IEEE-754 double. Symbolically: |V| × 2^E > DBL_MAX, where DBL_MAX is the largest finite double.
+    Underflow path:
+    C2b: S underflows to zero in IEEE-754 double. Symbolically: |V| × 2^E < DBL_MIN_SUBNORM, where DBL_MIN_SUBNORM is the smallest positive subnormal double (effectively below the representable range so the result rounds to 0.0).
+  - Either C2a or C2b must hold.
+
+  6) Robustness against parsing edge cases
+  - arg1 must not contain leading/trailing characters that atof would ignore in a way that yields 0.0; ensure it begins with an optional sign followed by digits and an optional decimal point/exponent part.
+  - arg2 must represent an integer within the typical range supported by atoi; extremely large textual integers are permitted but beware undefined behavior is not an issue for atoi; however, for mathematical intent, E should be treated as an integer possibly large enough in magnitude to cause overflow/underflow as per C2a/C2b.
+
+  Summary of necessary and sufficient conditions for inputs (arg1, arg2):
+  - V = atof(arg1) is finite and non-zero. (C1)
+  - E = atoi(arg2).
+  - Either Overflow: |V| × 2^E > DBL_MAX (C2a), or Underflow: |V| × 2^E < DBL_MIN_SUBNORM (C2b).
+  These conditions ensure the first check is false, scalbn applies scaling, and the second check is true, reaching the target branch.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+      import os
+
+      # Use values that satisfy the path constraints:
+      # V = 1.0 (finite, non-zero), E = -2000
+      # S = scalbn(1.0, -2000) = 2^-2000 < DBL_MIN_SUBNORM -> underflows to 0.0
+      cmd = "./temp_executable 1.0 -2000"
+
+      # Ensure locale uses '.' as decimal separator for atof
+      env = os.environ.copy()
+      env["LC_ALL"] = "C"
+      env["LANG"] = "C"
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+              env=env,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // s_ldexp.c (39 lines total)
+
+
+
+
+  #include "fdlibm.h"
+  #include <errno.h>
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double ldexp(double value, int exp)
+  #else
+  	double ldexp(value, exp)
+  	double value; int exp;
+  #endif
+  {
+  	if(!finite(value)||value==0.0) {
+  		// Unexecuted code (line 17) removed. Its line cov: 1/1 (100%)
+  	}
+  	value = scalbn(value,exp);
+  	if(!finite(value)||value==0.0) {
+  		// Unexecuted code (line 21) removed. Its line cov: 0/1 (0%)
+  	}
+  	return value;
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	if (argc != 3) {
+  		// Unexecuted code (lines 31-32) removed. Its line cov: 0/2 (0%)
+  	}
+  	double a0 = atof(argv[1]);
+  	int a1 = atoi(argv[2]);
+  	double r = ldexp(a0, a1);
+  	printf("%f\n", r);
+  	return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [s_ldexp.c] enter main 1
+  [s_ldexp.c] enter main 3
+  [s_ldexp.c] enter main 4
+  [s_ldexp.c] enter ldexp 1
+  [s_ldexp.c] enter ldexp 3
+  [s_ldexp.c] enter ldexp 4
+  [s_ldexp.c] enter ldexp 5
+  [s_ldexp.c] enter ldexp 6
+  [s_ldexp.c] enter main 5
+execution_summary: |2+
+
+  ```c
+  // s_ldexp.c (39 lines total)
+
+
+
+
+  #include "fdlibm.h"
+  #include <errno.h>
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double ldexp(double value, int exp)
+  #else
+  	double ldexp(value, exp)
+  	double value; int exp;
+  #endif
+  {
+  	if(!finite(value)||value==0.0) {
+  		// Unexecuted code (line 17) removed. Its line cov: 1/1 (100%)
+  	}
+  	value = scalbn(value,exp);
+  	if(!finite(value)||value==0.0) {
+  		errno = ERANGE;
+  	}
+  	return value;
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	if (argc != 3) {
+  		// Unexecuted code (lines 31-32) removed. Its line cov: 0/2 (0%)
+  	}
+  	double a0 = atof(argv[1]);
+  	int a1 = atoi(argv[2]);
+  	double r = ldexp(a0, a1);
+  	printf("%f\n", r);
+  	return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0 1"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [s_ldexp.c] enter main 1
+  [s_ldexp.c] enter main 3
+  [s_ldexp.c] enter main 4
+  [s_ldexp.c] enter ldexp 1
+  [s_ldexp.c] enter ldexp 3
+  [s_ldexp.c] enter ldexp 4
+  [s_ldexp.c] enter ldexp 6
+  [s_ldexp.c] enter main 5

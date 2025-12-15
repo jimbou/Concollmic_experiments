@@ -1,0 +1,254 @@
+id: 5
+src_id: 1
+create_time: '2025-12-14 18:49:07.323'
+time_taken: 528
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 2
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.49090000
+    call_cnt: 3
+    latency: 45.67s
+    input_tokens: 12980
+    output_tokens: 3855
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.36486000
+      call_cnt: 2
+      latency: 33.57s
+      input_tokens: 10335
+      output_tokens: 2636
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10160000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.24370000
+      call_cnt: 1
+      latency: 27.59s
+      input_tokens: 5080
+      output_tokens: 2310
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.01956000
+      call_cnt: 1
+      latency: 5.97s
+      input_tokens: 5255
+      output_tokens: 326
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.12604000
+      call_cnt: 1
+      latency: 12.10s
+      input_tokens: 2645
+      output_tokens: 1219
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05290000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.07314000
+      call_cnt: 1
+      latency: 12.10s
+      input_tokens: 2645
+      output_tokens: 1219
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (argc != 3) -> true in s_ldexp.c:main
+target_file_lines: s_ldexp.c:31-32
+target_lines_content: |-
+  		printf("Usage: %s <arg> <arg>\n", argv[0]);
+  		return 1;
+justification: This branch has 0% historical coverage (lines 31-32) and represents
+  the program’s argument-count error path. Exercising it adds new behavior coverage
+  (usage/error handling) and is reachable by varying command-line arguments within
+  the existing harness paradigm. Other unexecuted code in ldexp() shows 100% historical
+  coverage and thus is lower priority.
+target_path_constraint: |-
+  1. Process invocation structure:
+  - The target executable must be launched with a command-line argument list whose length is not equal to three (i.e., program name plus two arguments is NOT satisfied). In standard C programs, argc counts the program name as the first element. Therefore, ensure total tokens parsed into argv are either fewer than 3 (e.g., only program name; or program name plus one arg) or greater than 3 (program name plus three or more args).
+
+  2. Shell and quoting behavior:
+  - If the harness uses a shell to invoke the program (e.g., passing a single string command), be aware that quoting and whitespace determine how many argv entries reach the program. The constraint is strictly on the final argv length presented to the process: argc != 3.
+
+  3. Input validity irrelevance under this path:
+  - There is no requirement to provide numeric values for argv[1] or argv[2], because execution will not proceed past the argc check once argc != 3. No file I/O or environment variables are needed.
+
+  4. Environment conditions:
+  - The executable must exist and be runnable. No special permissions or locale settings are required. There are no dependencies on stdin/stdout content.
+
+  5. Termination behavior expectation:
+  - When argc != 3, the program enters the error-handling branch at lines 31-32. Ensure the invocation strictly violates the “exactly two user arguments” expectation so those lines execute.
+selected_cnt: 1
+successful_generation_cnt: 1
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # We must violate the argc == 3 check. Invoke the executable with no user arguments,
+      # so the shell parses only the program name, yielding argc == 1.
+      try:
+          result = subprocess.run(
+              ["./temp_executable"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          raise e
+returncode: 1
+src_execution_summary: |2+
+
+  ```c
+  // s_ldexp.c (39 lines total)
+
+
+
+
+  #include "fdlibm.h"
+  #include <errno.h>
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double ldexp(double value, int exp)
+  #else
+  	double ldexp(value, exp)
+  	double value; int exp;
+  #endif
+  {
+  	if(!finite(value)||value==0.0) {
+  		return value;
+  	}
+  	// Unexecuted code (lines 19-23) removed. Its line cov: 5/5 (100%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	if (argc != 3) {
+  		// Unexecuted code (lines 31-32) removed. Its line cov: 0/2 (0%)
+  	}
+  	double a0 = atof(argv[1]);
+  	int a1 = atoi(argv[2]);
+  	double r = ldexp(a0, a1);
+  	printf("%f\n", r);
+  	return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [s_ldexp.c] enter main 1
+  [s_ldexp.c] enter main 2
+execution_summary: |2+
+
+  ```c
+  // s_ldexp.c (39 lines total)
+
+
+
+
+  #include "fdlibm.h"
+  #include <errno.h>
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double ldexp(double value, int exp)
+  #else
+  	double ldexp(value, exp)
+  	double value; int exp;
+  #endif
+  {
+  	// Unexecuted code (lines 16-23) removed. Its line cov: 8/8 (100%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	if (argc != 3) {
+  		printf("Usage: %s <arg> <arg>\n", argv[0]);
+  		return 1;
+  	}
+  	// Unexecuted code (lines 34-38) removed. Its line cov: 5/5 (100%)
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # We set argv[1] to a non-finite double ("nan") so the ldexp pre-check is true.
+      # argv[2] can be any decimal integer; we use "1".
+      # This preserves the original harness structure: <program> <arg1> <arg2>.
+      try:
+          result = subprocess.run(
+              ["./temp_executable nan 1"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [s_ldexp.c] enter main 1
+  [s_ldexp.c] enter main 3
+  [s_ldexp.c] enter main 4
+  [s_ldexp.c] enter ldexp 1
+  [s_ldexp.c] enter ldexp 2
+  [s_ldexp.c] enter main 5

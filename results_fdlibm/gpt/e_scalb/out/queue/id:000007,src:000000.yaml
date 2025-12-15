@@ -1,0 +1,336 @@
+id: 7
+src_id: 0
+create_time: '2025-12-14 16:05:17.519'
+time_taken: 826
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 1
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.75788000
+    call_cnt: 3
+    latency: 85.98s
+    input_tokens: 14014
+    output_tokens: 7960
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.60064000
+      call_cnt: 2
+      latency: 70.37s
+      input_tokens: 10871
+      output_tokens: 6387
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10646000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.44024000
+      call_cnt: 1
+      latency: 59.82s
+      input_tokens: 5323
+      output_tokens: 5488
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.05394000
+      call_cnt: 1
+      latency: 10.55s
+      input_tokens: 5548
+      output_tokens: 899
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.15724000
+      call_cnt: 1
+      latency: 15.61s
+      input_tokens: 3143
+      output_tokens: 1573
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.06286000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.09438000
+      call_cnt: 1
+      latency: 15.61s
+      input_tokens: 3143
+      output_tokens: 1573
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (-fn > 65000.0) -> true in e_scalb.c:__ieee754_scalb
+target_file_lines: e_scalb.c:41-41
+target_lines_content: "\t\treturn scalbn(x,-65000);"
+justification: 'This branch has zero historical coverage (line cov: 0/1, 0%). It guards
+  an extreme-edge case where the scaling exponent is a very large negative value,
+  which is likely to exercise special-case handling (e.g., underflow/limit behavior)
+  that is untested. Other nearby checks (NaN, non-finite, non-integer, and large positive
+  exponent) already show 100% historical coverage, so prioritizing this uncovered
+  negative-exponent path maximizes new coverage without duplicating already-tested
+  behaviors.'
+target_path_constraint: |-
+  Goal: Trigger the branch in __ieee754_scalb where (-fn > 65000.0) evaluates to true (i.e., the scaling factor argument is a finite real number less than -65000).
+
+  Program interface and inputs:
+  - The executable is invoked via a shell command string "./temp_executable 1.0 1.0" with shell=True. However, to reach the target branch, the same executable must be invokable with two command-line arguments (both strings) representing floating-point numbers in text form. The program expects exactly three argv entries: program name, arg1, arg2.
+
+  Chronological, self-contained constraints:
+  1) Argument count and parsing
+     - Exactly two user-supplied command-line arguments must be provided (argc == 3 overall including program name). This ensures the program does not take the early-exit path for incorrect argc.
+     - Arg1 and Arg2 must each be valid textual representations of real numbers in a C locale (period as decimal separator), acceptable by the C library function atof(). Leading/trailing whitespace is allowed but not required. No thousands separators or locale-specific characters.
+     - Let x be the real number parsed from Arg1, and fn be the real number parsed from Arg2.
+
+  2) Finite and non-NaN requirements (to avoid earlier exits and reach the specific check):
+     - x must be a finite real number (not NaN, not ±infinity). Any finite x is acceptable because the target branch depends only on fn.
+     - fn must be a finite real number (not NaN, not ±infinity). This avoids the isnan(fn) and !finite(fn) branches.
+
+  3) Avoid earlier guards that would divert control flow before reaching the target branch body (note: checks are evaluated sequentially inside __ieee754_scalb):
+     - Ensure fn is not NaN: Arg2 must not be a NaN textual form (e.g., avoid "nan", "NaN", or variants). Similarly, avoid infinities (e.g., "inf", "infinity", "+inf", "-inf").
+     - Ensure rint(fn) == fn (i.e., fn is an integer-valued real) OR at least, even if this check is performed, we must pass through it without taking that branch. To be certain: require fn to be mathematically an integer value (no fractional part), when interpreted in double precision (e.g., ...,-2, -1, 0, 1, 2,...). This prevents taking the "rint(fn)!=fn" branch.
+     - Ensure fn ≤ 65000.0 is not sufficient; we specifically need the later negative-large check. Also avoid triggering the positive-large check: require fn ≤ 65000.0.
+
+  4) Target branch satisfaction:
+     - Require (-fn > 65000.0) to be true. Equivalently, require fn < -65000.0.
+     - Combine with the avoidance of the positive-large check: fn must satisfy fn < -65000.0 (which automatically ensures fn is not > 65000.0).
+     - Also maintain integer-valued constraint to skip the non-integer branch: fn must be an integer-valued finite double strictly less than -65000.0.
+
+  5) Summary of constraints expressed formally:
+     - argc == 3
+     - Arg1 parses via atof to a finite double x ∈ R (no NaN/Inf). No restriction on value beyond finiteness.
+     - Arg2 parses via atof to a finite double fn ∈ R such that:
+         a) fn is not NaN or ±Inf
+         b) fn is an integer-valued double (rint(fn) == fn)
+         c) fn < -65000.0
+
+  6) Environmental conditions:
+     - No files or environment variables are needed. Standard C locale should be assumed so that decimal point is '.'.
+
+  Any pair of command-line strings meeting the above will drive execution to the target branch (-fn > 65000.0) in __ieee754_scalb.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Concrete inputs chosen to satisfy constraints:
+      # Arg1 (x): finite double -> "1.0"
+      # Arg2 (fn): integer-valued finite double less than -65000.0 -> "-65001"
+      # This ensures (-fn > 65000.0) is true, i.e., fn < -65000.0, and rint(fn) == fn.
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0 -65001"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // e_scalb.c (64 lines total)
+  #include <stdio.h>
+  #include "fdlibm.h"
+
+  #ifdef _SCALB_INT
+  #ifdef __STDC__
+  	double __ieee754_scalb(double x, int fn)
+  #else
+  	double __ieee754_scalb(x,fn)
+  	double x; int fn;
+  #endif
+  #else
+  #ifdef __STDC__
+  	double __ieee754_scalb(double x, double fn)
+  #else
+  	double __ieee754_scalb(x,fn)
+  	double x, fn;
+  #endif
+  #endif
+  {
+  #ifdef _SCALB_INT
+  	// Unexecuted code (line 21) removed. Its line cov: 0/1 (0%)
+  #else
+  	fprintf(stderr, "\n");
+  	if (isnan(x)||isnan(fn)) {
+  		// Unexecuted code (line 25) removed. Its line cov: 1/1 (100%)
+  	}
+  	if (!finite(fn)) {
+  		// Unexecuted code (lines 28-32) removed. Its line cov: 5/5 (100%)
+  	}
+  	if (rint(fn)!=fn) {
+  		// Unexecuted code (line 35) removed. Its line cov: 1/1 (100%)
+  	}
+  	if ( fn > 65000.0) {
+  		// Unexecuted code (line 38) removed. Its line cov: 1/1 (100%)
+  	}
+  	if (-fn > 65000.0) {
+  		// Unexecuted code (line 41) removed. Its line cov: 0/1 (0%)
+  	}
+  	return scalbn(x,(int)fn);
+  #endif
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 3) {
+          // Unexecuted code (lines 53-54) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = __ieee754_scalb(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [e_scalb.c] enter main 3
+
+  [e_scalb.c] enter __ieee754_scalb 9
+execution_summary: |2+
+
+  ```c
+  // e_scalb.c (64 lines total)
+  #include <stdio.h>
+  #include "fdlibm.h"
+
+  #ifdef _SCALB_INT
+  #ifdef __STDC__
+  	double __ieee754_scalb(double x, int fn)
+  #else
+  	double __ieee754_scalb(x,fn)
+  	double x; int fn;
+  #endif
+  #else
+  #ifdef __STDC__
+  	double __ieee754_scalb(double x, double fn)
+  #else
+  	double __ieee754_scalb(x,fn)
+  	double x, fn;
+  #endif
+  #endif
+  {
+  #ifdef _SCALB_INT
+  	// Unexecuted code (line 21) removed. Its line cov: 0/1 (0%)
+  #else
+  	fprintf(stderr, "\n");
+  	if (isnan(x)||isnan(fn)) {
+  		// Unexecuted code (line 25) removed. Its line cov: 1/1 (100%)
+  	}
+  	if (!finite(fn)) {
+  		// Unexecuted code (lines 28-32) removed. Its line cov: 5/5 (100%)
+  	}
+  	if (rint(fn)!=fn) {
+  		// Unexecuted code (line 35) removed. Its line cov: 1/1 (100%)
+  	}
+  	if ( fn > 65000.0) {
+  		// Unexecuted code (line 38) removed. Its line cov: 1/1 (100%)
+  	}
+  	if (-fn > 65000.0) {
+  		return scalbn(x,-65000);
+  	}
+  	// Unexecuted code (line 43) removed. Its line cov: 1/1 (100%)
+  #endif
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 3) {
+          // Unexecuted code (lines 53-54) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = __ieee754_scalb(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [e_scalb.c] enter main 3
+
+  [e_scalb.c] enter __ieee754_scalb 10

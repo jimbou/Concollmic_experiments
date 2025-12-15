@@ -1,0 +1,360 @@
+id: 2
+src_id: 0
+create_time: '2025-12-14 19:22:05.582'
+time_taken: 316
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.85360000
+    call_cnt: 3
+    latency: 103.33s
+    input_tokens: 14369
+    output_tokens: 9437
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.68180000
+      call_cnt: 2
+      latency: 86.68s
+      input_tokens: 11287
+      output_tokens: 7601
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10938000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.52328000
+      call_cnt: 1
+      latency: 72.00s
+      input_tokens: 5469
+      output_tokens: 6782
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.04914000
+      call_cnt: 1
+      latency: 14.68s
+      input_tokens: 5818
+      output_tokens: 819
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.17180000
+      call_cnt: 1
+      latency: 16.64s
+      input_tokens: 3082
+      output_tokens: 1836
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.06164000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.11016000
+      call_cnt: 1
+      latency: 16.64s
+      input_tokens: 3082
+      output_tokens: 1836
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: In s_modf.c:modf, inside the (j0 < 20) block, take the else-path (i.e.,
+  1 ≤ |x| < 2^20) and then the nested branch `if (((i0 & i) | i1) == 0)` -> false
+  (non-integer subcase).
+target_file_lines: s_modf.c:41-42
+target_lines_content: |-
+  		    __HIp(iptr) = i0&(~i);
+  		    __LOp(iptr) = 0;
+justification: This branch and its body currently have 0% historical coverage (the
+  else-body shows lines 41-43 as unexecuted). It exercises the primary logic of modf
+  for magnitudes below 2^20 where the input is not an exact integer, which differs
+  from the already-attempted exact-integer subcase and from the currently observed
+  path (|x| < 1). It is reachable by choosing a single numeric command-line argument
+  that parses to a finite double with 1 ≤ |x| < 2^20 and a nonzero fractional part,
+  which the program supports via argv[1]. This will expand coverage in the core numeric
+  path without touching error handling.
+target_path_constraint: |-
+  Constraints to reach: In s_modf.c:modf, within the j0 < 20 block, take the else-path (1 ≤ |x| < 2^20) and then satisfy `((i0 & i) | i1) != 0` (non-integer subcase).
+
+  Follow the program’s input contract and environment in the order they are observed by execution:
+
+  1) Process invocation via shell:
+  - The test harness runs the program using a shell with the exact command string: "./temp_executable 1.0 ". You MUST supply an alternative invocation that preserves the format: a single executable path followed by ONE argument token that represents a number in a text form. The argument list length must be exactly 2 when parsed by the C program (argc == 2). Avoid spaces inside the numeric token so it remains one argv element.
+
+  2) Command-line argument parsing:
+  - The program reads argv[1] and converts it to a double using atof under the C locale (decimal point is a dot). Therefore:
+    a. argv[1] must be a valid decimal ASCII textual representation of a finite IEEE-754 double value x.
+    b. No leading/trailing characters other than those acceptable by atof for a single numeric value (optional leading sign, digits, optional decimal point with digits, optional exponent part like 'e±k'). Do not include extra tokens after the number.
+
+  3) Magnitude class to enter j0 < 20 else-path of modf (1 ≤ |x| < 2^20):
+  - Let x be the parsed double. Require 1 ≤ |x| < 1,048,576 (which equals 2^20). This ensures the exponent field j0 computed inside modf satisfies 0 ≤ j0 < 20, taking the "else" branch of the inner if (i.e., not the j0 < 0 subcase, which would be |x| < 1).
+  - x must be normalized and not subnormal, NaN, or ±∞.
+
+  4) Non-integer subcase inside that block: enforce a nonzero fractional part so that `((i0 & i) | i1) != 0`.
+  - In semantic terms: x must NOT be an exact integer. Equivalently, frac(x) ≠ 0, where frac(x) is the fractional part of x in base 2 and base 10; practically, require that x has any nonzero fractional component. This guarantees that the low 32-bit word i1 or the masked bits i0 under the width-dependent mask i are nonzero, making the condition false.
+  - To avoid edge cases due to decimal-to-binary rounding that could accidentally yield an integer, avoid values that are exactly integral in binary. A sufficient textual constraint: argv[1] represents a number with a non-zero fractional part that does not round to an integer in IEEE-754 double precision. For instance, ensure that there exists an integer n such that n < |x| < n + 1 and x ≠ n.
+
+  5) Parsing robustness:
+  - Ensure the numeric token does not contain leading/trailing whitespace that the shell would strip into multiple argv entries. Keep it as a single contiguous token.
+  - Use only ASCII characters; avoid locale-dependent grouping or decimal separators.
+
+  6) Environment and I/O:
+  - No files are required. Standard I/O and stderr are available. No special environment variables or permissions are needed.
+
+  Summary of core mathematical constraints on x (the value parsed from argv[1]):
+  - x is finite and normalized (not NaN, not ±∞, not subnormal)
+  - 1 ≤ |x| < 2^20
+  - x ∉ Z (x is not an integer)
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # We choose x = 1.5 to satisfy all constraints:
+      # - Finite, normalized double
+      # - 1 <= |x| < 2^20
+      # - Non-integer (fractional part is 0.5, exact in binary and decimal)
+      # Invocation preserves format: single executable path followed by ONE numeric token
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.5"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // s_modf.c (84 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+  #ifdef __STDC__
+  static const double one = 1.0;
+  #else
+  static double one = 1.0;
+  #endif
+
+  #ifdef __STDC__
+  	double modf(double x, double *iptr)
+  #else
+  	double modf(x, iptr)
+  	double x,*iptr;
+  #endif
+  {
+  	int i0,i1,j0;
+  	unsigned i;
+  	i0 =  __HI(x);		
+  	i1 =  __LO(x);		
+  	j0 = ((i0>>20)&0x7ff)-0x3ff;	
+  	if(j0<20) {			
+  	    fprintf(stderr, "\n");
+  	    if(j0<0) {			
+  		__HIp(iptr) = i0&0x80000000;
+  		__LOp(iptr) = 0;		
+  		return x;
+  	    } else {
+  		// Unexecuted code (line 34) removed. Its line cov: 0/1 (0%)
+  		if(((i0&i)|i1)==0) {		
+  		    // Unexecuted code (lines 36-39) removed. Its line cov: 0/4 (0%)
+  		} else {
+  		    // Unexecuted code (lines 41-43) removed. Its line cov: 0/3 (0%)
+  		}
+  	    }
+  	} else if (j0>51) {		
+  	    // Unexecuted code (lines 47-50) removed. Its line cov: 0/4 (0%)
+  	} else {			
+  	    // Unexecuted code (line 52) removed. Its line cov: 0/1 (0%)
+  	    if((i1&i)==0) { 		
+  		// Unexecuted code (lines 54-57) removed. Its line cov: 0/4 (0%)
+  	    } else {
+  		// Unexecuted code (lines 59-61) removed. Its line cov: 0/3 (0%)
+  	    }
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char **argv) {
+      fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 72-73) removed. Its line cov: 0/2 (0%)
+      }
+
+      double x = atof(argv[1]);
+      double iptr;
+
+      double frac = modf(x, &iptr);
+
+      printf("fraction = %f\n", frac);
+      printf("integer  = %f\n", iptr);
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [s_modf.c] enter main 3
+  [s_modf.c] enter main 4
+  [s_modf.c] enter modf 1
+
+  [s_modf.c] enter modf 3
+  [s_modf.c] enter main 5
+execution_summary: |2+
+
+  ```c
+  // s_modf.c (84 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+  #ifdef __STDC__
+  static const double one = 1.0;
+  #else
+  static double one = 1.0;
+  #endif
+
+  #ifdef __STDC__
+  	double modf(double x, double *iptr)
+  #else
+  	double modf(x, iptr)
+  	double x,*iptr;
+  #endif
+  {
+  	int i0,i1,j0;
+  	unsigned i;
+  	i0 =  __HI(x);		
+  	i1 =  __LO(x);		
+  	j0 = ((i0>>20)&0x7ff)-0x3ff;	
+  	if(j0<20) {			
+  	    fprintf(stderr, "\n");
+  	    if(j0<0) {			
+  		__HIp(iptr) = i0&0x80000000;
+  		__LOp(iptr) = 0;		
+  		return x;
+  	    } else {
+  		// Unexecuted code (line 34) removed. Its line cov: 0/1 (0%)
+  		if(((i0&i)|i1)==0) {		
+  		    // Unexecuted code (lines 36-39) removed. Its line cov: 0/4 (0%)
+  		} else {
+  		    // Unexecuted code (lines 41-43) removed. Its line cov: 0/3 (0%)
+  		}
+  	    }
+  	} else if (j0>51) {		
+  	    // Unexecuted code (lines 47-50) removed. Its line cov: 0/4 (0%)
+  	} else {			
+  	    // Unexecuted code (line 52) removed. Its line cov: 0/1 (0%)
+  	    if((i1&i)==0) { 		
+  		// Unexecuted code (lines 54-57) removed. Its line cov: 0/4 (0%)
+  	    } else {
+  		// Unexecuted code (lines 59-61) removed. Its line cov: 0/3 (0%)
+  	    }
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char **argv) {
+      fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 72-73) removed. Its line cov: 0/2 (0%)
+      }
+
+      double x = atof(argv[1]);
+      double iptr;
+
+      double frac = modf(x, &iptr);
+
+      printf("fraction = %f\n", frac);
+      printf("integer  = %f\n", iptr);
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0 "],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [s_modf.c] enter main 3
+  [s_modf.c] enter main 4
+  [s_modf.c] enter modf 1
+
+  [s_modf.c] enter modf 3
+  [s_modf.c] enter main 5

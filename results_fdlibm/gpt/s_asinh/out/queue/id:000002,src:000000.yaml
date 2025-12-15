@@ -1,0 +1,320 @@
+id: 2
+src_id: 0
+create_time: '2025-12-14 17:10:52.449'
+time_taken: 277
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.73818000
+    call_cnt: 3
+    latency: 84.93s
+    input_tokens: 13647
+    output_tokens: 7754
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.58916000
+      call_cnt: 2
+      latency: 68.87s
+      input_tokens: 10867
+      output_tokens: 6197
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10658000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.45072000
+      call_cnt: 1
+      latency: 61.68s
+      input_tokens: 5329
+      output_tokens: 5666
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03186000
+      call_cnt: 1
+      latency: 7.20s
+      input_tokens: 5538
+      output_tokens: 531
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.14902000
+      call_cnt: 1
+      latency: 16.06s
+      input_tokens: 2780
+      output_tokens: 1557
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05560000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.09342000
+      call_cnt: 1
+      latency: 16.06s
+      input_tokens: 2780
+      output_tokens: 1557
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (ix >= 0x7ff00000) -> true in s_asinh.c:asinh
+target_file_lines: s_asinh.c:26-26
+target_lines_content: "\t\treturn x+x;"
+justification: 'This branch handles non-finite inputs (NaN/±Inf) and currently has
+  0% historical coverage (the trace shows the body at line 26 is unexecuted: 0/1).
+  Exercising it will cover the special-case logic for IEEE-754 edge cases, which is
+  critical for numerical correctness and distinct from all finite-input paths. It
+  is reachable via the existing harness by choosing a single command-line argument
+  that parses to NaN or Infinity.'
+target_path_constraint: |-
+  Chronological, environment-level constraints to reach: if (ix >= 0x7ff00000) -> true in s_asinh.c:asinh
+
+  1. Process invocation constraints:
+  - The program must be executed via a shell command that passes exactly one argument to the executable: argc == 2 at program entry. With the provided harness, ensure the command line effectively becomes: `<executable> <single_token_argument>` where `<single_token_argument>` is not split by the shell (no spaces). The harness already uses shell=True and a single quoted string, so only the content of that token matters.
+
+  2. Argument parsing constraints:
+  - The program reads the sole argument as a C string and converts it to double using atof. Therefore, the argument must be a textual representation that atof recognizes as a non-finite IEEE-754 value (NaN or Infinity). Accepted canonical forms include (case-insensitive, leading/trailing spaces not allowed due to tokenization):
+    - "inf" or "+inf" or "infinity" or "+infinity" (interpreted as +∞)
+    - "-inf" or "-infinity" (interpreted as -∞)
+    - "nan" or "nan(<payload>)" (interpreted as NaN)
+  - Do not include additional characters that would prevent atof from parsing the value; the entire token should start with the non-finite keyword.
+
+  3. Floating-point bit-pattern constraints (to satisfy ix >= 0x7ff00000):
+  - Let x be the parsed double-precision value from atof. The function extracts the high 32 bits of x’s IEEE-754 binary64 representation into hx = __HI(x), and ix = hx & 0x7fffffff zeroes the sign bit. The condition ix >= 0x7ff00000 is true iff the exponent field is all 1s (binary 2047), i.e., x is NaN or Infinity (any sign). Thus require:
+    - x is NaN or ±Infinity.
+
+  4. Input correctness and reachability:
+  - Ensure the argument is a single token recognized by atof as NaN or Infinity so that asinh(a0) is called with non-finite x, making ix >= 0x7ff00000 true.
+
+  No additional filesystem or environment constraints are needed because the program does not read files or environment variables beyond the single command-line argument.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Chosen concrete input: single-token argument "inf"
+      # Rationale:
+      # - atof("inf") parses to +Infinity (non-finite)
+      # - This ensures IEEE-754 exponent = 2047, so ix >= 0x7ff00000 is true
+      # - No spaces or special shell characters; remains a single token
+      try:
+          result = subprocess.run(
+              ["./temp_executable inf"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // s_asinh.c (61 lines total)
+  #include <stdio.h>
+
+  #include "fdlibm.h"
+
+  #ifdef __STDC__
+  static const double 
+  #else
+  static double 
+  #endif
+  one =  1.00000000000000000000e+00, 
+  ln2 =  6.93147180559945286227e-01, 
+  huge=  1.00000000000000000000e+300; 
+
+  #ifdef __STDC__
+  	double asinh(double x)
+  #else
+  	double asinh(x)
+  	double x;
+  #endif
+  {	
+  	double t,w;
+  	int hx,ix;
+  	hx = __HI(x);
+  	ix = hx&0x7fffffff;
+  	if(ix>=0x7ff00000) {
+  		// Unexecuted code (line 26) removed. Its line cov: 0/1 (0%)
+  	}
+  	if(ix< 0x3e300000) {
+  		if(huge+x>one) {
+  			return x;
+  		}
+  	}
+  	if(ix>0x41b00000) {
+  		// Unexecuted code (line 34) removed. Its line cov: 0/1 (0%)
+  	} else if (ix>0x40000000) {
+  		// Unexecuted code (lines 36-37) removed. Its line cov: 0/2 (0%)
+  	} else {
+  		// Unexecuted code (lines 39-40) removed. Its line cov: 0/2 (0%)
+  	}
+  	if(hx>0) {
+  		// Unexecuted code (line 43) removed. Its line cov: 0/1 (0%)
+  	} else {
+  		// Unexecuted code (line 45) removed. Its line cov: 0/1 (0%)
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	if (argc != 2) {
+  		// Unexecuted code (lines 54-55) removed. Its line cov: 0/2 (0%)
+  	}
+  	double a0 = atof(argv[1]);
+  	double r = asinh(a0);
+  	printf("%f\n", r);
+  	return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [s_asinh.c] enter main 1
+  [s_asinh.c] enter main 3
+  [s_asinh.c] enter main 4
+  [s_asinh.c] enter asinh 1
+  [s_asinh.c] enter asinh 3
+  [s_asinh.c] enter asinh 4
+execution_summary: |2+
+
+  ```c
+  // s_asinh.c (61 lines total)
+  #include <stdio.h>
+
+  #include "fdlibm.h"
+
+  #ifdef __STDC__
+  static const double 
+  #else
+  static double 
+  #endif
+  one =  1.00000000000000000000e+00, 
+  ln2 =  6.93147180559945286227e-01, 
+  huge=  1.00000000000000000000e+300; 
+
+  #ifdef __STDC__
+  	double asinh(double x)
+  #else
+  	double asinh(x)
+  	double x;
+  #endif
+  {	
+  	double t,w;
+  	int hx,ix;
+  	hx = __HI(x);
+  	ix = hx&0x7fffffff;
+  	if(ix>=0x7ff00000) {
+  		// Unexecuted code (line 26) removed. Its line cov: 0/1 (0%)
+  	}
+  	if(ix< 0x3e300000) {
+  		if(huge+x>one) {
+  			return x;
+  		}
+  	}
+  	if(ix>0x41b00000) {
+  		// Unexecuted code (line 34) removed. Its line cov: 0/1 (0%)
+  	} else if (ix>0x40000000) {
+  		// Unexecuted code (lines 36-37) removed. Its line cov: 0/2 (0%)
+  	} else {
+  		// Unexecuted code (lines 39-40) removed. Its line cov: 0/2 (0%)
+  	}
+  	if(hx>0) {
+  		// Unexecuted code (line 43) removed. Its line cov: 0/1 (0%)
+  	} else {
+  		// Unexecuted code (line 45) removed. Its line cov: 0/1 (0%)
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	if (argc != 2) {
+  		// Unexecuted code (lines 54-55) removed. Its line cov: 0/2 (0%)
+  	}
+  	double a0 = atof(argv[1]);
+  	double r = asinh(a0);
+  	printf("%f\n", r);
+  	return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [s_asinh.c] enter main 1
+  [s_asinh.c] enter main 3
+  [s_asinh.c] enter main 4
+  [s_asinh.c] enter asinh 1
+  [s_asinh.c] enter asinh 3
+  [s_asinh.c] enter asinh 4

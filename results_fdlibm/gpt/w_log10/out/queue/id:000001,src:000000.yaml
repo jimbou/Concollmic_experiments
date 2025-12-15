@@ -1,0 +1,375 @@
+id: 1
+src_id: 0
+create_time: '2025-12-14 22:00:09.358'
+time_taken: 236
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $1.38446000
+    call_cnt: 4
+    latency: 174.17s
+    input_tokens: 20011
+    output_tokens: 16404
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.94596000
+      call_cnt: 3
+      latency: 96.58s
+      input_tokens: 17106
+      output_tokens: 10064
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10256000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.36526000
+      call_cnt: 1
+      latency: 33.41s
+      input_tokens: 5128
+      output_tokens: 4145
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.43974000
+      call_cnt: 1
+      latency: 54.57s
+      input_tokens: 5828
+      output_tokens: 5279
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03840000
+      call_cnt: 1
+      latency: 8.60s
+      input_tokens: 6150
+      output_tokens: 640
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.43850000
+      call_cnt: 1
+      latency: 77.59s
+      input_tokens: 2905
+      output_tokens: 6340
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05810000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.38040000
+      call_cnt: 1
+      latency: 77.59s
+      input_tokens: 2905
+      output_tokens: 6340
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: 'In w_log10.c: in function log10(double x), take the else branch after
+  checking x<=0.0, specifically executing the body `else { return z; }` at line 34
+  (i.e., ensure the earlier condition `(_LIB_VERSION == _IEEE_ || isnan(x))` is false
+  and `x > 0.0`).'
+target_file_lines: w_log10.c:34-34
+target_lines_content: "\t    return z;"
+justification: This branch has zero historical coverage (line 34 marked as not covered)
+  and was not executed in the current trace. It represents the positive-input path
+  when the math library is in a non-IEEE runtime mode, which exercises alternative
+  error-handling/return behavior in fdlibm and expands coverage within the core log10
+  computation. Unlike branches gated by compile-time macros or by changing the fixed
+  command-line argument, this branch can be reached by controlling the runtime environment
+  (library mode) while keeping the existing harness intact.
+target_path_constraint: |-
+  Inputs and environment must guide execution to the return at line 34 in w_log10.c’s log10 implementation (the non-IEEE positive-input path). Impose the following constraints in chronological order:
+
+  1) Process invocation and arguments
+  - The target binary is invoked exactly as in the harness: a single command-line argument representing a floating-point number in decimal ASCII, using the process’ default C locale (dot as decimal separator), and no surrounding quotes that would reach argv[1]. The shell wrapping in the harness must not alter argv splitting (it won’t, since the command is a single string with one token and one argument embedded). The program expects argc == 2; therefore provide exactly one numeric token after the program name.
+
+  2) Argument parses to a finite positive double
+  - The string in argv[1] must be a valid textual representation of a positive, finite double per C’s atof (e.g., optional leading spaces, optional leading sign, digits with optional decimal point, optional exponent). Symbolically: parsed_value a0 satisfies: a0 > 0.0, isfinite(a0) == true, and a0 != 0.0. This ensures the check x <= 0.0 evaluates false and avoids isnan(x) being true.
+
+  3) Library mode/environment requirements so that (_LIB_VERSION == _IEEE_ || isnan(x)) is false
+  - At runtime, the math library mode indicator _LIB_VERSION must NOT equal _IEEE_. Additionally, x is not NaN due to step (2). Thus require: _LIB_VERSION != _IEEE_. This is a global runtime variable used by fdlibm; it is typically controlled by linking or initialization. Environment-wise: ensure no environment variables, startup code, or linker options force _LIB_VERSION to _IEEE_. If there is an API (e.g., setlibversion or similar initializer) invoked before main, it must result in _LIB_VERSION set to a non-IEEE mode (e.g., _POSIX_ or _SVID_). Constraint: program must be built/linked and executed such that _LIB_VERSION takes a non-IEEE value at runtime.
+
+  4) Reach the target return at line 34
+  - With constraints (2) and (3), the condition (_LIB_VERSION == _IEEE_ || isnan(x)) is false, the subsequent condition (x <= 0.0) is false, so execution flows to the else body that returns z at line 34.
+
+  Notes/format stipulations
+  - No files are read. No stdin usage. Only argv[1] influences x. The decimal separator must be '.'. Whitespace is allowed around the number. No NaN or Infinity textual forms are allowed, as atof may parse them but they would violate finiteness/positivity constraints above.
+  - Do not attempt to satisfy via compile-time macro _IEEE_LIBM; it must remain undefined so that the non-IEEE path in the function body is compiled. The constraint targets runtime behavior only.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import os
+      import signal
+      import subprocess
+      import tempfile
+      import textwrap
+      import shutil
+
+      # Build a tiny preload library that forces fdlibm/libm into non-IEEE mode
+      # by setting the runtime _LIB_VERSION to _POSIX_ (2) before main()
+      tmpdir = tempfile.mkdtemp(prefix="fdlibm_preload_")
+      c_path = os.path.join(tmpdir, "setlibm.c")
+      so_path = os.path.join(tmpdir, "libsetlibm.so")
+      c_src = r'''
+      #define _GNU_SOURCE
+      #include <dlfcn.h>
+
+      typedef void (*setver_fn)(int);
+
+      static void __attribute__((constructor)) set_non_ieee(void) {
+          void *handle = RTLD_DEFAULT;
+
+          /* Try the official setter if available */
+          setver_fn setver = (setver_fn)dlsym(handle, "__setlibm_version");
+          if (setver) {
+              setver(2); /* _POSIX_ */
+              return;
+          }
+
+          /* Fallback: directly set the global version variable (common names) */
+          int *p = (int*)dlsym(handle, "_LIB_VERSION");
+          if (!p) {
+              p = (int*)dlsym(handle, "__libm_version");
+          }
+          if (p) {
+              *p = 2; /* _POSIX_ */
+          }
+      }
+      '''
+
+      try:
+          with open(c_path, "w") as f:
+              f.write(textwrap.dedent(c_src))
+
+          # Compile the shared object
+          compile_cmd = [
+              "gcc", "-shared", "-fPIC", "-O2",
+              c_path, "-o", so_path, "-ldl"
+          ]
+          comp = subprocess.run(
+              compile_cmd,
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              check=False,
+          )
+          if comp.returncode != 0:
+              raise RuntimeError(f"Failed to build preload library: {comp.stderr}\n{comp.stdout}")
+
+          # Prepare environment: enforce C locale for '.' decimal separator and preload the SO
+          env = os.environ.copy()
+          env["LC_ALL"] = "C"
+          env["LD_PRELOAD"] = so_path + (":" + env["LD_PRELOAD"] if "LD_PRELOAD" in env and env["LD_PRELOAD"] else "")
+
+          try:
+              result = subprocess.run(
+                  ["./temp_executable 1.0"],
+                  capture_output=True,
+                  encoding="utf-8",
+                  errors="replace",
+                  shell=True,
+                  timeout=timeout,
+                  env=env,
+              )
+              return result.stderr, result.returncode
+          except subprocess.TimeoutExpired as e:
+              return e.stderr, -signal.SIGKILL
+      finally:
+          # Cleanup temporary files
+          try:
+              shutil.rmtree(tmpdir)
+          except Exception:
+              pass
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // w_log10.c (55 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+
+  #ifdef __STDC__
+  	double log10(double x)		
+  #else
+  	double log10(x)			
+  	double x;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	// Unexecuted code (line 19) removed. Its line cov: 0/1 (0%)
+  #else
+  	double z;
+  	z = __ieee754_log10(x);
+  	if(_LIB_VERSION == _IEEE_ || isnan(x)) {
+  		return z;
+  	}
+  	if(x<=0.0) {
+  		fprintf(stderr, "\n");
+  	    if(x==0.0) {
+  	        // Unexecuted code (line 29) removed. Its line cov: 0/1 (0%)
+  	    } else {
+  	        // Unexecuted code (line 31) removed. Its line cov: 0/1 (0%)
+  	    }
+  	} else {
+  	    // Unexecuted code (line 34) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 45-46) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = log10(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [w_log10.c] enter main 3
+  [w_log10.c] enter log10 2
+  [w_log10.c] enter log10 3
+execution_summary: |2+
+
+  ```c
+  // w_log10.c (55 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+
+  #ifdef __STDC__
+  	double log10(double x)		
+  #else
+  	double log10(x)			
+  	double x;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	// Unexecuted code (line 19) removed. Its line cov: 0/1 (0%)
+  #else
+  	double z;
+  	z = __ieee754_log10(x);
+  	if(_LIB_VERSION == _IEEE_ || isnan(x)) {
+  		return z;
+  	}
+  	if(x<=0.0) {
+  		fprintf(stderr, "\n");
+  	    if(x==0.0) {
+  	        // Unexecuted code (line 29) removed. Its line cov: 0/1 (0%)
+  	    } else {
+  	        // Unexecuted code (line 31) removed. Its line cov: 0/1 (0%)
+  	    }
+  	} else {
+  	    // Unexecuted code (line 34) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 45-46) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = log10(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [w_log10.c] enter main 3
+  [w_log10.c] enter log10 2
+  [w_log10.c] enter log10 3

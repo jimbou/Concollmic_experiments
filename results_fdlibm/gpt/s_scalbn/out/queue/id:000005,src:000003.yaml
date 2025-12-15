@@ -1,0 +1,390 @@
+id: 5
+src_id: 3
+create_time: '2025-12-14 19:59:17.968'
+time_taken: 772
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.96652000
+    call_cnt: 3
+    latency: 137.37s
+    input_tokens: 14615
+    output_tokens: 11237
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.77472000
+      call_cnt: 2
+      latency: 112.62s
+      input_tokens: 11301
+      output_tokens: 9145
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.11050000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.60392000
+      call_cnt: 1
+      latency: 100.11s
+      input_tokens: 5525
+      output_tokens: 8140
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.06030000
+      call_cnt: 1
+      latency: 12.51s
+      input_tokens: 5776
+      output_tokens: 1005
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.19180000
+      call_cnt: 1
+      latency: 24.75s
+      input_tokens: 3314
+      output_tokens: 2092
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.06628000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.12552000
+      call_cnt: 1
+      latency: 24.75s
+      input_tokens: 3314
+      output_tokens: 2092
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (k > 0x7fe) -> true in s_scalbn.c:scalbn()
+target_file_lines: s_scalbn.c:44-44
+target_lines_content: "\t\treturn huge*copysign(huge,x);"
+justification: This is the overflow branch in scalbn, triggered when scaling a finite
+  normalized double by 2^n would exceed the maximum finite exponent. It currently
+  shows 0/1 (0%) historical coverage (“Unexecuted code (line 44)”), and exercising
+  it validates core numeric edge handling (overflow to infinity or similar), which
+  is high-impact for coverage and correctness. The harness can reach it by controlling
+  argv[1] (a finite normalized double) and argv[2] (an integer n) such that the resulting
+  exponent exceeds the finite limit. This path differs from the current run (which
+  proceeded to the k>0 adjustment path) and will execute new code.
+target_path_constraint: |-
+  Chronological, self-contained constraints to reach s_scalbn.c:scalbn() overflow branch (k > 0x7fe -> true):
+
+  1. Command invocation shape:
+     - Launch the program exactly as a single executable with two command-line arguments. The process must start such that argc == 3 inside main.
+     - The first argument (argv[1]) is a textual representation of a finite, normalized IEEE-754 double-precision (binary64) value. “Normalized” means the exponent field (11 bits) is neither all zeros nor all ones; the value is not NaN or Infinity and not subnormal or zero.
+     - The second argument (argv[2]) is a textual decimal integer that atof/atoi will parse respectively into double a0 and int a1.
+     - Locale must use the dot character '.' as the decimal separator so that atof parses correctly. For example, set LC_ALL=C or LANG=C in the environment. The program does not read files; no other environment dependencies are required beyond permitting standard execution.
+
+  2. Input value properties prior to scalbn:
+     - After parsing: a0 must be finite and normalized; a1 must be an integer.
+     - Internals used by scalbn (explained without relying on code names): The routine reads the IEEE-754 exponent of a0 (call it E, unbiased exponent), by extracting the 11-bit exponent field and subtracting the bias 1023. It refers to a quantity k which is the raw exponent field value (biased exponent) prior to adding a1. The branch of interest tests if (k + a1) > 0x7fe, where 0x7fe = 2046 is the maximum finite biased exponent (one less than 0x7ff which denotes Inf/NaN). Thus we must ensure k + a1 > 2046 while avoiding earlier special-case branches.
+
+  3. Avoid early branches:
+     - Prevent a0 from being zero or subnormal: ensure its biased exponent field k_original is in [1, 2046]. This avoids entering the k==0 path (which rescales by 2^54 and applies different checks).
+     - Prevent a0 from being Inf or NaN: ensure its exponent field is not 0x7ff. That keeps us out of the k==0x7ff path.
+     - Prevent triggering k <= -54 and n > 50000 paths: choose a1 such that k + a1 does not land ≤ -54 while also avoiding the extremely large positive a1 combined with negative k producing n > 50000 check later. These are automatically avoided if we design for overflow (k + a1 > 2046).
+
+  4. Core overflow constraint:
+     - Let k be the biased exponent field of a0 (an integer in [1, 2046]). Require: k + a1 > 2046.
+     - Equivalently in terms of the unbiased exponent E = k - 1023: require E + a1 > 1023.
+     - Additionally, maintain that a0 is finite normalized so mantissa/sign are arbitrary but not all-zero exponent.
+
+  5. Robust textual formatting constraints so atof/atoi produce intended values:
+     - argv[1] must be a decimal string that atof parses to the intended a0 without overflow to Inf or underflow to subnormal/zero. Examples of valid formats include "d.ddd", optional sign, and optional exponent part "e±dd". Do not include non-numeric characters other than those permitted in C locale floating literals.
+     - argv[2] must be a base-10 integer string that atoi parses to a1 with no leading/trailing non-digit characters except optional leading sign.
+     - No extra whitespace is required but typical C parsers allow leading whitespace; avoid trailing non-numeric characters to prevent partial parsing.
+
+  6. Combined condition summary (SMT-style):
+     - Variables: a0 ∈ R (IEEE-754 binary64), a1 ∈ Z.
+     - Constraints:
+       a) is_finite_normal_binary64(a0) = true.
+       b) biased_exponent(a0) = k ∈ [1, 2046].
+       c) a1 ∈ Z parsed by atoi from argv[2].
+       d) k + a1 > 2046.
+       e) Locale: LC_ALL = "C" (decimal separator '.').
+
+  Any inputs satisfying these constraints will cause scalbn to enter the overflow branch where (k + n) > 0x7fe evaluates to true, thus executing the previously uncovered code line.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+      import os
+
+      # Concrete inputs satisfying the target path constraints:
+      # argv[1] = "1.0"  -> finite, normalized double (biased exponent k = 0x3ff = 1023)
+      # argv[2] = "1024" -> integer n such that k + n = 1023 + 1024 = 2047 > 0x7fe (2046)
+      # Locale ensures '.' is decimal separator for atof
+      env = os.environ.copy()
+      env["LC_ALL"] = "C"
+      env["LANG"] = "C"
+
+      cmd = "./temp_executable 1.0 1024"
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+              env=env,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Ensure we always return a string for stderr even if None
+          stderr = e.stderr if isinstance(e.stderr, str) else (e.stderr.decode("utf-8", "replace") if e.stderr else "")
+          return stderr, -signal.SIGKILL
+      except Exception:
+          # Bubble up unexpected issues to surface harness/environment problems
+          raise
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // s_scalbn.c (80 lines total)
+  #include <stdio.h>
+
+  #include "fdlibm.h"
+
+  #ifdef __STDC__
+  static const double
+  #else
+  static double
+  #endif
+  two54   =  1.80143985094819840000e+16, 
+  twom54  =  5.55111512312578270212e-17, 
+  huge   = 1.0e+300,
+  tiny   = 1.0e-300;
+
+  #ifdef __STDC__
+  	double scalbn (double x, int n)
+  #else
+  	double scalbn (x,n)
+  	double x; int n;
+  #endif
+  {
+  	fprintf(stderr, "\n");
+  	int  k,hx,lx;
+  	hx = __HI(x);
+  	lx = __LO(x);
+          k = (hx&0x7ff00000)>>20;		
+          if (k==0) {				
+              if ((lx|(hx&0x7fffffff))==0) {
+  		// Unexecuted code (line 29) removed. Its line cov: 1/1 (100%)
+  	    }
+  	    x *= two54; 
+  	    hx = __HI(x);
+  	    k = ((hx&0x7ff00000)>>20) - 54; 
+              if (n< -50000) {
+  		// Unexecuted code (line 35) removed. Its line cov: 0/1 (0%)
+  	    }
+          }
+          if (k==0x7ff) {
+  		// Unexecuted code (line 39) removed. Its line cov: 0/1 (0%)
+  	}
+          fprintf(stderr, "\n");
+          k = k+n; 
+          if (k >  0x7fe) {
+  		// Unexecuted code (line 44) removed. Its line cov: 0/1 (0%)
+  	}
+          if (k > 0) 				
+  	    {
+  		__HI(x) = (hx&0x800fffff)|(k<<20); return x;
+  	    }
+          if (k <= -54)
+              if (n > 50000) 	
+  		{
+  			// Unexecuted code (line 53) removed. Its line cov: 0/1 (0%)
+  		}
+  	    else {
+  		// Unexecuted code (line 56) removed. Its line cov: 1/1 (100%)
+  	    }
+          // Unexecuted code (lines 58-60) removed. Its line cov: 3/3 (100%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 3) {
+          // Unexecuted code (lines 69-70) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      int a1 = atoi(argv[2]);
+
+      double r = scalbn(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [s_scalbn.c] enter main 3
+
+  [s_scalbn.c] enter scalbn 3
+
+  [s_scalbn.c] enter scalbn 8
+execution_summary: |2+
+
+  ```c
+  // s_scalbn.c (80 lines total)
+  #include <stdio.h>
+
+  #include "fdlibm.h"
+
+  #ifdef __STDC__
+  static const double
+  #else
+  static double
+  #endif
+  two54   =  1.80143985094819840000e+16, 
+  twom54  =  5.55111512312578270212e-17, 
+  huge   = 1.0e+300,
+  tiny   = 1.0e-300;
+
+  #ifdef __STDC__
+  	double scalbn (double x, int n)
+  #else
+  	double scalbn (x,n)
+  	double x; int n;
+  #endif
+  {
+  	fprintf(stderr, "\n");
+  	int  k,hx,lx;
+  	hx = __HI(x);
+  	lx = __LO(x);
+          k = (hx&0x7ff00000)>>20;		
+          if (k==0) {				
+              if ((lx|(hx&0x7fffffff))==0) {
+  		// Unexecuted code (line 29) removed. Its line cov: 1/1 (100%)
+  	    }
+  	    x *= two54; 
+  	    hx = __HI(x);
+  	    k = ((hx&0x7ff00000)>>20) - 54; 
+              if (n< -50000) {
+  		// Unexecuted code (line 35) removed. Its line cov: 0/1 (0%)
+  	    }
+          }
+          if (k==0x7ff) {
+  		// Unexecuted code (line 39) removed. Its line cov: 0/1 (0%)
+  	}
+          fprintf(stderr, "\n");
+          k = k+n; 
+          if (k >  0x7fe) {
+  		// Unexecuted code (line 44) removed. Its line cov: 0/1 (0%)
+  	}
+          if (k > 0) 				
+  	    {
+  		__HI(x) = (hx&0x800fffff)|(k<<20); return x;
+  	    }
+          if (k <= -54)
+              if (n > 50000) 	
+  		{
+  			// Unexecuted code (line 53) removed. Its line cov: 0/1 (0%)
+  		}
+  	    else {
+  		// Unexecuted code (line 56) removed. Its line cov: 1/1 (100%)
+  	    }
+          // Unexecuted code (lines 58-60) removed. Its line cov: 3/3 (100%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 3) {
+          // Unexecuted code (lines 69-70) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      int a1 = atoi(argv[2]);
+
+      double r = scalbn(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+      import os
+
+      # Use normalized finite double for argv[1]: 1.0 (exponent bits = 0x3ff)
+      # Choose integer n for argv[2]: 1024 so k0 + n = 1023 + 1024 = 2047 > 0x7fe
+      # Ensure locale uses '.' as decimal separator
+      env = os.environ.copy()
+      env["LC_ALL"] = "C"
+      env["LANG"] = "C"
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0 1024"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+              env=env,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          raise e
+src_execution_trace: |2
+
+  [s_scalbn.c] enter main 3
+
+  [s_scalbn.c] enter scalbn 3
+
+  [s_scalbn.c] enter scalbn 8

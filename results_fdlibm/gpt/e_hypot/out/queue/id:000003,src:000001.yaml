@@ -1,0 +1,392 @@
+id: 3
+src_id: 1
+create_time: '2025-12-14 14:32:02.226'
+time_taken: 813
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $1.10586000
+    call_cnt: 3
+    latency: 145.39s
+    input_tokens: 14250
+    output_tokens: 13681
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.90500000
+      call_cnt: 2
+      latency: 120.04s
+      input_tokens: 11233
+      output_tokens: 11339
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.11000000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.47094000
+      call_cnt: 1
+      latency: 72.73s
+      input_tokens: 5500
+      output_tokens: 5938
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.32406000
+      call_cnt: 1
+      latency: 47.30s
+      input_tokens: 5733
+      output_tokens: 5401
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.20086000
+      call_cnt: 1
+      latency: 25.35s
+      input_tokens: 3017
+      output_tokens: 2342
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.06034000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.14052000
+      call_cnt: 1
+      latency: 25.35s
+      input_tokens: 3017
+      output_tokens: 2342
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (k != 0) -> false (take the else-branch) in e_hypot.c:__ieee754_hypot
+target_file_lines: e_hypot.c:90-90
+target_lines_content: "\t    return w;"
+justification: This else path (line 90) has 0% historical coverage and represents
+  the core, unspecialized hypot computation when no scaling is needed (k remains 0).
+  Reaching it requires avoiding the early fast-return and both scaling branches. Covering
+  this will exercise the main arithmetic path that is currently untested, improving
+  coverage without relying on extreme values. We avoid the previously attempted but
+  unreached large-number branch (ha > 0x5f300000) noted in the already_selected list.
+target_path_constraint: |-
+  Constraints to reach: if (k != 0) -> false (take the else-branch) in e_hypot.c:__ieee754_hypot
+
+  Chronological, input-level constraints:
+
+  1. Command-line arguments and locale
+  - The program must be invoked with exactly two numeric command-line arguments after the executable name (total argc = 3 inside the program).
+  - Each argument must be a decimal floating-point string parseable by the C library function atof under the C locale (decimal separator is a dot ‘.’; no thousands separators).
+  - The process locale must be set to the C/EN locale so that atof uses ‘.’ as the decimal separator (e.g., LC_ALL = "C", LANG = "C", LC_NUMERIC = "C").
+
+  2. Parsing and finiteness
+  - Both arguments must parse into finite double-precision floating-point values (IEEE-754 binary64). Neither may be NaN nor infinite.
+  - Neither parsed value may be exactly zero.
+
+  3. Magnitude window to avoid scaling (ensuring k remains 0)
+  - Let x and y be the parsed doubles.
+  - Define A = max(|x|, |y|) and B = min(|x|, |y|).
+  - To avoid the “huge-value” scaling branch: A ≤ 2^500.
+  - To avoid the “tiny-value” scaling branch: B ≥ 2^-500.
+    These two constraints ensure the implementation does not perform magnitude scaling and therefore keeps k = 0.
+
+  4. Prevent the early fast-path return (ensure the main hypot computation runs)
+  - Ensure the exponent/magnitude gap between A and B is not too large:
+    A / B ≤ 2^60.
+    This guarantees the implementation does not return immediately via the large-exponent-difference shortcut and proceeds into the core computation path where k is still 0.
+
+  5. Summary in SMT-style (for clarity; x and y are reals to be parsed as doubles)
+  - Locale_C(x), Locale_C(y)  // both strings parseable under C locale
+  - isFiniteDouble(x) ∧ isFiniteDouble(y)
+  - x ≠ 0 ∧ y ≠ 0
+  - Let A = max(|x|, |y|), B = min(|x|, |y|)
+  - A ≤ 2^500 ∧ B ≥ 2^-500 ∧ A/B ≤ 2^60
+
+  Any pair of command-line strings that, when parsed under the C locale, satisfy all constraints above will drive execution into the else-branch of the final `if (k != 0)` check (i.e., k == 0).
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import os
+      import signal
+      import subprocess
+
+      # Concrete inputs chosen to satisfy the target constraints:
+      # - Exactly two numeric args: "1" and "1"
+      # - Both parseable as finite doubles under C locale, and both nonzero
+      # - Magnitude window: A = B = 1 -> A <= 2^500 and B >= 2^-500
+      # - Ratio: A/B = 1 <= 2^60, so no early fast-path return
+      # - No scaling occurs, so k remains 0 and the final check (k != 0) is false
+      cmd = "./temp_executable 1 1"
+
+      # Ensure C/EN locale so atof parses '.' as decimal separator
+      env = os.environ.copy()
+      env["LC_ALL"] = "C"
+      env["LANG"] = "C"
+      env["LC_NUMERIC"] = "C"
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+              env=env,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // e_hypot.c (110 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double __ieee754_hypot(double x, double y)
+  #else
+  	double __ieee754_hypot(x,y)
+  	double x, y;
+  #endif
+  {
+  	fprintf(stderr, "\n");
+  	double a=x,b=y,t1,t2,y1,y2,w;
+  	int j,k,ha,hb;
+
+  	ha = __HI(x)&0x7fffffff;	
+  	hb = __HI(y)&0x7fffffff;	
+  	if(hb > ha) {
+  	    a=y;b=x;j=ha; ha=hb;hb=j;
+  	} else {
+  	    // Unexecuted code (line 26) removed. Its line cov: 1/1 (100%)
+  	}
+  	__HI(a) = ha;	
+  	__HI(b) = hb;	
+  	if((ha-hb)>0x3c00000) {
+  	    return a+b;
+  	}
+  	k=0;
+  	if(ha > 0x5f300000) {	
+  	   // Unexecuted code (lines 35-48) removed. Its line cov: 0/13 (0%)
+  	}
+  	if(hb < 0x20b00000) {	
+  	    // Unexecuted code (lines 51-66) removed. Its line cov: 10/16 (62%)
+  	}
+      
+  	// Unexecuted code (lines 69-84) removed. Its line cov: 12/16 (75%)
+  	if(k!=0) {
+  	    // Unexecuted code (lines 86-88) removed. Its line cov: 3/3 (100%)
+  	} else {
+  	    // Unexecuted code (line 90) removed. Its line cov: 0/1 (0%)
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      if (argc != 3) {
+          // Unexecuted code (lines 99-100) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = __ieee754_hypot(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [e_hypot.c] enter main 1
+  [e_hypot.c] enter main 3
+
+  [e_hypot.c] enter __ieee754_hypot 3
+  [e_hypot.c] enter __ieee754_hypot 10
+  [e_hypot.c] enter __ieee754_hypot 11
+  [e_hypot.c] enter __ieee754_hypot 14
+  [e_hypot.c] enter __ieee754_hypot 16
+  [e_hypot.c] enter __ieee754_hypot 17
+execution_summary: |2+
+
+  ```c
+  // e_hypot.c (110 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double __ieee754_hypot(double x, double y)
+  #else
+  	double __ieee754_hypot(x,y)
+  	double x, y;
+  #endif
+  {
+  	fprintf(stderr, "\n");
+  	double a=x,b=y,t1,t2,y1,y2,w;
+  	int j,k,ha,hb;
+
+  	ha = __HI(x)&0x7fffffff;	
+  	hb = __HI(y)&0x7fffffff;	
+  	if(hb > ha) {
+  	    // Unexecuted code (line 24) removed. Its line cov: 1/1 (100%)
+  	} else {
+  	    a=x;b=y;
+  	}
+  	__HI(a) = ha;	
+  	__HI(b) = hb;	
+  	if((ha-hb)>0x3c00000) {
+  	    // Unexecuted code (line 31) removed. Its line cov: 1/1 (100%)
+  	}
+  	k=0;
+  	if(ha > 0x5f300000) {	
+  	   // Unexecuted code (lines 35-48) removed. Its line cov: 0/13 (0%)
+  	}
+  	if(hb < 0x20b00000) {	
+  	    if(hb <= 0x000fffff) {		
+  		if((hb|(__LO(b)))==0) {
+  		    // Unexecuted code (line 53) removed. Its line cov: 0/1 (0%)
+  		}
+  		t1=0;
+  		__HI(t1) = 0x7fd00000;	
+  		b *= t1;
+  		a *= t1;
+  		k -= 1022;
+  	    } else {		
+  	        // Unexecuted code (lines 61-65) removed. Its line cov: 0/5 (0%)
+  	    }
+  	}
+      
+  	w = a-b;
+  	if (w>b) {
+  	    // Unexecuted code (lines 71-74) removed. Its line cov: 0/4 (0%)
+  	} else {
+  	    a  = a+a;
+  	    y1 = 0;
+  	    __HI(y1) = hb;
+  	    y2 = b - y1;
+  	    t1 = 0;
+  	    __HI(t1) = ha+0x00100000;
+  	    t2 = a - t1;
+  	    w  = sqrt(t1*y1-(w*(-w)-(t1*y2+t2*b)));
+  	}
+  	if(k!=0) {
+  	    t1 = 1.0;
+  	    __HI(t1) += (k<<20);
+  	    return t1*w;
+  	} else {
+  	    // Unexecuted code (line 90) removed. Its line cov: 0/1 (0%)
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      if (argc != 3) {
+          // Unexecuted code (lines 99-100) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = __ieee754_hypot(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import os
+      import signal
+      import subprocess
+
+      # Concrete inputs chosen to satisfy the target constraint:
+      # - Both parseable as finite doubles in C locale
+      # - |x| = 1, |y| = 1e-100 -> exponent difference ~ 100
+      # - In terms of high words: (100 << 20) = 0x06400000 > 0x03C00000
+      #   Thus, H(max)-H(min) > 0x3c00000 holds and triggers the fast-path branch.
+      cmd = "./temp_executable 1 1e-100"
+
+      # Ensure C/EN locale so atof parses '.' as decimal separator
+      env = os.environ.copy()
+      env["LC_ALL"] = "C"
+      env["LANG"] = "C"
+      env["LC_NUMERIC"] = "C"
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+              env=env,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          raise e
+src_execution_trace: |
+  [e_hypot.c] enter main 1
+  [e_hypot.c] enter main 3
+
+  [e_hypot.c] enter __ieee754_hypot 2
+  [e_hypot.c] enter __ieee754_hypot 4

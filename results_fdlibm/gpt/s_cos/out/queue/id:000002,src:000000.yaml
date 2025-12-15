@@ -1,0 +1,311 @@
+id: 2
+src_id: 0
+create_time: '2025-12-14 17:43:36.153'
+time_taken: 240
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.67236000
+    call_cnt: 3
+    latency: 67.35s
+    input_tokens: 13260
+    output_tokens: 6786
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.52490000
+      call_cnt: 2
+      latency: 55.45s
+      input_tokens: 10444
+      output_tokens: 5267
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10252000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.38776000
+      call_cnt: 1
+      latency: 46.92s
+      input_tokens: 5126
+      output_tokens: 4690
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03462000
+      call_cnt: 1
+      latency: 8.53s
+      input_tokens: 5318
+      output_tokens: 577
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.14746000
+      call_cnt: 1
+      latency: 11.90s
+      input_tokens: 2816
+      output_tokens: 1519
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05632000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.09114000
+      call_cnt: 1
+      latency: 11.90s
+      input_tokens: 2816
+      output_tokens: 1519
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: else if (ix >= 0x7ff00000) -> true in s_cos.c:cos
+target_file_lines: s_cos.c:31-31
+target_lines_content: "\t\treturn x-x;"
+justification: This branch handles non-finite double inputs (NaN or ±Infinity) and
+  currently has 0% historical coverage (line 31). Exercising it explores a distinct
+  error/special-case path in the math library, increasing coverage beyond the small-angle
+  fast path that was taken in the current execution. It is reachable by controlling
+  the single command-line argument so that atof produces a non-finite double.
+target_path_constraint: |-
+  Chronological, input-and-environment level constraints to reach the target branch (ix >= 0x7ff00000) in cos(x):
+
+  1) Process invocation via the existing harness:
+     - The program must be started with exactly one command-line argument after the executable name. The harness already runs it as: shell=True with "./temp_executable 1.0"; modify only the single argument portion so that there is exactly one whitespace-separated token after the executable path. No additional arguments or spaces that create extra tokens.
+
+  2) Argument parsing behavior:
+     - The program reads argv[1] as a C string and converts it using the C library function atof (locale-insensitive, accepts standard C representations for floating-point numbers, including special values if supported by the platform).
+     - Constraint on argv[1]: When processed by atof, it MUST produce a non-finite IEEE-754 double value, i.e., either +Infinity, -Infinity, or NaN. This ensures the high 32-bit word of the double (ix) has all exponent bits set (0x7ff00000 or larger when masked to 0x7fffffff), satisfying ix >= 0x7ff00000.
+
+  3) Examples of accepted textual forms (expressed symbolically, not concrete literals) that must be recognized by atof to yield non-finite:
+     - A textual form that atof parses as positive infinity.
+     - A textual form that atof parses as negative infinity.
+     - A textual form that atof parses as NaN (quiet or signaling). Optional payloads are allowed.
+     Requirements for these forms:
+     - No leading/trailing non-space characters besides an optional sign and valid letters for the representation.
+     - The entire string may contain leading/trailing whitespace which atof skips, but it must not contain additional tokens that would change argc.
+
+  4) Platform considerations:
+     - Ensure the runtime C library on the target environment supports parsing of the chosen non-finite form via atof. Many libcs accept case-insensitive tokens for infinity and nan. Select a spelling known to be accepted by the environment used for execution.
+
+  5) No file or environment dependencies:
+     - The program does not read files or environment variables; only argv[1] controls the path. Ensure the process has normal execution permissions so the program runs to completion.
+
+  Sufficient condition summary:
+  - Exactly one argument after the program name, whose atof conversion yields a non-finite double (NaN or ±Inf). This guarantees ix has all exponent bits set, making (ix >= 0x7ff00000) true and entering the targeted else-if branch.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Use a single argument that atof parses as a non-finite double: "nan"
+      # This yields a NaN, satisfying ix >= 0x7ff00000 in the cos(x) path.
+      try:
+          result = subprocess.run(
+              ["./temp_executable nan"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, return stderr captured before timeout and return code -SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # Raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // s_cos.c (66 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double cos(double x)
+  #else
+  	double cos(x)
+  	double x;
+  #endif
+  {
+  	double y[2],z=0.0;
+  	int n, ix;
+
+      
+  	ix = __HI(x);
+
+      
+  	ix &= 0x7fffffff;
+  	if(ix <= 0x3fe921fb) {
+  		return __kernel_cos(x,z);
+  	}
+
+      
+  	else if (ix>=0x7ff00000) {
+  		// Unexecuted code (line 31) removed. Its line cov: 0/1 (0%)
+  	}
+
+      
+  	else {
+  	    // Unexecuted code (lines 36-46) removed. Its line cov: 0/11 (0%)
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+
+      if (argc != 2) {
+          // Unexecuted code (lines 56-57) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = cos(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [s_cos.c] enter main 1
+  [s_cos.c] enter main 3
+  [s_cos.c] enter cos 1
+  [s_cos.c] enter cos 2
+execution_summary: |2+
+
+  ```c
+  // s_cos.c (66 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double cos(double x)
+  #else
+  	double cos(x)
+  	double x;
+  #endif
+  {
+  	double y[2],z=0.0;
+  	int n, ix;
+
+      
+  	ix = __HI(x);
+
+      
+  	ix &= 0x7fffffff;
+  	if(ix <= 0x3fe921fb) {
+  		return __kernel_cos(x,z);
+  	}
+
+      
+  	else if (ix>=0x7ff00000) {
+  		// Unexecuted code (line 31) removed. Its line cov: 0/1 (0%)
+  	}
+
+      
+  	else {
+  	    // Unexecuted code (lines 36-46) removed. Its line cov: 0/11 (0%)
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+
+      if (argc != 2) {
+          // Unexecuted code (lines 56-57) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = cos(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [s_cos.c] enter main 1
+  [s_cos.c] enter main 3
+  [s_cos.c] enter cos 1
+  [s_cos.c] enter cos 2

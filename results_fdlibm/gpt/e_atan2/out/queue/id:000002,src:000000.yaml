@@ -1,0 +1,464 @@
+id: 2
+src_id: 0
+create_time: '2025-12-14 13:40:50.265'
+time_taken: 457
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $1.10968000
+    call_cnt: 4
+    latency: 108.25s
+    input_tokens: 21416
+    output_tokens: 11356
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.89982000
+      call_cnt: 3
+      latency: 82.82s
+      input_tokens: 18537
+      output_tokens: 8818
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.11498000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.34346000
+      call_cnt: 1
+      latency: 32.52s
+      input_tokens: 5749
+      output_tokens: 3637
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.40394000
+      call_cnt: 1
+      latency: 40.28s
+      input_tokens: 6262
+      output_tokens: 4557
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03744000
+      call_cnt: 1
+      latency: 10.03s
+      input_tokens: 6526
+      output_tokens: 624
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.20986000
+      call_cnt: 1
+      latency: 25.43s
+      input_tokens: 2879
+      output_tokens: 2538
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05758000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.15228000
+      call_cnt: 1
+      latency: 25.43s
+      input_tokens: 2879
+      output_tokens: 2538
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: 'if ((hx - 0x3ff00000 | lx) == 0) -> true in e_atan2.c: __ieee754_atan2'
+target_file_lines: e_atan2.c:45-45
+target_lines_content: "\t\treturn atan(y);"
+justification: This branch (special-case when x == 1.0 exactly) has zero historical
+  coverage (line 45 is marked with '-') and is central to fdlibm’s atan2 implementation.
+  It is reachable with the existing harness because the program is invoked with two
+  command-line arguments "1.0 1.0"; ensuring the second argument parses to an IEEE-754
+  double exactly equal to 1.0 will force this branch and immediately return atan(y).
+  Exercising this path adds new coverage distinct from the currently observed generic
+  path that computes z = atan(fabs(y/x)) and returns via switch(m).
+target_path_constraint: |-
+  Inputs and environment seen by the program (a command-line tool) must satisfy the following to reach the target branch where the x-operand equals exactly 1.0 in IEEE-754 double precision and the function returns atan(y):
+
+  1) Process invocation
+  - The executable is launched via a shell with exactly three argv elements visible to the program: argv[0] (program name), argv[1] (string for y), argv[2] (string for x). The program must see argc == 3.
+
+  2) Argument parseability
+  - Both argv[1] and argv[2] must be valid decimal strings that atof can parse as finite IEEE-754 binary64 (double) numbers without producing NaN or Infinity.
+
+  3) Exact IEEE-754 value for x
+  - The second numeric argument (argv[2], used as x) must parse to a double whose bit pattern is exactly that of +1.0. In IEEE-754 binary64, +1.0 has high 32 bits 0x3FF00000 and low 32 bits 0x00000000. Equivalently, the full 64-bit pattern is 0x3FF0000000000000.
+  - Achieve this by ensuring argv[2] is a canonical decimal representation that atof parses to exactly +1.0 with no rounding ambiguity. Avoid representations that could be locale-dependent (e.g., commas) or contain trailing characters. The string must represent +1.0 exactly (e.g., a form that libc’s atof maps exactly to 1.0).
+  - The parsed sign must be positive (no leading minus), and there must be no trailing spaces or characters; leading/trailing whitespace is permitted by atof but should be avoided to ensure deterministic parsing.
+
+  4) y unconstrained except finiteness
+  - The first numeric argument (argv[1], used as y) must be a finite double so that the early NaN/Inf check does not trigger an alternate path. No further numeric relation between y and x is required for entering the target branch; any finite y value will do.
+
+  5) Environment constraints
+  - Program must run in a C locale or any locale where the decimal point character is '.' so that the decimal strings are parsed as intended.
+  - No environment variables or I/O are required beyond standard process environment; standard error must be writable (the function emits a newline to stderr before the branch check, but this does not affect control flow).
+
+  6) Summary of branch condition mapping
+  - Reaching the target requires that, after atof parses argv[2] to a double, the internal check (hx-0x3ff00000 | lx) == 0 evaluates true. This is equivalent to x == +1.0 exactly at the bit level. Ensuring argv[2] parses to exactly +1.0 satisfies this condition and forces the path that returns atan(y).
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import os
+      import signal
+      import subprocess
+
+      # Ensure locale where decimal point is '.', so atof parses as intended
+      env = os.environ.copy()
+      env["LC_ALL"] = "C"
+      env["LANG"] = "C"
+      env["LC_NUMERIC"] = "C"
+
+      # Use exactly three argv elements: argv[0]=program, argv[1]=y (finite), argv[2]=x (exact +1.0)
+      # Both numbers are valid finite decimal strings; x parses exactly to IEEE-754 double +1.0
+      cmd = "./temp_executable 0.5 1.0"
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              env=env,
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // e_atan2.c (150 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double 
+  #else
+  static double 
+  #endif
+  tiny  = 1.0e-300,
+  zero  = 0.0,
+  pi_o_4  = 7.8539816339744827900E-01, 
+  pi_o_2  = 1.5707963267948965580E+00, 
+  pi      = 3.1415926535897931160E+00, 
+  pi_lo   = 1.2246467991473531772E-16; 
+
+  #ifdef __STDC__
+  	double __ieee754_atan2(double y, double x)
+  #else
+  	double __ieee754_atan2(y,x)
+  	double  y,x;
+  #endif
+  {  
+  	double z;
+  	int k,m,hx,hy,ix,iy;
+  	unsigned lx,ly;
+
+  	hx = __HI(x); ix = hx&0x7fffffff;
+  	lx = __LO(x);
+  	hy = __HI(y); iy = hy&0x7fffffff;
+  	ly = __LO(y);
+  	if(((ix|((lx|-lx)>>31))>0x7ff00000)||
+  	   ((iy|((ly|-ly)>>31))>0x7ff00000))	
+  	{
+  		// Unexecuted code (line 40) removed. Its line cov: 0/1 (0%)
+  	}
+  	fprintf(stderr, "\n");
+  	if((hx-0x3ff00000|lx)==0)
+  	{
+  		// Unexecuted code (line 45) removed. Its line cov: 0/1 (0%)
+  	}
+  	m = ((hy>>31)&1)|((hx>>30)&2);	
+
+      
+  	if((iy|ly)==0)
+  	{
+  		// Unexecuted code (lines 52-60) removed. Its line cov: 0/9 (0%)
+  	}
+      
+  	if((ix|lx)==0)
+  	{
+  		// Unexecuted code (line 65) removed. Its line cov: 0/1 (0%)
+  	}
+  	    
+      
+  	if(ix==0x7ff00000)
+  	{
+  		// Unexecuted code (lines 71-96) removed. Its line cov: 0/26 (0%)
+  	}
+      
+  	if(iy==0x7ff00000)
+  	{
+  		// Unexecuted code (line 101) removed. Its line cov: 0/1 (0%)
+  	}
+
+      
+  	k = (iy-ix)>>20;
+  	if(k > 60)
+  	{
+  		// Unexecuted code (line 108) removed. Its line cov: 0/1 (0%)
+  	}
+  	else if(hx<0&&k<-60)
+  	{
+  		// Unexecuted code (line 112) removed. Its line cov: 0/1 (0%)
+  	}
+  	else
+  	{
+  		z=atan(fabs(y/x));
+  	}
+  	
+  	switch (m) {
+  	    case 0:
+  		return       z  ;	
+  	    case 1:
+  		// Unexecuted code (lines 123-124) removed. Its line cov: 0/2 (0%)
+  	    case 2:
+  		// Unexecuted code (line 126) removed. Its line cov: 0/1 (0%)
+  	    default: 
+  	    	// Unexecuted code (line 128) removed. Its line cov: 0/1 (0%)
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+
+  	if (argc != 3)
+  	{
+  		// Unexecuted code (lines 139-140) removed. Its line cov: 0/2 (0%)
+  	}
+
+  	double a0 = atof(argv[1]);
+  	double a1 = atof(argv[2]);
+
+  	double r = __ieee754_atan2(a0, a1);
+  	printf("%f\n", r);
+
+  	return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [e_atan2.c] enter main 1
+  [e_atan2.c] enter main 3
+  [e_atan2.c] enter __ieee754_atan2 1
+
+  [e_atan2.c] enter __ieee754_atan2 5
+  [e_atan2.c] enter __ieee754_atan2 6
+  [e_atan2.c] enter __ieee754_atan2 11
+  [e_atan2.c] enter __ieee754_atan2 13
+  [e_atan2.c] enter __ieee754_atan2 25
+  [e_atan2.c] enter __ieee754_atan2 27
+  [e_atan2.c] enter __ieee754_atan2 30
+  [e_atan2.c] enter __ieee754_atan2 31
+  [e_atan2.c] enter __ieee754_atan2 32
+execution_summary: |2+
+
+  ```c
+  // e_atan2.c (150 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double 
+  #else
+  static double 
+  #endif
+  tiny  = 1.0e-300,
+  zero  = 0.0,
+  pi_o_4  = 7.8539816339744827900E-01, 
+  pi_o_2  = 1.5707963267948965580E+00, 
+  pi      = 3.1415926535897931160E+00, 
+  pi_lo   = 1.2246467991473531772E-16; 
+
+  #ifdef __STDC__
+  	double __ieee754_atan2(double y, double x)
+  #else
+  	double __ieee754_atan2(y,x)
+  	double  y,x;
+  #endif
+  {  
+  	double z;
+  	int k,m,hx,hy,ix,iy;
+  	unsigned lx,ly;
+
+  	hx = __HI(x); ix = hx&0x7fffffff;
+  	lx = __LO(x);
+  	hy = __HI(y); iy = hy&0x7fffffff;
+  	ly = __LO(y);
+  	if(((ix|((lx|-lx)>>31))>0x7ff00000)||
+  	   ((iy|((ly|-ly)>>31))>0x7ff00000))	
+  	{
+  		// Unexecuted code (line 40) removed. Its line cov: 0/1 (0%)
+  	}
+  	fprintf(stderr, "\n");
+  	if((hx-0x3ff00000|lx)==0)
+  	{
+  		// Unexecuted code (line 45) removed. Its line cov: 0/1 (0%)
+  	}
+  	m = ((hy>>31)&1)|((hx>>30)&2);	
+
+      
+  	if((iy|ly)==0)
+  	{
+  		// Unexecuted code (lines 52-60) removed. Its line cov: 0/9 (0%)
+  	}
+      
+  	if((ix|lx)==0)
+  	{
+  		// Unexecuted code (line 65) removed. Its line cov: 0/1 (0%)
+  	}
+  	    
+      
+  	if(ix==0x7ff00000)
+  	{
+  		// Unexecuted code (lines 71-96) removed. Its line cov: 0/26 (0%)
+  	}
+      
+  	if(iy==0x7ff00000)
+  	{
+  		// Unexecuted code (line 101) removed. Its line cov: 0/1 (0%)
+  	}
+
+      
+  	k = (iy-ix)>>20;
+  	if(k > 60)
+  	{
+  		// Unexecuted code (line 108) removed. Its line cov: 0/1 (0%)
+  	}
+  	else if(hx<0&&k<-60)
+  	{
+  		// Unexecuted code (line 112) removed. Its line cov: 0/1 (0%)
+  	}
+  	else
+  	{
+  		z=atan(fabs(y/x));
+  	}
+  	
+  	switch (m) {
+  	    case 0:
+  		return       z  ;	
+  	    case 1:
+  		// Unexecuted code (lines 123-124) removed. Its line cov: 0/2 (0%)
+  	    case 2:
+  		// Unexecuted code (line 126) removed. Its line cov: 0/1 (0%)
+  	    default: 
+  	    	// Unexecuted code (line 128) removed. Its line cov: 0/1 (0%)
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+
+  	if (argc != 3)
+  	{
+  		// Unexecuted code (lines 139-140) removed. Its line cov: 0/2 (0%)
+  	}
+
+  	double a0 = atof(argv[1]);
+  	double a1 = atof(argv[2]);
+
+  	double r = __ieee754_atan2(a0, a1);
+  	printf("%f\n", r);
+
+  	return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [e_atan2.c] enter main 1
+  [e_atan2.c] enter main 3
+  [e_atan2.c] enter __ieee754_atan2 1
+
+  [e_atan2.c] enter __ieee754_atan2 5
+  [e_atan2.c] enter __ieee754_atan2 6
+  [e_atan2.c] enter __ieee754_atan2 11
+  [e_atan2.c] enter __ieee754_atan2 13
+  [e_atan2.c] enter __ieee754_atan2 25
+  [e_atan2.c] enter __ieee754_atan2 27
+  [e_atan2.c] enter __ieee754_atan2 30
+  [e_atan2.c] enter __ieee754_atan2 31
+  [e_atan2.c] enter __ieee754_atan2 32

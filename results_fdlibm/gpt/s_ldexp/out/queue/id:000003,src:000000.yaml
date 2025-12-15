@@ -1,0 +1,292 @@
+id: 3
+src_id: 0
+create_time: '2025-12-14 18:45:42.936'
+time_taken: 327
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.68516000
+    call_cnt: 3
+    latency: 74.21s
+    input_tokens: 13483
+    output_tokens: 6925
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.51998000
+      call_cnt: 2
+      latency: 58.90s
+      input_tokens: 10381
+      output_tokens: 5206
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10130000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.36768000
+      call_cnt: 1
+      latency: 47.25s
+      input_tokens: 5065
+      output_tokens: 4356
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.05100000
+      call_cnt: 1
+      latency: 11.65s
+      input_tokens: 5316
+      output_tokens: 850
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.16518000
+      call_cnt: 1
+      latency: 15.31s
+      input_tokens: 3102
+      output_tokens: 1719
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.06204000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.10314000
+      call_cnt: 1
+      latency: 15.31s
+      input_tokens: 3102
+      output_tokens: 1719
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (!finite(value) || value == 0.0) -> true in s_ldexp.c:ldexp (the
+  second check after scaling)
+target_file_lines: s_ldexp.c:21-21
+target_lines_content: "\t\terrno = ERANGE;"
+justification: 'This branch has 0% historical coverage (line cov: 0/1) and guards
+  the post-scaling edge cases of ldexp (overflow to ±Inf or underflow to +0.0/−0.0).
+  Exercising it will validate numeric boundary handling and error paths, which are
+  critical in math libraries. The first pre-scaling check is already fully covered
+  (100%), and main’s argc check (also 0% covered) is effectively unreachable under
+  the current harness that always supplies two arguments. Therefore, this branch is
+  the highest-priority reachable target for increasing meaningful coverage.'
+target_path_constraint: |-
+  Goal: Trigger the second post-scaling check in ldexp so that (!finite(value) || value == 0.0) evaluates to true after value = scalbn(original_value, exp).
+
+  Program entry and invocation constraints (must all hold):
+  1) Process invocation via shell is fixed by harness; do not change the executable name. Command must pass exactly two arguments to the program (since argc is fixed in the harness), both provided as strings in the command line: argv[1] and argv[2].
+
+  Argument format constraints:
+  2) argv[1] must be a valid decimal floating-point literal, parseable by C atof, representing the initial value v. It can include an optional sign, digits with optional decimal point, and optional exponent part (e.g., [-+]? (digits[.digits]? | .digits) ([eE][-+]?digits)?). No locale-specific characters; ASCII digits only.
+  3) argv[2] must be a valid base-10 integer literal, parseable by C atoi, representing the scaling exponent e. It can include an optional sign followed by ASCII digits only; no whitespace beyond standard argv tokenization.
+
+  Semantic relationship constraints to reach the branch (post-scaling failure):
+  4) Let v be the double parsed from argv[1] via atof; let e be the int parsed from argv[2] via atoi.
+  5) Precondition enforced by code path: The first check (!finite(v) || v == 0.0) must be false to pass it, i.e., v is finite AND v != 0.0.
+  6) After scaling by a power of two, value = scalbn(v, e) must be either non-finite (Infinity) OR exactly zero to satisfy the second check. Formally: !isfinite(scalbn(v, e)) OR scalbn(v, e) == 0.0.
+
+  Interpretation in IEEE-754 double semantics (typical on platforms using fdlibm):
+  7) Overflow case: Choose v and e such that |v| * 2^e exceeds DBL_MAX, with v finite and nonzero. Symbolically: |v| > 0, isfinite(v), and |v| * 2^e > DBL_MAX. This will make scalbn(v, e) produce +Inf or −Inf, thus !finite(value) becomes true.
+  8) Underflow-to-zero case: Choose v and e such that |v| * 2^e is strictly between 0 and the smallest subnormal threshold so that the rounded result is exactly 0. Symbolically: |v| > 0, isfinite(v), and |v| * 2^e == 0.0 in the target’s double arithmetic (i.e., the result underflows to signed zero). Practical sufficient condition: |v| * 2^e < DBL_MIN_SUBNORMAL / 2 (ensures flush to zero under round-to-nearest ties-to-even), but any precise underflow-to-zero condition that the platform observes is acceptable.
+
+  Robustness and portability constraints:
+  9) Avoid NaN input: argv[1] must not encode NaN; since atof does not parse “nan” unless explicitly provided, constrain to numeric literals that decode to a finite nonzero double (per 5).
+  10) Platform assumes IEEE-754 doubles and fdlibm behavior for scalbn. If the environment differs, the logical requirements in 7 or 8 still apply in terms of the C library’s scalbn producing Infinity or 0.0 from finite nonzero input.
+
+  Summary of constraints to satisfy the target branch:
+  - argv[1] parses to a finite nonzero double v.
+  - argv[2] parses to an integer e.
+  - Either |v| * 2^e > DBL_MAX (overflow) OR scalbn(v, e) == 0.0 (underflow-to-zero).
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Chosen concrete inputs to satisfy the target path constraint:
+      # argv[1] = "1.0" (finite, nonzero double)
+      # argv[2] = "1024" (integer exponent)
+      # Rationale: scalbn(1.0, 1024) = 2^1024, which exceeds DBL_MAX and thus overflows to Infinity,
+      # making (!finite(value) || value == 0.0) evaluate to true.
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0 1024"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // s_ldexp.c (39 lines total)
+
+
+
+
+  #include "fdlibm.h"
+  #include <errno.h>
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double ldexp(double value, int exp)
+  #else
+  	double ldexp(value, exp)
+  	double value; int exp;
+  #endif
+  {
+  	if(!finite(value)||value==0.0) {
+  		// Unexecuted code (line 17) removed. Its line cov: 1/1 (100%)
+  	}
+  	value = scalbn(value,exp);
+  	if(!finite(value)||value==0.0) {
+  		// Unexecuted code (line 21) removed. Its line cov: 0/1 (0%)
+  	}
+  	return value;
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	if (argc != 3) {
+  		// Unexecuted code (lines 31-32) removed. Its line cov: 0/2 (0%)
+  	}
+  	double a0 = atof(argv[1]);
+  	int a1 = atoi(argv[2]);
+  	double r = ldexp(a0, a1);
+  	printf("%f\n", r);
+  	return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [s_ldexp.c] enter main 1
+  [s_ldexp.c] enter main 3
+  [s_ldexp.c] enter main 4
+  [s_ldexp.c] enter ldexp 1
+  [s_ldexp.c] enter ldexp 3
+  [s_ldexp.c] enter ldexp 4
+  [s_ldexp.c] enter ldexp 6
+  [s_ldexp.c] enter main 5
+execution_summary: |2+
+
+  ```c
+  // s_ldexp.c (39 lines total)
+
+
+
+
+  #include "fdlibm.h"
+  #include <errno.h>
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double ldexp(double value, int exp)
+  #else
+  	double ldexp(value, exp)
+  	double value; int exp;
+  #endif
+  {
+  	if(!finite(value)||value==0.0) {
+  		// Unexecuted code (line 17) removed. Its line cov: 1/1 (100%)
+  	}
+  	value = scalbn(value,exp);
+  	if(!finite(value)||value==0.0) {
+  		// Unexecuted code (line 21) removed. Its line cov: 0/1 (0%)
+  	}
+  	return value;
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	if (argc != 3) {
+  		// Unexecuted code (lines 31-32) removed. Its line cov: 0/2 (0%)
+  	}
+  	double a0 = atof(argv[1]);
+  	int a1 = atoi(argv[2]);
+  	double r = ldexp(a0, a1);
+  	printf("%f\n", r);
+  	return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0 1"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [s_ldexp.c] enter main 1
+  [s_ldexp.c] enter main 3
+  [s_ldexp.c] enter main 4
+  [s_ldexp.c] enter ldexp 1
+  [s_ldexp.c] enter ldexp 3
+  [s_ldexp.c] enter ldexp 4
+  [s_ldexp.c] enter ldexp 6
+  [s_ldexp.c] enter main 5

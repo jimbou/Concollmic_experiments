@@ -1,0 +1,302 @@
+id: 4
+src_id: 0
+create_time: '2025-12-14 20:17:52.462'
+time_taken: 474
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.70912000
+    call_cnt: 3
+    latency: 70.10s
+    input_tokens: 13118
+    output_tokens: 7446
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.57664000
+      call_cnt: 2
+      latency: 59.33s
+      input_tokens: 10424
+      output_tokens: 6136
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10254000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.44728000
+      call_cnt: 1
+      latency: 51.45s
+      input_tokens: 5127
+      output_tokens: 5689
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.02682000
+      call_cnt: 1
+      latency: 7.88s
+      input_tokens: 5297
+      output_tokens: 447
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.13248000
+      call_cnt: 1
+      latency: 10.77s
+      input_tokens: 2694
+      output_tokens: 1310
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05388000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.07860000
+      call_cnt: 1
+      latency: 10.77s
+      input_tokens: 2694
+      output_tokens: 1310
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: else if (ix >= 0x7ff00000) -> true in s_sin.c:sin(double)
+target_file_lines: s_sin.c:31-31
+target_lines_content: "\t\treturn x-x;"
+justification: This branch has zero historical coverage (0%) and handles IEEE-754
+  special values (Infinity/NaN). Exercising it will validate edge-case behavior of
+  the math library’s sine implementation, which is important for robustness and expands
+  coverage beyond regular numeric paths.
+target_path_constraint: |-
+  Constraints to reach: else if (ix >= 0x7ff00000) -> true in s_sin.c:sin(double)
+
+  Execution environment:
+  1) Program must be launched exactly with one command-line argument (besides program name); the harness already invokes: ./temp_executable 1.0 using shell. We must adapt only the argument value content while preserving a single argument.
+
+  Command-line argument format and semantics:
+  2) argv[1] is parsed by atof into a C double (IEEE-754 binary64). The branch condition examines the high 32 bits of this double (after masking the sign bit) and checks if they are greater than or equal to 0x7ff00000, which corresponds to exponent bits all ones (2047), i.e., Infinity or NaN.
+
+  Therefore the constraint on the numerical value is:
+  3) The textual representation in argv[1] must be such that atof parses it into a NaN or Infinity (±Inf or any NaN). Examples of acceptable lexical tokens per C standard library include: "inf", "+inf", "-inf", "infinity", "nan", "nan(...)" forms, and case-insensitive variants. Do not include surrounding characters beyond optional leading/trailing whitespace recognized by atof. Ensure it remains a single shell argument (no spaces unless quoted by the harness or replaced with no spaces).
+
+  Preconditions that must still hold to reach sin():
+  4) argc must equal 2 at runtime (program name plus one argument). The harness already satisfies this by passing a single argument string.
+
+  Resulting path predicate (at the double level):
+  5) Let X = atof(argv[1]). Require: X is Infinity (sign irrelevant) or NaN. Equivalently, in IEEE-754 terms, exponent(X) = 0x7ff and fraction arbitrary (NaN if fraction != 0; Infinity if fraction == 0). This guarantees ix>=0x7ff00000 after clearing the sign bit, thus taking the target branch.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          # Provide an argument that atof parses to Infinity to satisfy ix >= 0x7ff00000
+          result = subprocess.run(
+              ["./temp_executable inf"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // s_sin.c (67 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double sin(double x)
+  #else
+  	double sin(x)
+  	double x;
+  #endif
+  {
+  	double y[2],z=0.0;
+  	int n, ix;
+
+      
+  	ix = __HI(x);
+
+      
+  	ix &= 0x7fffffff;
+  	if(ix <= 0x3fe921fb) {
+  		return __kernel_sin(x,z,0);
+  	}
+
+      
+  	else if (ix>=0x7ff00000) {
+  		// Unexecuted code (line 31) removed. Its line cov: 0/1 (0%)
+  	}
+
+      
+  	else {
+  	    // Unexecuted code (lines 36-46) removed. Its line cov: 8/11 (73%)
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+
+      if (argc != 2) {
+          // Unexecuted code (lines 57-58) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = sin(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [s_sin.c] enter main 3
+  [s_sin.c] enter sin 1
+  [s_sin.c] enter sin 2
+execution_summary: |2+
+
+  ```c
+  // s_sin.c (67 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double sin(double x)
+  #else
+  	double sin(x)
+  	double x;
+  #endif
+  {
+  	double y[2],z=0.0;
+  	int n, ix;
+
+      
+  	ix = __HI(x);
+
+      
+  	ix &= 0x7fffffff;
+  	if(ix <= 0x3fe921fb) {
+  		return __kernel_sin(x,z,0);
+  	}
+
+      
+  	else if (ix>=0x7ff00000) {
+  		// Unexecuted code (line 31) removed. Its line cov: 0/1 (0%)
+  	}
+
+      
+  	else {
+  	    // Unexecuted code (lines 36-46) removed. Its line cov: 8/11 (73%)
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+
+      if (argc != 2) {
+          // Unexecuted code (lines 57-58) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = sin(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [s_sin.c] enter main 3
+  [s_sin.c] enter sin 1
+  [s_sin.c] enter sin 2

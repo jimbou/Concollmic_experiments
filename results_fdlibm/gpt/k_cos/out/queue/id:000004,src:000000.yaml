@@ -1,0 +1,359 @@
+id: 4
+src_id: 0
+create_time: '2025-12-14 16:31:35.738'
+time_taken: 715
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $1.44326000
+    call_cnt: 4
+    latency: 186.49s
+    input_tokens: 21442
+    output_tokens: 16907
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $1.23424000
+      call_cnt: 3
+      latency: 153.06s
+      input_tokens: 18413
+      output_tokens: 14433
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10754000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.57976000
+      call_cnt: 1
+      latency: 80.67s
+      input_tokens: 5377
+      output_tokens: 7525
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.49936000
+      call_cnt: 1
+      latency: 61.52s
+      input_tokens: 6413
+      output_tokens: 6115
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.04758000
+      call_cnt: 1
+      latency: 10.88s
+      input_tokens: 6623
+      output_tokens: 793
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.20902000
+      call_cnt: 1
+      latency: 33.43s
+      input_tokens: 3029
+      output_tokens: 2474
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.06058000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.14844000
+      call_cnt: 1
+      latency: 33.43s
+      input_tokens: 3029
+      output_tokens: 2474
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (ix > 0x3fe90000) -> false in k_cos.c:__kernel_cos
+target_file_lines: k_cos.c:51-52
+target_lines_content: |-
+  	        __HI(qx) = ix-0x00200000;	
+  	        __LO(qx) = 0;
+justification: Lines 51-52 inside the else-branch of `if (ix > 0x3fe90000)` have 0/2
+  (0%) historical coverage. This branch controls how `qx` is formed via bit-level
+  manipulation when |x| is in a specific range, exercising a distinct numerical path
+  of the kernel cosine routine that is currently untested. Reaching it will improve
+  coverage of core numerical code and may reveal edge-case behavior in the polynomial
+  approximation path.
+target_path_constraint: |-
+  Environment and invocation constraints (chronological):
+
+  1) Program invocation via shell: The executable is launched with exactly two command-line arguments after the program name (argv[1], argv[2]). The harness already invokes it as: "./temp_executable 1.0 1.0" with shell=True, which yields argc == 3. Maintain this structure so that the program does not exit early due to argc mismatch.
+
+  2) Argument parsing constraints:
+     - argv[1] and argv[2] must each be valid strings parsable by atof into finite double-precision values (no NaN/Inf), so that atof succeeds and produces doubles a0 and a1.
+
+  3) Domain constraint to enter the outer else-branch (lines 46-57):
+     - Let x := a0, y := a1.
+     - Define ix := high 32-bit word of the IEEE-754 double x, masked with 0x7fffffff (i.e., absolute-value high word).
+     - Require ix >= 0x3FD33333 to avoid the early return at lines 42-45, ensuring execution goes to the else-branch at line 46. In semantic terms, this means |x| >= x_threshold1 where x_threshold1 is the double whose high 32-bit word is 0x3FD33333, i.e., |x| is not very small and not in the small-angle path.
+
+  4) Target-branch constraint (to take the false branch of if (ix > 0x3fe90000)):
+     - Require ix <= 0x3fe90000, and simultaneously ix >= 0x3FD33333 from step (3). This puts |x| in the closed interval of magnitudes [H1, H2], where H1 has high word 0x3FD33333 and H2 has high word 0x3fe90000. This guarantees the condition (ix > 0x3fe90000) evaluates to false, entering the body that writes __HI(qx) = ix - 0x00200000 and __LO(qx) = 0.
+
+  5) Avoid the very-small-x early return block at lines 34-38:
+     - Ensure ix >= 0x3e400000 OR, if ix < 0x3e400000, ensure that (int)x != 0 to avoid the early return (line 36). To keep the path simple and consistent with steps (3-4), prefer ix >= 0x3FD33333 which automatically satisfies this and skips the tiny-x block.
+
+  6) y parameter constraint:
+     - y := a1 should be any finite double (no NaN/Inf). There is no branching on y along this path, but it participates in arithmetic at the return expression; keep it finite to avoid exceptions.
+
+  Summary (consolidated constraints on inputs):
+  - The program must be invoked with exactly two numeric strings.
+  - Let x be the double parsed from argv[1]. Let ix be the high 32 bits of x with sign bit cleared (IEEE-754 big-endian high word), i.e., ix = (__HI(x) & 0x7fffffff).
+  - Constrain ix to satisfy: 0x3FD33333 <= ix <= 0x3fe90000.
+  - Let y be the double parsed from argv[2]; require y to be finite.
+
+  Any inputs satisfying the above will lead execution to the else-branch and then take the false branch of (ix > 0x3fe90000), covering lines 51-52.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Chosen concrete inputs:
+      # x = 0.5 -> high word 0x3fe00000 (within [0x3FD33333, 0x3fe90000])
+      # y = 1.0 -> finite double
+      # This satisfies all target path constraints while keeping argc == 3
+      try:
+          result = subprocess.run(
+              ["./temp_executable 0.5 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // k_cos.c (75 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double 
+  #else
+  static double 
+  #endif
+  one =  1.00000000000000000000e+00, 
+  C1  =  4.16666666666666019037e-02, 
+  C2  = -1.38888888888741095749e-03, 
+  C3  =  2.48015872894767294178e-05, 
+  C4  = -2.75573143513906633035e-07, 
+  C5  =  2.08757232129817482790e-09, 
+  C6  = -1.13596475577881948265e-11; 
+
+  #ifdef __STDC__
+  	double __kernel_cos(double x, double y)
+  #else
+  	double __kernel_cos(x, y)
+  	double x,y;
+  #endif
+  {
+  	double a,hz,z,r,qx;
+  	int ix;
+  	ix = __HI(x)&0x7fffffff;	
+  	
+  	if(ix<0x3e400000) {			
+  	    if(((int)x)==0) {
+  		// Unexecuted code (line 36) removed. Its line cov: 1/1 (100%)
+  	    }
+  	}
+  	z  = x*x;
+  	r  = z*(C1+z*(C2+z*(C3+z*(C4+z*(C5+z*C6)))));
+  	
+  	if(ix < 0x3FD33333) 			 
+  	{
+  	    return one - (0.5*z - (z*r - x*y));
+  	}
+  	else {
+  	    fprintf(stderr, "\n");
+  	    if(ix > 0x3fe90000) {		
+  		// Unexecuted code (line 49) removed. Its line cov: 1/1 (100%)
+  	    } else {
+  	        // Unexecuted code (lines 51-52) removed. Its line cov: 0/2 (0%)
+  	    }
+  	    // Unexecuted code (lines 54-56) removed. Its line cov: 3/3 (100%)
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      if (argc != 3) {
+          // Unexecuted code (lines 65-66) removed. Its line cov: 0/2 (0%)
+      }
+      double a0 = atof(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = __kernel_cos(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [k_cos.c] enter main 1
+  [k_cos.c] enter main 3
+  [k_cos.c] enter __kernel_cos 1
+  [k_cos.c] enter __kernel_cos 2
+  [k_cos.c] enter __kernel_cos 3
+execution_summary: |2+
+
+  ```c
+  // k_cos.c (75 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double 
+  #else
+  static double 
+  #endif
+  one =  1.00000000000000000000e+00, 
+  C1  =  4.16666666666666019037e-02, 
+  C2  = -1.38888888888741095749e-03, 
+  C3  =  2.48015872894767294178e-05, 
+  C4  = -2.75573143513906633035e-07, 
+  C5  =  2.08757232129817482790e-09, 
+  C6  = -1.13596475577881948265e-11; 
+
+  #ifdef __STDC__
+  	double __kernel_cos(double x, double y)
+  #else
+  	double __kernel_cos(x, y)
+  	double x,y;
+  #endif
+  {
+  	double a,hz,z,r,qx;
+  	int ix;
+  	ix = __HI(x)&0x7fffffff;	
+  	
+  	if(ix<0x3e400000) {			
+  	    if(((int)x)==0) {
+  		return one;
+  	    }
+  	}
+  	// Unexecuted code (lines 39-40) removed. Its line cov: 2/2 (100%)
+  	
+  	if(ix < 0x3FD33333) 			 
+  	{
+  	    // Unexecuted code (line 44) removed. Its line cov: 1/1 (100%)
+  	}
+  	else {
+  	    fprintf(stderr, "\n");
+  	    if(ix > 0x3fe90000) {		
+  		// Unexecuted code (line 49) removed. Its line cov: 1/1 (100%)
+  	    } else {
+  	        // Unexecuted code (lines 51-52) removed. Its line cov: 0/2 (0%)
+  	    }
+  	    // Unexecuted code (lines 54-56) removed. Its line cov: 3/3 (100%)
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      if (argc != 3) {
+          // Unexecuted code (lines 65-66) removed. Its line cov: 0/2 (0%)
+      }
+      double a0 = atof(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = __kernel_cos(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [k_cos.c] enter main 1
+  [k_cos.c] enter main 3
+  [k_cos.c] enter __kernel_cos 1
+  [k_cos.c] enter __kernel_cos 2
+  [k_cos.c] enter __kernel_cos 4
+  [k_cos.c] enter __kernel_cos 5

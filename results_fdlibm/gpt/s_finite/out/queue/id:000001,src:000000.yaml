@@ -1,0 +1,274 @@
+id: 1
+src_id: 0
+create_time: '2025-12-14 18:10:08.220'
+time_taken: 175
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 2
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.93142000
+    call_cnt: 4
+    latency: 106.69s
+    input_tokens: 18680
+    output_tokens: 9297
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.73634000
+      call_cnt: 3
+      latency: 81.56s
+      input_tokens: 16000
+      output_tokens: 6939
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.09928000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.24524000
+      call_cnt: 1
+      latency: 26.62s
+      input_tokens: 4964
+      output_tokens: 2278
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.36626000
+      call_cnt: 1
+      latency: 47.31s
+      input_tokens: 5428
+      output_tokens: 4235
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.02556000
+      call_cnt: 1
+      latency: 7.64s
+      input_tokens: 5608
+      output_tokens: 426
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.19508000
+      call_cnt: 1
+      latency: 25.13s
+      input_tokens: 2680
+      output_tokens: 2358
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05360000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.14148000
+      call_cnt: 1
+      latency: 25.13s
+      input_tokens: 2680
+      output_tokens: 2358
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (argc != 2) -> true in s_finite.c:main
+target_file_lines: s_finite.c:29-30
+target_lines_content: |2-
+          printf("Usage: %s <arg>\n", argv[0]);
+          return 1;
+justification: This is the only explicit branch in the visible code and its body (lines
+  29-30) has 0% historical coverage. Exercising this error-handling path broadens
+  coverage by validating argument-count handling and the program’s usage output/exit
+  path. It is reachable purely via command-line invocation shape (number of arguments),
+  which is controllable from the environment/test harness perspective.
+target_path_constraint: |-
+  Chronological, environment-level constraints to drive execution to the target branch (argc != 2) => true in s_finite.c:main:
+
+  1) Process invocation shape (command-line arguments):
+     - The program must be launched such that the C runtime observes a number of arguments other than 2 (i.e., argc != 2). In C, argc counts the program name as argv[0] plus each subsequent token separated by whitespace that the OS/loader passes to main.
+     - Therefore, ensure the command-line, after shell parsing, yields either:
+       a) Only the program path/name and no additional user argument (argc == 1), or
+       b) The program path/name and 2 or more additional arguments (argc >= 3).
+     - Do NOT rely on quoting/whitespace that gets collapsed by the shell in a way that still yields exactly one argument beyond argv[0]; the key is to avoid exactly one post-program token.
+
+  2) Shell parsing considerations (since the harness uses shell=True):
+     - Quoted strings remain a single argv token; unquoted whitespace splits tokens.
+     - Redirections, pipes, or environment assignments should not change argc unless they introduce additional argv tokens; ensure the final argv vector length is not 2.
+
+  3) Input value constraints: None required, because this branch is taken before any parsing of argv[1]. Even if extra arguments exist, their contents are irrelevant for reaching the branch.
+
+  4) Environmental preconditions:
+     - The executable must exist and be runnable so that main is entered.
+     - No special files or stdin/stdout/stderr conditions are needed to reach the branch.
+
+  Sufficient condition summary:
+     Ensure the executed command results in argc ≠ 2 (e.g., argc == 1 or argc ≥ 3) at program start. This guarantees execution enters the “argc != 2” branch body in main.
+selected_cnt: 1
+successful_generation_cnt: 1
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Add one more unquoted token beyond the original single argument to ensure argc != 2
+      # This results in argv: ["./temp_executable", "1.0", "extra"] => argc == 3
+      cmd = ["./temp_executable 1.0 extra"]
+
+      try:
+          result = subprocess.run(
+              cmd,
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, return captured stderr and indicate kill via negative signal code
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # Propagate unexpected execution failures
+          raise e
+returncode: 1
+src_execution_summary: |2+
+
+  ```c
+  // s_finite.c (39 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	int finite(double x)
+  #else
+  	int finite(x)
+  	double x;
+  #endif
+  {
+  	// Unexecuted code (lines 17-19) removed. Its line cov: 0/3 (0%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+
+      if (argc != 2) {
+          // Unexecuted code (lines 29-30) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      int r = finite(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [s_finite.c] enter main 2
+execution_summary: |2+
+
+  ```c
+  // s_finite.c (39 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	int finite(double x)
+  #else
+  	int finite(x)
+  	double x;
+  #endif
+  {
+  	// Unexecuted code (lines 17-19) removed. Its line cov: 0/3 (0%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+
+      if (argc != 2) {
+          printf("Usage: %s <arg>\n", argv[0]);
+          return 1;
+      }
+
+      // Unexecuted code (lines 33-38) removed. Its line cov: 4/4 (100%)
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [s_finite.c] enter main 3

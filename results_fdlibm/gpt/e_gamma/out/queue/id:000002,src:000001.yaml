@@ -1,0 +1,279 @@
+id: 2
+src_id: 1
+create_time: '2025-12-14 14:14:20.437'
+time_taken: 226
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.89454000
+    call_cnt: 4
+    latency: 88.88s
+    input_tokens: 18948
+    output_tokens: 8593
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.70668000
+      call_cnt: 3
+      latency: 68.92s
+      input_tokens: 16116
+      output_tokens: 6406
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.09992000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.26092000
+      call_cnt: 1
+      latency: 20.59s
+      input_tokens: 4996
+      output_tokens: 2533
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.31278000
+      call_cnt: 1
+      latency: 35.74s
+      input_tokens: 5447
+      output_tokens: 3322
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03306000
+      call_cnt: 1
+      latency: 12.59s
+      input_tokens: 5673
+      output_tokens: 551
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.18786000
+      call_cnt: 1
+      latency: 19.96s
+      input_tokens: 2832
+      output_tokens: 2187
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05664000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.13122000
+      call_cnt: 1
+      latency: 19.96s
+      input_tokens: 2832
+      output_tokens: 2187
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (argc != 2) -> false in e_gamma.c:main
+target_file_lines: e_gamma.c:27-28
+target_lines_content: |2-
+      double r = __ieee754_gamma(a0);
+      printf("%f\n", r);
+justification: 'The current harness invokes the program with zero user arguments,
+  so execution took the usage path (argc != 2) and exited early. The alternative branch
+  (argc == 2) was not executed in this run and is the only path that exercises the
+  program’s core behavior: parsing a numeric argument, invoking the gamma implementation,
+  and printing the result. Although historical coverage shows this region as covered
+  (4/4, 100%), there are no other branches available in this file, and reaching this
+  branch is necessary to execute any of the computational logic. We will specify precise
+  external-input constraints required to reach this branch from program start.'
+target_path_constraint: |-
+  Goal: Reach the branch in main where the condition (argc != 2) evaluates to false, i.e., ensure argc == 2 so that the program proceeds to parse argv[1], compute gamma, and print the result.
+
+  Constraints in chronological order:
+
+  1) Process invocation (command-line):
+     - The program must be started with exactly one user-supplied argument in addition to argv[0] (the executable path). Formally: argc == 2.
+     - Using the provided harness style (shell=True with a single command string), ensure the composed command line contains precisely one whitespace-separated argument after the executable name/path. Avoid additional spaces or shell expansions that would create more than one argument.
+
+  2) Argument value format (argv[1]):
+     - argv[1] must be a valid C locale numeric string accepted by atof, representing a finite double value. The accepted forms include optional leading/trailing whitespace, optional sign (+/-), digits with optional decimal point, and/or scientific notation (e.g., d.ddde±dd). Avoid strings that result in NaN or infinities via non-numeric content.
+     - Do not include embedded NUL bytes; the argument must be a standard null-terminated string.
+     - No surrounding quotes should survive as part of the argument token after shell parsing; the actual argv[1] characters passed to the program must be the numeric characters themselves.
+
+  3) Environmental/locale assumptions:
+     - Decimal separator must be '.', not ','; execution must use the C/POSIX numeric locale or any locale where atof interprets '.' as the decimal point. Avoid relying on locale-specific formats.
+
+  4) Value domain for gamma computation:
+     - The gamma function is undefined (poles) at non-positive integers. While the implementation may still return a value with signgam set, to avoid domain errors or exceptional cases, provide argv[1] that does NOT represent 0, -1, -2, ...
+     - The value should be within the finite double range so that __ieee754_gamma returns a finite or representable value and printf can print it. Avoid magnitudes that cause overflow to infinity in the gamma function.
+
+  5) Output expectations (to ensure reaching the target branch region):
+     - When the above constraints hold, the code path will execute: conversion of argv[1] via atof, call to __ieee754_gamma with that double, and printing the resulting floating-point value with %f, followed by normal program exit with return code 0.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import os
+      import signal
+      import subprocess
+
+      try:
+          # Ensure C/POSIX numeric locale so '.' is the decimal separator for atof
+          env = os.environ.copy()
+          env["LC_ALL"] = "C"
+          env["LC_NUMERIC"] = "C"
+          env["LANG"] = "C"
+
+          # Exactly one user-supplied argument to make argc == 2
+          # Avoid quotes or shell constructs; a plain numeric string ensures a single argv token
+          cmd = "./temp_executable 0.5"
+
+          # Keep the same harness structure: shell=True and a single command string element in the list
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+              env=env,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // e_gamma.c (31 lines total)
+  #include <stdio.h>
+  #include "fdlibm.h"
+
+  extern int signgam;
+
+  #ifdef __STDC__
+  	double __ieee754_gamma(double x)
+  #else
+  	double __ieee754_gamma(x)
+  	double x;
+  #endif
+  {
+  	// Unexecuted code (line 13) removed. Its line cov: 1/1 (100%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      if (argc != 2) {
+          printf("Usage: %s <arg>\n", argv[0]);
+          return 1;
+      }
+
+      // Unexecuted code (lines 25-30) removed. Its line cov: 4/4 (100%)
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [e_gamma.c] enter main 1
+  [e_gamma.c] enter main 3
+  [e_gamma.c] enter __ieee754_gamma 1
+execution_summary: |2+
+
+  ```c
+  // e_gamma.c (31 lines total)
+  #include <stdio.h>
+  #include "fdlibm.h"
+
+  extern int signgam;
+
+  #ifdef __STDC__
+  	double __ieee754_gamma(double x)
+  #else
+  	double __ieee754_gamma(x)
+  	double x;
+  #endif
+  {
+  	return __ieee754_gamma_r(x,&signgam);
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      if (argc != 2) {
+          // Unexecuted code (lines 21-22) removed. Its line cov: 2/2 (100%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = __ieee754_gamma(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          # Invoke the executable with ZERO user arguments to ensure argc == 1 (thus argc != 2)
+          # Keep the same harness structure: shell=True and a single command string element in the list
+          cmd = "./temp_executable"
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [e_gamma.c] enter main 1
+  [e_gamma.c] enter main 2

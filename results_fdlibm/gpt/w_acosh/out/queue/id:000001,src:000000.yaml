@@ -1,0 +1,298 @@
+id: 1
+src_id: 0
+create_time: '2025-12-14 20:34:02.422'
+time_taken: 170
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.79482000
+    call_cnt: 3
+    latency: 132.77s
+    input_tokens: 13113
+    output_tokens: 8876
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.58056000
+      call_cnt: 2
+      latency: 107.72s
+      input_tokens: 10377
+      output_tokens: 6217
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10162000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.44990000
+      call_cnt: 1
+      latency: 100.12s
+      input_tokens: 5081
+      output_tokens: 5733
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.02904000
+      call_cnt: 1
+      latency: 7.60s
+      input_tokens: 5296
+      output_tokens: 484
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.21426000
+      call_cnt: 1
+      latency: 25.05s
+      input_tokens: 2736
+      output_tokens: 2659
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05472000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.15954000
+      call_cnt: 1
+      latency: 25.05s
+      input_tokens: 2736
+      output_tokens: 2659
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (x < 1.0) -> false (enter the else-block) in w_acosh.c:acosh
+target_file_lines: w_acosh.c:22-22
+target_lines_content: "\t    return z;"
+justification: This branch’s body (line 22) has 0% historical coverage and was not
+  executed in the current trace because execution returned early from acosh when the
+  math library was in IEEE mode. Exercising the else-block explores the library’s
+  non-IEEE error/handling path for valid inputs (x ≥ 1.0), which has never been covered,
+  thereby increasing overall coverage. It is reachable via environment-level configuration
+  of the math library mode without modifying the harness.
+target_path_constraint: |-
+  To reach the else-branch of the condition “if (x < 1.0)” inside acosh(x), ensure the following inputs and environment conditions in chronological order:
+
+  1) Process invocation (command-line arguments):
+  - The program must be invoked with exactly one argument besides the program name (i.e., argc == 2). The single argument must be a valid textual representation of a finite double-precision floating-point number in the C locale (decimal point is '.', no thousands separators). Let this value be X.
+
+  2) File system and permissions:
+  - No special files are required. The executable must be readable/executable. (No constraints beyond normal execution.)
+
+  3) Runtime environment for math library behavior:
+  - The build/runtime must not define _IEEE_LIBM at compile-time, or if compiled with both paths present, the runtime configuration must ensure the non-IEEE wrapper path is active so that the wrapper logic in acosh() executes beyond the _IEEE_LIBM short-circuit.
+  - The runtime math error handling mode must be such that _LIB_VERSION != _IEEE_. This ensures the wrapper does not immediately return after __ieee754_acosh(x). Concretely, set the libm global error handling mode to a non-IEEE setting (e.g., _LIB_VERSION = _POSIX_ or _SVID_) prior to calling acosh. If controllable only via environment, ensure the corresponding environment variable or initialization routine that the linked fdlibm honors is configured to a non-IEEE mode.
+  - The floating-point environment must not classify X as NaN: isnan(X) == false.
+
+  4) Numeric relationship to select the else-branch of (x < 1.0):
+  - X must be greater than or equal to 1.0: X >= 1.0.
+
+  5) Summary of constraints (SMT-style):
+  - arg_count = 2
+  - parse_double(argv[1]) = X, where isFinite(X) and not isNaN(X)
+  - libm_mode ∈ {POSIX, SVID, other_non_IEEE}  (i.e., _LIB_VERSION != _IEEE_)
+  - X ≥ 1.0
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import os
+      import signal
+      import subprocess
+
+      # We ensure:
+      # - argc == 2 via one numeric argument (X = 1.0, finite and not NaN)
+      # - X >= 1.0 to take the else-branch of (x < 1.0)
+      # - Set libm mode to a non-IEEE variant via environment variables commonly used by fdlibm-based builds
+      #   (these are harmless if not recognized and satisfy the constraint when honored)
+      env = os.environ.copy()
+      env_updates = {
+          # Prefer POSIX/SVID-style error handling over IEEE short-circuit
+          "LIBM_MODE": "POSIX",
+          "FDLIBM_MODE": "POSIX",
+          "_LIB_VERSION": "POSIX",
+          "LIBM_VERSION": "POSIX",
+          # Some builds consult this for math error behavior; keep disabled to avoid IEEE shortcuts
+          "MATH_ERREXCEPT": "0",
+      }
+      env.update(env_updates)
+
+      try:
+          # Keep the original test harness structure: invoke the executable with exactly one argument
+          # Use shell=True with a single string as in the original execution
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+              env=env,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // w_acosh.c (43 lines total)
+  #include <stdio.h>
+  #include "fdlibm.h"
+
+  #ifdef __STDC__
+  	double acosh(double x)		
+  #else
+  	double acosh(x)			
+  	double x;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	// Unexecuted code (line 12) removed. Its line cov: 0/1 (0%)
+  #else
+  	double z;
+  	z = __ieee754_acosh(x);
+  	if(_LIB_VERSION == _IEEE_ || isnan(x)) {
+  		return z;
+  	}
+  	if(x<1.0) {
+  	        // Unexecuted code (line 20) removed. Its line cov: 0/1 (0%)
+  	} else {
+  	    // Unexecuted code (line 22) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 33-34) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = acosh(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [w_acosh.c] enter main 3
+  [w_acosh.c] enter acosh 2
+  [w_acosh.c] enter acosh 3
+execution_summary: |2+
+
+  ```c
+  // w_acosh.c (43 lines total)
+  #include <stdio.h>
+  #include "fdlibm.h"
+
+  #ifdef __STDC__
+  	double acosh(double x)		
+  #else
+  	double acosh(x)			
+  	double x;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	// Unexecuted code (line 12) removed. Its line cov: 0/1 (0%)
+  #else
+  	double z;
+  	z = __ieee754_acosh(x);
+  	if(_LIB_VERSION == _IEEE_ || isnan(x)) {
+  		return z;
+  	}
+  	if(x<1.0) {
+  	        // Unexecuted code (line 20) removed. Its line cov: 0/1 (0%)
+  	} else {
+  	    // Unexecuted code (line 22) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 33-34) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = acosh(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [w_acosh.c] enter main 3
+  [w_acosh.c] enter acosh 2
+  [w_acosh.c] enter acosh 3

@@ -1,0 +1,471 @@
+id: 1
+src_id: 0
+create_time: '2025-12-14 15:51:17.105'
+time_taken: 344
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $1.91244000
+    call_cnt: 5
+    latency: 208.09s
+    input_tokens: 33939
+    output_tokens: 20561
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $1.75276000
+      call_cnt: 4
+      latency: 193.50s
+      input_tokens: 30908
+      output_tokens: 18910
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.12808000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.40976000
+      call_cnt: 1
+      latency: 44.65s
+      input_tokens: 6404
+      output_tokens: 4136
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    non_tool:
+      model: gpt-5
+      cost: $0.65352000
+      call_cnt: 1
+      latency: 79.05s
+      input_tokens: 8080
+      output_tokens: 8192
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.51454000
+      call_cnt: 1
+      latency: 62.45s
+      input_tokens: 8100
+      output_tokens: 5801
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.04686000
+      call_cnt: 1
+      latency: 7.36s
+      input_tokens: 8324
+      output_tokens: 781
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.15968000
+      call_cnt: 1
+      latency: 14.59s
+      input_tokens: 3031
+      output_tokens: 1651
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.06062000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.09906000
+      call_cnt: 1
+      latency: 14.59s
+      input_tokens: 3031
+      output_tokens: 1651
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: 'if (ix >= 0x7ff00000) -> true in e_rem_pio2.c: __ieee754_rem_pio2'
+target_file_lines: e_rem_pio2.c:143-144
+target_lines_content: |-
+  	    y[0]=y[1]=x-x; return 0;
+  	}
+justification: "This branch handles non-finite inputs (NaN/Infinity) and has zero
+  historical coverage: the entire guarded block (lines 143-144) shows '-' coverage.
+  Exercising this path covers special IEEE-754 cases that are important for robustness
+  and error handling and leads execution through a code path completely different
+  from the current run. It is reachable by manipulating the program’s first command-line
+  argument (parsed as a double), which fits the harness interaction model."
+target_path_constraint: |-
+  Chronological constraints to reach: e_rem_pio2.c::__ieee754_rem_pio2, branch "if (ix >= 0x7ff00000)" -> true
+
+  1. Command invocation and argument count
+  - The program must be launched in a way that supplies exactly two command-line arguments to main (argc == 3 including program name). The harness currently invokes a single string "./temp_executable 1.0 1.0" with shell=True, which results in argc == 3 inside the program: argv[0] is the executable path, argv[1] is the first numeric string, argv[2] is the second numeric string. Ensure this remains true; do not add or remove arguments.
+
+  2. First argument format (parsed into double)
+  - argv[1] must be a string encoding a non-finite IEEE-754 double value (Infinity or NaN) that the standard C library function atof will parse as such.
+  - Acceptable encodings, depending on the C library, include case-insensitive tokens for infinity or NaN, such as:
+    * "inf", "+inf", "-inf", "infinity", "+infinity", "-infinity" for infinities
+    * "nan", "nan(...)" for NaNs, where the payload inside parentheses may be ignored by atof.
+  - The string must not contain extra leading or trailing characters that would prevent atof from recognizing the non-finite value. Leading/trailing whitespace is acceptable; embedded non-numeric tokens beyond the recognized patterns are not.
+
+  3. Second argument format (parsed but unused)
+  - argv[2] can be any string that atof can parse (finite or non-finite). It is not used in the targeted path selection, but must be present to satisfy argc == 3.
+
+  4. Environmental constraints
+  - No special environment variables are required. The executable must run under an environment where the C standard library’s atof recognizes non-finite tokens (typical on POSIX/GLIBC and many standard C libraries). Locale should not alter recognition of "inf"/"nan" tokens; ensure default "C" or a locale compatible with these tokens.
+
+  5. Mathematical relation driving the branch
+  - Let x be the double value produced by atof(argv[1]). The branch condition derives ix from the high 32 bits of x’s IEEE-754 binary representation (hx = HI(x); ix = hx & 0x7fffffff). The check "ix >= 0x7ff00000" is true iff x is non-finite (IEEE-754 exponent field all 1s): either Infinity (fraction all zeros) or NaN (fraction non-zero). Therefore, require x to be Infinity or NaN.
+
+  6. Side-condition: avoid early return from earlier branch
+  - Before reaching the targeted branch, the function checks if |x| <= 0x3fe921fb worth of threshold corresponding to small magnitudes (approximately |x| <= π/4). To ensure execution proceeds past the early-return at lines 74-77 and reaches the non-finite check, x must be non-finite; any Infinity/NaN automatically bypasses numeric comparisons in a way that keeps control flow advancing to the non-finite check (the ix calculation precedes magnitude comparisons used by that earlier branch, and the branch we target is evaluated after the first small-magnitude check).
+
+  Summary of required input
+  - Provide argv[1] such that atof(argv[1]) yields an IEEE-754 non-finite double (Infinity or NaN). Maintain exactly two arguments total beyond program name (argc == 3).
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+      import os
+
+      try:
+          # Ensure a locale that recognizes 'inf'/'nan' tokens
+          env = os.environ.copy()
+          env["LC_ALL"] = "C"
+          env["LANG"] = "C"
+
+          # Use a single shell command string that yields exactly two arguments:
+          # argv[1] = "inf" (non-finite), argv[2] = "0" (parseable, unused)
+          cmd = "./temp_executable inf 0"
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+              env=env,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // e_rem_pio2.c (181 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+
+  #ifdef __STDC__
+  static const int two_over_pi[] = {
+  #else
+  static int two_over_pi[] = {
+  #endif
+  0xA2F983, 0x6E4E44, 0x1529FC, 0x2757D1, 0xF534DD, 0xC0DB62, 
+  0x95993C, 0x439041, 0xFE5163, 0xABDEBB, 0xC561B7, 0x246E3A, 
+  0x424DD2, 0xE00649, 0x2EEA09, 0xD1921C, 0xFE1DEB, 0x1CB129, 
+  0xA73EE8, 0x8235F5, 0x2EBB44, 0x84E99C, 0x7026B4, 0x5F7E41, 
+  0x3991D6, 0x398353, 0x39F49C, 0x845F8B, 0xBDF928, 0x3B1FF8, 
+  0x97FFDE, 0x05980F, 0xEF2F11, 0x8B5A0A, 0x6D1F6D, 0x367ECF, 
+  0x27CB09, 0xB74F46, 0x3F669E, 0x5FEA2D, 0x7527BA, 0xC7EBE5, 
+  0xF17B3D, 0x0739F7, 0x8A5292, 0xEA6BFB, 0x5FB11F, 0x8D5D08, 
+  0x560330, 0x46FC7B, 0x6BABF0, 0xCFBC20, 0x9AF436, 0x1DA9E3, 
+  0x91615E, 0xE61B08, 0x659985, 0x5F14A0, 0x68408D, 0xFFD880, 
+  0x4D7327, 0x310606, 0x1556CA, 0x73A8C9, 0x60E27B, 0xC08C6B, 
+  };
+
+  #ifdef __STDC__
+  static const int npio2_hw[] = {
+  #else
+  static int npio2_hw[] = {
+  #endif
+  0x3FF921FB, 0x400921FB, 0x4012D97C, 0x401921FB, 0x401F6A7A, 0x4022D97C,
+  0x4025FDBB, 0x402921FB, 0x402C463A, 0x402F6A7A, 0x4031475C, 0x4032D97C,
+  0x40346B9C, 0x4035FDBB, 0x40378FDB, 0x403921FB, 0x403AB41B, 0x403C463A,
+  0x403DD85A, 0x403F6A7A, 0x40407E4C, 0x4041475C, 0x4042106C, 0x4042D97C,
+  0x4043A28C, 0x40446B9C, 0x404534AC, 0x4045FDBB, 0x4046C6CB, 0x40478FDB,
+  0x404858EB, 0x404921FB,
+  };
+
+
+
+  #ifdef __STDC__
+  static const double 
+  #else
+  static double 
+  #endif
+  zero =  0.00000000000000000000e+00, 
+  half =  5.00000000000000000000e-01, 
+  two24 =  1.67772160000000000000e+07, 
+  invpio2 =  6.36619772367581382433e-01, 
+  pio2_1  =  1.57079632673412561417e+00, 
+  pio2_1t =  6.07710050650619224932e-11, 
+  pio2_2  =  6.07710050630396597660e-11, 
+  pio2_2t =  2.02226624879595063154e-21, 
+  pio2_3  =  2.02226624871116645580e-21, 
+  pio2_3t =  8.47842766036889956997e-32; 
+
+  #ifdef __STDC__
+  	int __ieee754_rem_pio2(double x, double *y)
+  #else
+  	int __ieee754_rem_pio2(x,y)
+  	double x,y[];
+  #endif
+  {
+  	double z,w,t,r,fn;
+  	double tx[3];
+  	int e0,i,j,nx,n,ix,hx;
+
+  	hx = __HI(x);		
+  	ix = hx&0x7fffffff;
+  	
+  	if(ix<=0x3fe921fb)   
+  	    {
+  		y[0] = x; y[1] = 0; return 0;
+  	    }
+  	
+  	// Unexecuted code (lines 79-103) removed. Its line cov: 0/25 (0%)
+  	
+  	fprintf(stderr, "\n");
+  	if(ix<=0x413921fb) { 
+  	    // Unexecuted code (lines 107-144) removed. Its line cov: 0/37 (0%)
+  	fprintf(stderr, "\n");
+  	__LO(z) = __LO(x);
+  	e0 	= (ix>>20)-1046;	
+  	__HI(z) = ix - (e0<<20);
+  	for(i=0;i<2;i++) {
+  		// Unexecuted code (lines 151-152) removed. Its line cov: 0/2 (0%)
+  	}
+  	fprintf(stderr, "\n");
+  	tx[2] = z;
+  	nx = 3;
+  	while(tx[nx-1]==zero) nx--;	
+  	n  =  __kernel_rem_pio2(tx,y,e0,nx,2,two_over_pi);
+  	if(hx<0) {
+  		// Unexecuted code (line 160) removed. Its line cov: 0/1 (0%)
+  	}
+  	// Unexecuted code (line 162) removed. Its line cov: 0/1 (0%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      if (argc != 3) {
+          // Unexecuted code (lines 170-171) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      double a1 = 0.0;
+
+      int r = __ieee754_rem_pio2(a0, &a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [e_rem_pio2.c] enter main 1
+  [e_rem_pio2.c] enter main 3
+  [e_rem_pio2.c] enter main 4
+  [e_rem_pio2.c] enter __ieee754_rem_pio2 1
+  [e_rem_pio2.c] enter __ieee754_rem_pio2 2
+  [e_rem_pio2.c] enter __ieee754_rem_pio2 3
+  [e_rem_pio2.c] enter main 5
+execution_summary: |2+
+
+  ```c
+  // e_rem_pio2.c (181 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+
+  #ifdef __STDC__
+  static const int two_over_pi[] = {
+  #else
+  static int two_over_pi[] = {
+  #endif
+  0xA2F983, 0x6E4E44, 0x1529FC, 0x2757D1, 0xF534DD, 0xC0DB62, 
+  0x95993C, 0x439041, 0xFE5163, 0xABDEBB, 0xC561B7, 0x246E3A, 
+  0x424DD2, 0xE00649, 0x2EEA09, 0xD1921C, 0xFE1DEB, 0x1CB129, 
+  0xA73EE8, 0x8235F5, 0x2EBB44, 0x84E99C, 0x7026B4, 0x5F7E41, 
+  0x3991D6, 0x398353, 0x39F49C, 0x845F8B, 0xBDF928, 0x3B1FF8, 
+  0x97FFDE, 0x05980F, 0xEF2F11, 0x8B5A0A, 0x6D1F6D, 0x367ECF, 
+  0x27CB09, 0xB74F46, 0x3F669E, 0x5FEA2D, 0x7527BA, 0xC7EBE5, 
+  0xF17B3D, 0x0739F7, 0x8A5292, 0xEA6BFB, 0x5FB11F, 0x8D5D08, 
+  0x560330, 0x46FC7B, 0x6BABF0, 0xCFBC20, 0x9AF436, 0x1DA9E3, 
+  0x91615E, 0xE61B08, 0x659985, 0x5F14A0, 0x68408D, 0xFFD880, 
+  0x4D7327, 0x310606, 0x1556CA, 0x73A8C9, 0x60E27B, 0xC08C6B, 
+  };
+
+  #ifdef __STDC__
+  static const int npio2_hw[] = {
+  #else
+  static int npio2_hw[] = {
+  #endif
+  0x3FF921FB, 0x400921FB, 0x4012D97C, 0x401921FB, 0x401F6A7A, 0x4022D97C,
+  0x4025FDBB, 0x402921FB, 0x402C463A, 0x402F6A7A, 0x4031475C, 0x4032D97C,
+  0x40346B9C, 0x4035FDBB, 0x40378FDB, 0x403921FB, 0x403AB41B, 0x403C463A,
+  0x403DD85A, 0x403F6A7A, 0x40407E4C, 0x4041475C, 0x4042106C, 0x4042D97C,
+  0x4043A28C, 0x40446B9C, 0x404534AC, 0x4045FDBB, 0x4046C6CB, 0x40478FDB,
+  0x404858EB, 0x404921FB,
+  };
+
+
+
+  #ifdef __STDC__
+  static const double 
+  #else
+  static double 
+  #endif
+  zero =  0.00000000000000000000e+00, 
+  half =  5.00000000000000000000e-01, 
+  two24 =  1.67772160000000000000e+07, 
+  invpio2 =  6.36619772367581382433e-01, 
+  pio2_1  =  1.57079632673412561417e+00, 
+  pio2_1t =  6.07710050650619224932e-11, 
+  pio2_2  =  6.07710050630396597660e-11, 
+  pio2_2t =  2.02226624879595063154e-21, 
+  pio2_3  =  2.02226624871116645580e-21, 
+  pio2_3t =  8.47842766036889956997e-32; 
+
+  #ifdef __STDC__
+  	int __ieee754_rem_pio2(double x, double *y)
+  #else
+  	int __ieee754_rem_pio2(x,y)
+  	double x,y[];
+  #endif
+  {
+  	double z,w,t,r,fn;
+  	double tx[3];
+  	int e0,i,j,nx,n,ix,hx;
+
+  	hx = __HI(x);		
+  	ix = hx&0x7fffffff;
+  	
+  	if(ix<=0x3fe921fb)   
+  	    {
+  		y[0] = x; y[1] = 0; return 0;
+  	    }
+  	
+  	// Unexecuted code (lines 79-103) removed. Its line cov: 0/25 (0%)
+  	
+  	fprintf(stderr, "\n");
+  	if(ix<=0x413921fb) { 
+  	    // Unexecuted code (lines 107-144) removed. Its line cov: 0/37 (0%)
+  	fprintf(stderr, "\n");
+  	__LO(z) = __LO(x);
+  	e0 	= (ix>>20)-1046;	
+  	__HI(z) = ix - (e0<<20);
+  	for(i=0;i<2;i++) {
+  		// Unexecuted code (lines 151-152) removed. Its line cov: 0/2 (0%)
+  	}
+  	fprintf(stderr, "\n");
+  	tx[2] = z;
+  	nx = 3;
+  	while(tx[nx-1]==zero) nx--;	
+  	n  =  __kernel_rem_pio2(tx,y,e0,nx,2,two_over_pi);
+  	if(hx<0) {
+  		// Unexecuted code (line 160) removed. Its line cov: 0/1 (0%)
+  	}
+  	// Unexecuted code (line 162) removed. Its line cov: 0/1 (0%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      if (argc != 3) {
+          // Unexecuted code (lines 170-171) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      double a1 = 0.0;
+
+      int r = __ieee754_rem_pio2(a0, &a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [e_rem_pio2.c] enter main 1
+  [e_rem_pio2.c] enter main 3
+  [e_rem_pio2.c] enter main 4
+  [e_rem_pio2.c] enter __ieee754_rem_pio2 1
+  [e_rem_pio2.c] enter __ieee754_rem_pio2 2
+  [e_rem_pio2.c] enter __ieee754_rem_pio2 3
+  [e_rem_pio2.c] enter main 5

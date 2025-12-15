@@ -1,0 +1,395 @@
+id: 3
+src_id: 0
+create_time: '2025-12-14 15:39:16.190'
+time_taken: 407
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: true
+newly_covered_lines: 1
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.77596000
+    call_cnt: 3
+    latency: 81.09s
+    input_tokens: 14267
+    output_tokens: 8177
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.59382000
+      call_cnt: 2
+      latency: 65.77s
+      input_tokens: 10956
+      output_tokens: 6245
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10734000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.42510000
+      call_cnt: 1
+      latency: 52.21s
+      input_tokens: 5367
+      output_tokens: 5222
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.06138000
+      call_cnt: 1
+      latency: 13.56s
+      input_tokens: 5589
+      output_tokens: 1023
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.18214000
+      call_cnt: 1
+      latency: 15.31s
+      input_tokens: 3311
+      output_tokens: 1932
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.06622000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.11592000
+      call_cnt: 1
+      latency: 15.31s
+      input_tokens: 3311
+      output_tokens: 1932
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (hp < 0x00200000) -> false (take the else-block) in e_remainder.c:__ieee754_remainder
+target_file_lines: e_remainder.c:63-64
+target_lines_content: |-
+  	    p_half = 0.5*p;
+  	    if(x>p_half) {
+justification: This else branch (lines 63-69) has 0/7 (0%) historical coverage, indicating
+  no tests have exercised the normal-divisor path beyond earlier early-returns. Reaching
+  it requires avoiding the exact-equality early return and ensures execution through
+  a larger, currently untested block, yielding more coverage than smaller 0/1 branches.
+  It is reachable via command-line numeric inputs parsed by atof, which our harness
+  can vary.
+target_path_constraint: |-
+  Inputs are two command-line arguments, both strings parsed as double-precision floating-point numbers (IEEE-754 binary64) by atof.
+
+  Chronological constraints to reach the target branch (the else arm of `if (hp < 0x00200000)` in __ieee754_remainder):
+
+  1) Invocation shape
+  - The program must be executed with exactly three argv entries (program name plus two arguments): argc == 3. This is already ensured by the harness but remains a precondition.
+
+  2) Argument parseability
+  - argv[1] and argv[2] must each be valid decimal or scientific-notation textual representations that atof parses into finite double values a0 (x) and a1 (p).
+  - Do not use representations that produce NaN or Infinity (e.g., "nan", "inf", overflow magnitudes), and do not use non-numeric text.
+
+  3) Denominator not zero (to avoid the (hp|lp)==0 branch) 
+  - a1 ≠ 0.0 exactly. The textual representation must not parse to +0.0 or -0.0.
+
+  4) Avoid NaN/Inf checks (to bypass the (hx>=0x7ff00000) || (hp>=0x7ff00000 && ((hp-0x7ff00000)|lp)!=0) branch)
+  - Both a0 and a1 must be finite (not NaN, not ±Inf). This is implied by step 2 but listed explicitly.
+
+  5) Force the pre-remainder fmod path to execute but not short-circuit to exact equality
+  - Ensure that |a1| > 2^(-1022) (a1 is a normal, not subnormal, double) AND |a1| >= 2^(-1022) implies hp >= 0x00100000. This satisfies hp >= 0x00200000 only if |a1| ≥ 2^(-1021).
+  - To guarantee taking the else arm (hp < 0x00200000 is false), require |a1| ≥ 2^(-1021). In decimal terms, choose a1 such that its magnitude is at least 2^(-1021) ≈ 1.1125369292536e-307, and still a normal (not subnormal) value. Any typical nonzero decimal like 1.0 satisfies this.
+
+  6) Avoid the exact-equality early return
+  - Prevent (x, p) from being exactly equal in both high and low 32-bit words: not (x == ±p with identical bit patterns except sign). Concretely, ensure that a0 is not exactly equal to ±a1 (bitwise equality), for example by making a0/a1 not exactly 1.0 or -1.0 at the binary64 level. State as constraint: a0 ≠ a1 and a0 ≠ -a1 when represented as IEEE-754 binary64 after atof parsing.
+
+  7) Ensure the initial reduction executes without degenerate outcomes
+  - The code executes x = fmod(x, p+p) when |p| is not extremely large; to keep behavior defined and avoid the (hx-hp)|(lx-lp) == 0 check afterwards evaluating true due to exact equality, ensure that after reduction x' = fmod(a0, 2*a1) is not exactly equal in magnitude to a1 with identical binary64 representation. Practically: Avoid a0 values that are exact odd multiples of a1. Constraint: a0 / a1 ∉ {…, -3, -1, 1, 3, …} as exact integers in binary64.
+
+  8) Core branch condition for the target
+  - With a1 chosen as in (5) (|a1| ≥ 2^(-1021), i.e., normal and not tiny), its high 32-bit word hp satisfies hp ≥ 0x00200000, so (hp < 0x00200000) is false, taking the else branch.
+
+  Summary of constraints in concise form:
+  - argc == 3
+  - a0 = atof(argv[1]) is finite
+  - a1 = atof(argv[2]) is finite and a1 ≠ ±0.0
+  - |a1| ≥ 2^(-1021) (normal double with exponent field ≥ 1 and not tiny; ensures hp ≥ 0x00200000)
+  - a0 ≠ a1 and a0 ≠ -a1 (avoid exact equality early return)
+  - a0 / a1 is not an exact odd integer in binary64 (to avoid equality after modulo reduction)
+  - All numbers are representable in IEEE-754 binary64 via standard C atof parsing
+selected_cnt: 1
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Chosen concrete inputs:
+      # a0 = 3.25, a1 = 2.0
+      # Rationale:
+      # - Both parse as finite IEEE-754 doubles via atof
+      # - a1 != +/-0.0 and |a1| >= 2^(-1021) (2.0 is normal and large enough)
+      # - a0 != a1 and a0 != -a1
+      # - a0/a1 = 1.625, not an exact odd integer, avoiding degenerate modulo outcomes
+
+      try:
+          cmd = "./temp_executable 3.25 2.0"
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // e_remainder.c (93 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double zero = 0.0;
+  #else
+  static double zero = 0.0;
+  #endif
+
+
+  #ifdef __STDC__
+  	double __ieee754_remainder(double x, double p)
+  #else
+  	double __ieee754_remainder(x,p)
+  	double x,p;
+  #endif
+  {
+  	int hx,hp;
+  	unsigned sx,lx,lp;
+  	double p_half;
+
+  	hx = __HI(x);		
+  	lx = __LO(x);		
+  	hp = __HI(p);		
+  	lp = __LO(p);		
+  	sx = hx&0x80000000;
+  	hp &= 0x7fffffff;
+  	hx &= 0x7fffffff;
+
+      
+  	if((hp|lp)==0) {
+  		// Unexecuted code (line 38) removed. Its line cov: 1/1 (100%)
+  	}
+  	if((hx>=0x7ff00000)||			
+  	  ((hp>=0x7ff00000)&&			
+  	  (((hp-0x7ff00000)|lp)!=0))) {
+  	    // Unexecuted code (line 43) removed. Its line cov: 0/1 (0%)
+  	}
+
+
+  	if (hp<=0x7fdfffff) {
+  		x = __ieee754_fmod(x,p+p);
+  	}
+  	if (((hx-hp)|(lx-lp))==0) {
+  		return zero*x;
+  	}
+  	// Unexecuted code (lines 53-54) removed. Its line cov: 2/2 (100%)
+  	if (hp<0x00200000) {
+  	    // Unexecuted code (lines 56-61) removed. Its line cov: 5/6 (83%)
+  	} else {
+  	    // Unexecuted code (lines 63-69) removed. Its line cov: 0/7 (0%)
+  	}
+  	// Unexecuted code (lines 71-72) removed. Its line cov: 2/2 (100%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+
+      if (argc != 3) {
+          // Unexecuted code (lines 82-83) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = __ieee754_remainder(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [e_remainder.c] enter main 3
+  [e_remainder.c] enter __ieee754_remainder 1
+  [e_remainder.c] enter __ieee754_remainder 4
+  [e_remainder.c] enter __ieee754_remainder 6
+  [e_remainder.c] enter __ieee754_remainder 7
+  [e_remainder.c] enter __ieee754_remainder 8
+  [e_remainder.c] enter __ieee754_remainder 9
+  [e_remainder.c] enter __ieee754_remainder 13
+execution_summary: |2+
+
+  ```c
+  // e_remainder.c (93 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double zero = 0.0;
+  #else
+  static double zero = 0.0;
+  #endif
+
+
+  #ifdef __STDC__
+  	double __ieee754_remainder(double x, double p)
+  #else
+  	double __ieee754_remainder(x,p)
+  	double x,p;
+  #endif
+  {
+  	int hx,hp;
+  	unsigned sx,lx,lp;
+  	double p_half;
+
+  	hx = __HI(x);		
+  	lx = __LO(x);		
+  	hp = __HI(p);		
+  	lp = __LO(p);		
+  	sx = hx&0x80000000;
+  	hp &= 0x7fffffff;
+  	hx &= 0x7fffffff;
+
+      
+  	if((hp|lp)==0) {
+  		// Unexecuted code (line 38) removed. Its line cov: 1/1 (100%)
+  	}
+  	if((hx>=0x7ff00000)||			
+  	  ((hp>=0x7ff00000)&&			
+  	  (((hp-0x7ff00000)|lp)!=0))) {
+  	    // Unexecuted code (line 43) removed. Its line cov: 0/1 (0%)
+  	}
+
+
+  	if (hp<=0x7fdfffff) {
+  		x = __ieee754_fmod(x,p+p);
+  	}
+  	if (((hx-hp)|(lx-lp))==0) {
+  		// Unexecuted code (line 51) removed. Its line cov: 1/1 (100%)
+  	}
+  	x  = fabs(x);
+  	p  = fabs(p);
+  	if (hp<0x00200000) {
+  	    if(x+x>p) {
+  		x-=p;
+  		if(x+x>=p) {
+  			x -= p;
+  		}
+  	    }
+  	} else {
+  	    // Unexecuted code (lines 63-69) removed. Its line cov: 0/7 (0%)
+  	}
+  	__HI(x) ^= sx;
+  	return x;
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+
+      if (argc != 3) {
+          // Unexecuted code (lines 82-83) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = __ieee754_remainder(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [e_remainder.c] enter main 3
+  [e_remainder.c] enter __ieee754_remainder 1
+  [e_remainder.c] enter __ieee754_remainder 4
+  [e_remainder.c] enter __ieee754_remainder 5

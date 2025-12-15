@@ -1,0 +1,412 @@
+id: 1
+src_id: 0
+create_time: '2025-12-14 14:00:24.290'
+time_taken: 261
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: true
+newly_covered_lines: 14
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $1.49466000
+    call_cnt: 4
+    latency: 151.34s
+    input_tokens: 21483
+    output_tokens: 17750
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $1.29722000
+      call_cnt: 3
+      latency: 128.84s
+      input_tokens: 18760
+      output_tokens: 15367
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.11262000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.30388000
+      call_cnt: 1
+      latency: 25.24s
+      input_tokens: 5631
+      output_tokens: 2917
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.48316000
+      call_cnt: 1
+      latency: 46.43s
+      input_tokens: 6443
+      output_tokens: 5824
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.39756000
+      call_cnt: 1
+      latency: 57.18s
+      input_tokens: 6686
+      output_tokens: 6626
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.19744000
+      call_cnt: 1
+      latency: 22.50s
+      input_tokens: 2723
+      output_tokens: 2383
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05446000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.14298000
+      call_cnt: 1
+      latency: 22.50s
+      input_tokens: 2723
+      output_tokens: 2383
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (hx < 0x3FF0A2B2) -> true in e_exp.c::__ieee754_exp
+target_file_lines: e_exp.c:63-63
+target_lines_content: "\t\thi = x-ln2HI[xsb]; lo=ln2LO[xsb]; k = 1-xsb-xsb;"
+justification: This inner branch of the moderate-|x| path in __ieee754_exp has zero
+  historical coverage (line 63 is marked '-' in the requested code and the trace indicates
+  it was not executed). Reaching it exercises the core range-reduction logic for exp(x)
+  when |x| is between about 0.3466 and ~1.04, which is central to the algorithm and
+  likely to unlock downstream computations (e.g., polynomial approximation and scaling).
+  It is reachable with the existing harness, which passes one floating-point argument,
+  and will improve coverage within the algorithm’s most common input range.
+target_path_constraint: |-
+  Chronological, self-contained constraints to reach: if (hx < 0x3FF0A2B2) -> true inside __ieee754_exp
+
+  1. Process invocation and argument count:
+  - The program must be executed such that it receives exactly one command-line argument after the executable name. In C terms, main must see argc == 2 and argv[1] present.
+
+  2. Argument format and parsing:
+  - argv[1] must be a text string that C’s atof can parse as a finite double-precision floating-point number.
+  - Disallow special tokens or encodings that produce non-finite values: argv[1] must not represent NaN (e.g., "nan", "NaN") or infinity (e.g., "inf", "infinity", signed variants), and must not overflow so that atof yields an infinite value.
+  - The string may contain optional leading/trailing whitespace and an optional leading sign; these are acceptable to atof.
+
+  3. Numeric range constraints on the parsed value (call it a0):
+  - Use IEEE-754 double semantics. Let |a0| denote the absolute value of the parsed double.
+  - Avoid the very-large-magnitude path: |a0| < 709.782712893384 (this ensures the check hx >= 0x40862E42 is false and bypasses overflow/underflow handling).
+  - Enter the moderate-magnitude path: |a0| > 0.34657359027997264 (approximately ln(2)/2), ensuring hx > 0x3FD62E42.
+  - Select the inner branch target: |a0| < 1.0397207708399179, ensuring hx < 0x3FF0A2B2.
+  - Use strict inequalities ("<" and ">"): a0 values exactly equal to the numeric bounds must be avoided to prevent boundary-case behavior.
+
+  These constraints guarantee the execution reaches the inner branch body guarded by (hx < 0x3FF0A2B2) within the moderate-|x| case of __ieee754_exp, thereby executing the code line(s) inside that branch.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Chosen concrete input:
+      # argv[1] = "0.9" satisfies all constraints:
+      # - Exactly one argument after program name
+      # - Finite double, not NaN/Inf
+      # - |0.9| = 0.9 which is:
+      #   > 0.34657359027997264 (ln(2)/2) and < 1.0397207708399179, and < 709.782712893384
+      cmd = "./temp_executable 0.9"
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // e_exp.c (110 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double
+  #else
+  static double
+  #endif
+  one	= 1.0,
+  halF[2]	= {0.5,-0.5,},
+  huge	= 1.0e+300,
+  twom1000= 9.33263618503218878990e-302,     
+  o_threshold=  7.09782712893383973096e+02,  
+  u_threshold= -7.45133219101941108420e+02,  
+  ln2HI[2]   ={ 6.93147180369123816490e-01,  
+  	     -6.93147180369123816490e-01,},
+  ln2LO[2]   ={ 1.90821492927058770002e-10,  
+  	     -1.90821492927058770002e-10,},
+  invln2 =  1.44269504088896338700e+00, 
+  P1   =  1.66666666666666019037e-01, 
+  P2   = -2.77777777770155933842e-03, 
+  P3   =  6.61375632143793436117e-05, 
+  P4   = -1.65339022054652515390e-06, 
+  P5   =  4.13813679705723846039e-08; 
+
+
+  #ifdef __STDC__
+  	double __ieee754_exp(double x)	
+  #else
+  	double __ieee754_exp(x)	
+  	double x;
+  #endif
+  {
+  	double y,hi,lo,c,t;
+  	int k,xsb;
+  	unsigned hx;
+
+  	hx  = __HI(x);	
+  	xsb = (hx>>31)&1;		
+  	hx &= 0x7fffffff;		
+
+      
+  	if(hx >= 0x40862E42) {			
+              // Unexecuted code (lines 50-57) removed. Its line cov: 0/8 (0%)
+
+      
+  	if(hx > 0x3fd62e42) {		 
+  	fprintf(stderr, "\n");
+  	    if(hx < 0x3FF0A2B2) {	
+  		// Unexecuted code (line 63) removed. Its line cov: 0/1 (0%)
+  	    } else {
+  		// Unexecuted code (lines 65-68) removed. Its line cov: 0/4 (0%)
+  	    }
+  	    // Unexecuted code (line 70) removed. Its line cov: 0/1 (0%)
+  	} 
+  	else if(hx < 0x3e300000)  {	
+  	    if(huge+x>one) return one+x;
+  	}
+  	else {
+  	    // Unexecuted code (line 76) removed. Its line cov: 0/1 (0%)
+  	}
+
+      
+  	// Unexecuted code (lines 80-83) removed. Its line cov: 0/4 (0%)
+  	if(k >= -1021) {
+  	    // Unexecuted code (lines 85-86) removed. Its line cov: 0/2 (0%)
+  	} else {
+  	    // Unexecuted code (lines 88-89) removed. Its line cov: 0/2 (0%)
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+
+      if (argc != 2) {
+          // Unexecuted code (lines 100-101) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = __ieee754_exp(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [e_exp.c] enter main 3
+  [e_exp.c] enter __ieee754_exp 1
+  [e_exp.c] enter __ieee754_exp 2
+  [e_exp.c] enter __ieee754_exp 4
+
+  [e_exp.c] enter __ieee754_exp 7
+  [e_exp.c] enter __ieee754_exp 8
+  [e_exp.c] enter __ieee754_exp 11
+execution_summary: |2+
+
+  ```c
+  // e_exp.c (110 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double
+  #else
+  static double
+  #endif
+  one	= 1.0,
+  halF[2]	= {0.5,-0.5,},
+  huge	= 1.0e+300,
+  twom1000= 9.33263618503218878990e-302,     
+  o_threshold=  7.09782712893383973096e+02,  
+  u_threshold= -7.45133219101941108420e+02,  
+  ln2HI[2]   ={ 6.93147180369123816490e-01,  
+  	     -6.93147180369123816490e-01,},
+  ln2LO[2]   ={ 1.90821492927058770002e-10,  
+  	     -1.90821492927058770002e-10,},
+  invln2 =  1.44269504088896338700e+00, 
+  P1   =  1.66666666666666019037e-01, 
+  P2   = -2.77777777770155933842e-03, 
+  P3   =  6.61375632143793436117e-05, 
+  P4   = -1.65339022054652515390e-06, 
+  P5   =  4.13813679705723846039e-08; 
+
+
+  #ifdef __STDC__
+  	double __ieee754_exp(double x)	
+  #else
+  	double __ieee754_exp(x)	
+  	double x;
+  #endif
+  {
+  	double y,hi,lo,c,t;
+  	int k,xsb;
+  	unsigned hx;
+
+  	hx  = __HI(x);	
+  	xsb = (hx>>31)&1;		
+  	hx &= 0x7fffffff;		
+
+      
+  	if(hx >= 0x40862E42) {			
+              if(hx>=0x7ff00000) {
+  		// Unexecuted code (lines 51-53) removed. Its line cov: 0/3 (0%)
+  	    }
+  	    if(x > o_threshold) return huge*huge; 
+  	    if(x < u_threshold) return twom1000*twom1000; 
+  	}
+
+      
+  	if(hx > 0x3fd62e42) {		 
+  	fprintf(stderr, "\n");
+  	    if(hx < 0x3FF0A2B2) {	
+  		// Unexecuted code (line 63) removed. Its line cov: 0/1 (0%)
+  	    } else {
+  		k  = (int)(invln2*x+halF[xsb]);
+  		t  = k;
+  		hi = x - t*ln2HI[0];	
+  		lo = t*ln2LO[0];
+  	    }
+  	    x  = hi - lo;
+  	} 
+  	else if(hx < 0x3e300000)  {	
+  	    // Unexecuted code (line 73) removed. Its line cov: 1/1 (100%)
+  	}
+  	else {
+  	    // Unexecuted code (line 76) removed. Its line cov: 0/1 (0%)
+  	}
+
+      
+  	t  = x*x;
+  	c  = x - t*(P1+t*(P2+t*(P3+t*(P4+t*P5))));
+  	if(k==0) 	return one-((x*c)/(c-2.0)-x); 
+  	else 		y = one-((lo-(x*c)/(2.0-c))-hi);
+  	if(k >= -1021) {
+  	    // Unexecuted code (lines 85-86) removed. Its line cov: 0/2 (0%)
+  	} else {
+  	    // Unexecuted code (lines 88-89) removed. Its line cov: 0/2 (0%)
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+
+      if (argc != 2) {
+          // Unexecuted code (lines 100-101) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = __ieee754_exp(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [e_exp.c] enter main 3
+  [e_exp.c] enter __ieee754_exp 1
+  [e_exp.c] enter __ieee754_exp 9

@@ -1,0 +1,283 @@
+id: 6
+src_id: 5
+create_time: '2025-12-14 18:50:35.903'
+time_taken: 623
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.69392000
+    call_cnt: 3
+    latency: 71.49s
+    input_tokens: 12940
+    output_tokens: 7252
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.49384000
+      call_cnt: 2
+      latency: 53.66s
+      input_tokens: 10115
+      output_tokens: 4859
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.09908000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.35894000
+      call_cnt: 1
+      latency: 44.60s
+      input_tokens: 4954
+      output_tokens: 4262
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03582000
+      call_cnt: 1
+      latency: 9.06s
+      input_tokens: 5161
+      output_tokens: 597
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.20008000
+      call_cnt: 1
+      latency: 17.82s
+      input_tokens: 2825
+      output_tokens: 2393
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05650000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.14358000
+      call_cnt: 1
+      latency: 17.82s
+      input_tokens: 2825
+      output_tokens: 2393
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (argc != 3) -> false in s_ldexp.c:main
+target_file_lines: s_ldexp.c:34-35
+target_lines_content: |-
+  	double a0 = atof(argv[1]);
+  	int a1 = atoi(argv[2]);
+justification: The only unexecuted path in this run is the argc==3 path after the
+  argument-count guard in main. While historical coverage shows 100% for the guarded
+  block (lines 34-38), there are no other lower-coverage or zero-coverage branches
+  visible in this program. Reaching this branch is essential to exercise the program’s
+  primary logic (including code paths that would invoke or relate to ldexp). It represents
+  a different execution path from the current run, which returned early due to argc!=3.
+target_path_constraint: |-
+  Chronological, external-input constraints to reach: if (argc != 3) -> false in main (i.e., argc == 3).
+
+  1) Process invocation (command line):
+  - The program must be launched with exactly two user-supplied arguments in addition to argv[0] (the program path). Formally: argc == 3.
+  - Neither argument may be omitted or merged; they must be separated by at least one whitespace character recognized by the system’s command-line parser.
+  - If the harness uses a shell, ensure proper quoting so that each of the two arguments is passed as a single argv element (no unintended word splitting). Avoid empty arguments created by quoting anomalies unless the OS still counts them as distinct argv entries.
+
+  2) Environment and execution context:
+  - The executable must be directly invocable and located at the specified path used by the harness.
+  - No environment variables need to be set for this branch, but the working directory and permissions must allow the executable to run.
+
+  3) Argument value format requirements (conservative to avoid early failures in the later, unshown logic):
+  - Provide arguments that the later code is likely to parse as numbers (because ldexp(value, exp) typically expects a floating-point value and an integer exponent).
+  - Constraint relationships (without fixing concrete values):
+    a) First argument should lexically represent a floating-point number in the C locale (e.g., optional sign, digits with optional decimal point and/or exponent part). This ensures strtod-like parsing succeeds.
+    b) Second argument should lexically represent a valid C integer (optional leading sign, followed by decimal digits) to satisfy strtol/atoi-style parsing.
+  - The strings must not contain NUL bytes before the end, to avoid truncation, and should be representable in the process locale (UTF-8 or ASCII is safe).
+
+  4) Error-avoidance constraints (to ensure we do not re-take the argc!=3 early-exit path and to reduce chances of subsequent parsing errors):
+  - Do not pass flags or combined tokens that the shell could interpret (e.g., unbalanced quotes, redirections) unless correctly quoted so that exactly two argv entries reach main.
+  - Avoid whitespace-only arguments; if used, they must be quoted such that they arrive as distinct argv entries and still satisfy the numeric lexical constraints above.
+
+  Sufficient condition summary:
+  - Invoke the program so that main receives three arguments total (argv[0], argv[1], argv[2]).
+  - argv[1] is a valid floating-point literal; argv[2] is a valid decimal integer literal. This will make (argc != 3) evaluate to false and proceed to the next (previously unexecuted) code region.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import os
+      import signal
+      import subprocess
+      import shlex
+
+      # Concrete arguments to satisfy argc == 3 and parsing constraints:
+      # argv[1]: valid floating-point literal; argv[2]: valid integer literal
+      float_arg = "3.14159"
+      int_arg = "2"
+      exe_path = "./temp_executable"
+
+      # Ensure the executable exists and is runnable
+      if not os.path.exists(exe_path):
+          raise FileNotFoundError(f"Executable not found at {exe_path}")
+      if not os.access(exe_path, os.X_OK):
+          raise PermissionError(f"Executable is not executable: {exe_path}")
+
+      # Use shell=True with a properly quoted command string so exactly two argv entries reach main
+      cmd = f"{shlex.quote(exe_path)} {shlex.quote(float_arg)} {shlex.quote(int_arg)}"
+
+      try:
+          result = subprocess.run(
+              cmd,
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // s_ldexp.c (39 lines total)
+
+
+
+
+  #include "fdlibm.h"
+  #include <errno.h>
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double ldexp(double value, int exp)
+  #else
+  	double ldexp(value, exp)
+  	double value; int exp;
+  #endif
+  {
+  	// Unexecuted code (lines 16-23) removed. Its line cov: 8/8 (100%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	if (argc != 3) {
+  		printf("Usage: %s <arg> <arg>\n", argv[0]);
+  		return 1;
+  	}
+  	// Unexecuted code (lines 34-38) removed. Its line cov: 5/5 (100%)
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [s_ldexp.c] enter main 1
+  [s_ldexp.c] enter main 3
+  [s_ldexp.c] enter main 4
+  [s_ldexp.c] enter ldexp 1
+  [s_ldexp.c] enter ldexp 3
+  [s_ldexp.c] enter ldexp 4
+  [s_ldexp.c] enter ldexp 6
+  [s_ldexp.c] enter main 5
+execution_summary: |2+
+
+  ```c
+  // s_ldexp.c (39 lines total)
+
+
+
+
+  #include "fdlibm.h"
+  #include <errno.h>
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double ldexp(double value, int exp)
+  #else
+  	double ldexp(value, exp)
+  	double value; int exp;
+  #endif
+  {
+  	if(!finite(value)||value==0.0) {
+  		// Unexecuted code (line 17) removed. Its line cov: 1/1 (100%)
+  	}
+  	value = scalbn(value,exp);
+  	if(!finite(value)||value==0.0) {
+  		// Unexecuted code (line 21) removed. Its line cov: 1/1 (100%)
+  	}
+  	return value;
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	if (argc != 3) {
+  		// Unexecuted code (lines 31-32) removed. Its line cov: 2/2 (100%)
+  	}
+  	double a0 = atof(argv[1]);
+  	int a1 = atoi(argv[2]);
+  	double r = ldexp(a0, a1);
+  	printf("%f\n", r);
+  	return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # We must violate the argc == 3 check. Invoke the executable with no user arguments,
+      # so the shell parses only the program name, yielding argc == 1.
+      try:
+          result = subprocess.run(
+              ["./temp_executable"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          raise e
+src_execution_trace: |
+  [s_ldexp.c] enter main 1
+  [s_ldexp.c] enter main 2

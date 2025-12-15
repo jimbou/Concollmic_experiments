@@ -1,0 +1,361 @@
+id: 2
+src_id: 0
+create_time: '2025-12-14 18:22:41.611'
+time_taken: 398
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $1.19272000
+    call_cnt: 4
+    latency: 138.07s
+    input_tokens: 20768
+    output_tokens: 12956
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.96596000
+      call_cnt: 3
+      latency: 107.43s
+      input_tokens: 17686
+      output_tokens: 10204
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10694000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.37208000
+      call_cnt: 1
+      latency: 34.82s
+      input_tokens: 5347
+      output_tokens: 4197
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.43894000
+      call_cnt: 1
+      latency: 60.99s
+      input_tokens: 6013
+      output_tokens: 5207
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.04800000
+      call_cnt: 1
+      latency: 11.62s
+      input_tokens: 6326
+      output_tokens: 800
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.22676000
+      call_cnt: 1
+      latency: 30.63s
+      input_tokens: 3082
+      output_tokens: 2752
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.06164000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.16512000
+      call_cnt: 1
+      latency: 30.63s
+      input_tokens: 3082
+      output_tokens: 2752
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: 'In s_floor.c: floor(double x) — take the inner else block of `if (j0
+  < 20) { if (j0 < 0) { ... } else { /* target */ } }` with the early-return check
+  `if(((i0&i)|i1)==0)` evaluating to false, so lines 36-41 execute'
+target_file_lines: s_floor.c:39-40
+target_lines_content: |-
+  		    if(i0<0) i0 += (0x00100000)>>j0;
+  		    i0 &= (~i); i1=0;
+justification: This block (lines 36-41) has 0/6 (0%) historical coverage. It represents
+  the core rounding path for magnitudes 1 ≤ |x| < 2^20 with a non-integer value, which
+  is a common and important case for floor. Reaching it will exercise logic that masks
+  fractional bits and, for negatives, adjusts by one ulp before masking. It is fully
+  reachable via the current harness by changing the single numeric command-line argument.
+target_path_constraint: |-
+  Goal: Execute s_floor.c: floor(double x) in the path where (1) j0 = exponent(x)−1023 satisfies 0 ≤ j0 < 20, (2) x is not already an integer (so the early return at lines 37/48 is NOT taken), and (3) reach lines 36–41 within the inner else of the j0<20 case.
+
+  Harness/Invocation constraints (chronological):
+  1) Process invocation via shell is fixed by the harness. The executable is run with exactly one command-line argument that is parsed as a C double using atof(argv[1]). Ensure only one argument is provided containing a valid finite decimal representation of a double precision floating-point number x.
+
+  2) Finiteness and non-NaN: x must be a finite number and not NaN nor ±Inf. (Required to ensure the huge+x>0.0 guard behaves normally and to avoid the j0==0x400 branch.)
+
+  3) Magnitude range to select the j0<20 branch but not the j0<0 sub-branch:
+     - Let e be the unbiased binary exponent of x (i.e., floor(log2(|x|)) for normalized values).
+     - Require 0 ≤ e < 20. Equivalently in real numbers: 1 ≤ |x| < 2^20.
+     - This guarantees j0 = e satisfies 0 ≤ j0 < 20, so control flows into the inner else block at lines 36–41.
+
+  4) Non-integer requirement to avoid the early return (line 37):
+     - x must not be an exact integer in IEEE-754 double representation. That is, the fractional part of x is non-zero.
+     - Formally: there does not exist an integer k such that x = k exactly as a double.
+     - Equivalently: x mod 1 ≠ 0 in reals AND x is representable with a non-zero fraction field relative to its current exponent.
+
+  5) huge+x>0.0 guard is true:
+     - With x finite and |x| ≪ 1.0e300, the condition huge + x > 0.0 is true. No extra constraint beyond step 2 is needed.
+
+  6) No special-casing due to sign for the chosen subpath (lines 39–41 also execute for both signs):
+     - Both positive and negative non-integer x with 1 ≤ |x| < 2^20 will proceed past the early-return and enter the block guarded by huge+x>0.0. For x < 0, line 39 adds a small unit before masking; for x > 0, line 39 is skipped by the if(i0<0). To guarantee execution of lines 39–40, allow either sign. To specifically witness line 39 execution (i0<0), additionally require x < 0. To witness only line 40 for positive, require x > 0.
+
+  7) Exclude subnormal/zero cases:
+     - Already implied by step 3 since |x| ≥ 1.
+
+  Summary SMT-style constraints (x is a 64-bit IEEE-754 finite double interpreted as real for predicates):
+     - finite(x) ∧ ¬NaN(x) ∧ ¬isInf(x)
+     - 1 ≤ |x| < 2^20
+     - frac(x) ≠ 0  (where frac(x) = x − roundTowardZero(x))
+     - Optional to force line 39: x < 0; Optional to skip it: x > 0.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Chosen concrete input:
+      # x = -1.5
+      # Justification:
+      # - Finite, not NaN/Inf
+      # - |x| = 1.5 satisfies 1 <= |x| < 2^20, hence 0 <= j0 < 20
+      # - Not an exact integer (fractional part != 0), so early return is avoided
+      # - Negative sign ensures the i0<0 branch (line 39) is taken inside the j0<20 inner else
+      cmd = "./temp_executable -1.5"
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, return stderr captured before timeout and return code -SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // s_floor.c (82 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double huge = 1.0e300;
+  #else
+  static double huge = 1.0e300;
+  #endif
+
+  #ifdef __STDC__
+  	double floor(double x)
+  #else
+  	double floor(x)
+  	double x;
+  #endif
+  {
+  	int i0,i1,j0;
+  	unsigned i,j;
+  	i0 =  __HI(x);
+  	i1 =  __LO(x);
+  	j0 = ((i0>>20)&0x7ff)-0x3ff;
+  	if(j0<20) {
+  	    if(j0<0) { 	
+  		if(huge+x>0.0) {
+  		    if(i0>=0) {i0=i1=0;} 
+  		    else if(((i0&0x7fffffff)|i1)!=0)
+  			{ i0=0xbff00000;i1=0;}
+  		}
+  	    } else {
+  		// Unexecuted code (lines 36-41) removed. Its line cov: 0/6 (0%)
+  	    }
+  	} else if (j0>51) {
+  	    // Unexecuted code (lines 44-45) removed. Its line cov: 0/2 (0%)
+  	} else {
+  	    // Unexecuted code (lines 47-59) removed. Its line cov: 0/13 (0%)
+  	}
+  	__HI(x) = i0;
+  	__LO(x) = i1;
+  	return x;
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 72-73) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = floor(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [s_floor.c] enter main 3
+  [s_floor.c] enter main 4
+  [s_floor.c] enter floor 1
+  [s_floor.c] enter floor 2
+  [s_floor.c] enter floor 3
+  [s_floor.c] enter floor 4
+  [s_floor.c] enter floor 12
+execution_summary: |2+
+
+  ```c
+  // s_floor.c (82 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double huge = 1.0e300;
+  #else
+  static double huge = 1.0e300;
+  #endif
+
+  #ifdef __STDC__
+  	double floor(double x)
+  #else
+  	double floor(x)
+  	double x;
+  #endif
+  {
+  	int i0,i1,j0;
+  	unsigned i,j;
+  	i0 =  __HI(x);
+  	i1 =  __LO(x);
+  	j0 = ((i0>>20)&0x7ff)-0x3ff;
+  	if(j0<20) {
+  	    if(j0<0) { 	
+  		if(huge+x>0.0) {
+  		    if(i0>=0) {i0=i1=0;} 
+  		    else if(((i0&0x7fffffff)|i1)!=0)
+  			{ i0=0xbff00000;i1=0;}
+  		}
+  	    } else {
+  		// Unexecuted code (lines 36-41) removed. Its line cov: 0/6 (0%)
+  	    }
+  	} else if (j0>51) {
+  	    // Unexecuted code (lines 44-45) removed. Its line cov: 0/2 (0%)
+  	} else {
+  	    // Unexecuted code (lines 47-59) removed. Its line cov: 0/13 (0%)
+  	}
+  	__HI(x) = i0;
+  	__LO(x) = i1;
+  	return x;
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 72-73) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = floor(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [s_floor.c] enter main 3
+  [s_floor.c] enter main 4
+  [s_floor.c] enter floor 1
+  [s_floor.c] enter floor 2
+  [s_floor.c] enter floor 3
+  [s_floor.c] enter floor 4
+  [s_floor.c] enter floor 12

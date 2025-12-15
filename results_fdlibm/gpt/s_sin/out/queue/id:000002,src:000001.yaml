@@ -1,0 +1,319 @@
+id: 2
+src_id: 1
+create_time: '2025-12-14 20:14:22.408'
+time_taken: 270
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.69618000
+    call_cnt: 3
+    latency: 77.08s
+    input_tokens: 13482
+    output_tokens: 7109
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.53092000
+      call_cnt: 2
+      latency: 60.08s
+      input_tokens: 10622
+      output_tokens: 5308
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10418000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.39026000
+      call_cnt: 1
+      latency: 48.61s
+      input_tokens: 5209
+      output_tokens: 4700
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03648000
+      call_cnt: 1
+      latency: 11.47s
+      input_tokens: 5413
+      output_tokens: 608
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.16526000
+      call_cnt: 1
+      latency: 17.01s
+      input_tokens: 2860
+      output_tokens: 1801
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05720000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.10806000
+      call_cnt: 1
+      latency: 17.01s
+      input_tokens: 2860
+      output_tokens: 1801
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: else if (ix >= 0x7ff00000) -> true in s_sin.c:sin()
+target_file_lines: s_sin.c:31-31
+target_lines_content: "\t\treturn x-x;"
+justification: 'This branch handles non-finite inputs (NaN/±Inf) and currently has
+  0% historical coverage (line cov: 0/1). Exercising it explores a distinct error/edge
+  path in the libm-style implementation and is reachable by changing only the single
+  command-line argument parsed by atof(), which is allowed under the existing harness
+  modality. It will contribute new coverage in a code region not reached by the current
+  run.'
+target_path_constraint: |-
+  Chronological, input-level constraints to reach else-if (ix >= 0x7ff00000) -> true in s_sin.c:sin():
+
+  1. Command invocation shape:
+     - The program is launched as a single shell command that includes the executable name followed by exactly one argument token. Under the harness, this is equivalent to the C program receiving argc == 2 and argv[1] containing the entire numeric input string.
+
+  2. Argument count constraint:
+     - Exactly one positional argument must be provided to the executable (besides argv[0]), so argc == 2 at program start.
+
+  3. Argument parsing constraint (string to double via atof):
+     - The single argument string must be a representation of a non-finite IEEE-754 double so that atof() returns either +Infinity, -Infinity, or NaN. Examples are NOT provided; instead, specify property-based requirements:
+       a) To obtain +Infinity or -Infinity: the string must denote magnitude overflow beyond the maximum finite double when parsed in base-10 by atof (e.g., an unbounded exponential form causing overflow). The sign (optional '+' or '-') determines polarity.
+       b) To obtain NaN: the string must denote a quiet NaN according to the platform's C library parsing rules (commonly case-insensitive "nan" or with optional payload decorations). The key requirement is that atof() yields a NaN value.
+     - Environment must use a locale where decimal parsing via atof is standard (e.g., '.' as decimal point); but NaN/Inf recognition by atof is typically locale-independent. No thousands separators or extra trailing tokens that would stop parsing early are permitted; the entire string should parse as the intended non-finite value.
+
+  4. Numeric classification constraint to trigger the targeted branch:
+     - Let x be the double produced by atof(argv[1]). Require x to be non-finite: either x is NaN or x is ±Infinity.
+     - Internally, the function reads the high 32-bit word of x (denoted ix = __HI(x)) and masks off the sign bit (ix &= 0x7fffffff). The targeted branch condition ix >= 0x7ff00000 is satisfied exactly for all NaN and ±Infinity inputs, because their exponent field is all ones. Therefore, ensure x has exponent bits of all ones (IEEE-754 double classification as Inf/NaN).
+
+  5. No additional environmental constraints:
+     - Standard I/O must be available (stderr/stdout), but there are no filesystem or permission requirements.
+
+  Sufficient conditions summary:
+  - Provide exactly one argument string such that atof() returns a non-finite double (NaN or ±Infinity). This guarantees ix >= 0x7ff00000 and the else-if branch executes.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Provide a single numeric argument that overflows when parsed as double,
+      # ensuring atof() returns +Infinity. "1e309" exceeds DBL_MAX (~1.797693e308).
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1e309"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // s_sin.c (67 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double sin(double x)
+  #else
+  	double sin(x)
+  	double x;
+  #endif
+  {
+  	double y[2],z=0.0;
+  	int n, ix;
+
+      
+  	ix = __HI(x);
+
+      
+  	ix &= 0x7fffffff;
+  	if(ix <= 0x3fe921fb) {
+  		// Unexecuted code (line 26) removed. Its line cov: 1/1 (100%)
+  	}
+
+      
+  	else if (ix>=0x7ff00000) {
+  		// Unexecuted code (line 31) removed. Its line cov: 0/1 (0%)
+  	}
+
+      
+  	else {
+  	    n = __ieee754_rem_pio2(x,y);
+  	    switch(n&3) {
+  		case 0: 
+  			return  __kernel_sin(y[0],y[1],1);
+  		case 1: 
+  			// Unexecuted code (line 41) removed. Its line cov: 0/1 (0%)
+  		case 2: 
+  			// Unexecuted code (line 43) removed. Its line cov: 0/1 (0%)
+  		default:
+  			// Unexecuted code (line 45) removed. Its line cov: 0/1 (0%)
+  	    }
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+
+      if (argc != 2) {
+          // Unexecuted code (lines 57-58) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = sin(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [s_sin.c] enter main 3
+  [s_sin.c] enter sin 1
+  [s_sin.c] enter sin 2
+execution_summary: |2+
+
+  ```c
+  // s_sin.c (67 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double sin(double x)
+  #else
+  	double sin(x)
+  	double x;
+  #endif
+  {
+  	double y[2],z=0.0;
+  	int n, ix;
+
+      
+  	ix = __HI(x);
+
+      
+  	ix &= 0x7fffffff;
+  	if(ix <= 0x3fe921fb) {
+  		return __kernel_sin(x,z,0);
+  	}
+
+      
+  	else if (ix>=0x7ff00000) {
+  		// Unexecuted code (line 31) removed. Its line cov: 0/1 (0%)
+  	}
+
+      
+  	else {
+  	    // Unexecuted code (lines 36-46) removed. Its line cov: 8/11 (73%)
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+
+      if (argc != 2) {
+          // Unexecuted code (lines 57-58) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = sin(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Use a single numeric argument strictly greater than ~pi/4 to trigger argument reduction in sin()
+      # 0.9 is finite, parses as a valid double, and |0.9| > 0.785398...
+      try:
+          result = subprocess.run(
+              ["./temp_executable 0.9"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          raise e
+src_execution_trace: |2
+
+  [s_sin.c] enter main 3
+  [s_sin.c] enter sin 1
+  [s_sin.c] enter sin 4
+  [s_sin.c] enter sin 5

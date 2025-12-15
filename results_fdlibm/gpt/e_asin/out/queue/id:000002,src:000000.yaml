@@ -1,0 +1,379 @@
+id: 2
+src_id: 0
+create_time: '2025-12-14 13:33:10.373'
+time_taken: 556
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $1.27646000
+    call_cnt: 4
+    latency: 203.45s
+    input_tokens: 21976
+    output_tokens: 13949
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $1.11594000
+      call_cnt: 3
+      latency: 185.96s
+      input_tokens: 19146
+      output_tokens: 12217
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.11252000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.48364000
+      call_cnt: 1
+      latency: 52.94s
+      input_tokens: 5626
+      output_tokens: 5862
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.48576000
+      call_cnt: 1
+      latency: 44.43s
+      input_tokens: 6596
+      output_tokens: 5788
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03402000
+      call_cnt: 1
+      latency: 88.59s
+      input_tokens: 6924
+      output_tokens: 567
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.16052000
+      call_cnt: 1
+      latency: 17.49s
+      input_tokens: 2830
+      output_tokens: 1732
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05660000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.10392000
+      call_cnt: 1
+      latency: 17.49s
+      input_tokens: 2830
+      output_tokens: 1732
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: 'In e_asin.c: __ieee754_asin, take the top-level condition `if (ix
+  >= 0x3ff00000)` -> true, and within that block take `if (((ix - 0x3ff00000) | __LO(x))
+  == 0)` -> false, so execution reaches the NaN-return path `(x - x) / (x - x)`.'
+target_file_lines: e_asin.c:50-50
+target_lines_content: "\t    return (x-x)/(x-x);"
+justification: This path has 0% historical coverage (lines 45-50). It exercises the
+  out-of-domain handling for asin when the input’s magnitude exceeds 1, a critical
+  edge case likely to reveal numerical or error-handling issues. We avoid the previously
+  selected-but-unreached exact-±1 branch and instead target the complementary subpath
+  that returns NaN, ensuring new coverage while staying compatible with the current
+  harness (single numeric CLI argument).
+target_path_constraint: |-
+  Chronological external-input constraints to reach the specified branch in e_asin.c:__ieee754_asin and execute the NaN-return path (x - x) / (x - x):
+
+  1. Command invocation and argument count:
+     - The program must be invoked via a shell command that passes exactly one numeric string argument to the executable, so that at runtime argc == 2 in main. Under the provided harness, this is already satisfied by running the executable with a single token argument.
+
+  2. Argument parseability:
+     - The sole command-line argument must be a valid textual representation of a double-precision (IEEE-754 binary64) floating-point number that atof can parse. The string should contain only the number (no extra tokens), using standard decimal or scientific notation.
+
+  3. Magnitude strictly greater than 1 (to enter ix >= 0x3ff00000 and avoid the exact ±1 sub-branch):
+     - The parsed double value x must satisfy |x| > 1.0. This ensures the top-level condition “ix >= 0x3ff00000” is true (the absolute-value bit pattern at least 1.0), and the equality check for exactly ±1.0 fails.
+
+  4. Not exactly ±1.0 (to take the false branch for ((ix - 0x3ff00000) | __LO(x)) == 0):
+     - x must NOT be exactly +1.0 or -1.0. Equivalently, the IEEE-754 binary64 representation must not equal either of the exact ±1.0 encodings. In string terms, choose a numeric representation that parses to a value strictly greater than 1.0 or strictly less than -1.0, ensuring the low 32 bits (__LO(x)) are not 0 when considered with ix - 0x3ff00000.
+
+  5. Finite value (to execute the NaN computation via (x - x) / (x - x) within the selected block):
+     - x must be a finite number, not NaN and not ±infinity. This guarantees that __ieee754_asin enters the selected block and proceeds to compute (x - x) / (x - x), which yields a NaN result in IEEE-754 arithmetic.
+
+  Outcome guarantee:
+  - Constraints 3–5 together ensure the function takes the ix >= 0x3ff00000 branch, bypasses the exact-±1 sub-branch, and executes line 50: return (x - x) / (x - x).
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Concrete input satisfying constraints:
+      # - Single numeric argument (argc == 2)
+      # - Parseable double by atof
+      # - |x| > 1.0 and x != \u00b11.0
+      # - Finite value
+      # Choose x = 2.0
+      try:
+          result = subprocess.run(
+              ["./temp_executable 2.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred: return captured stderr and -SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # Propagate unexpected execution errors
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // e_asin.c (109 lines total)
+
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double 
+  #else
+  static double 
+  #endif
+  one =  1.00000000000000000000e+00, 
+  huge =  1.000e+300,
+  pio2_hi =  1.57079632679489655800e+00, 
+  pio2_lo =  6.12323399573676603587e-17, 
+  pio4_hi =  7.85398163397448278999e-01, 
+  	
+  pS0 =  1.66666666666666657415e-01, 
+  pS1 = -3.25565818622400915405e-01, 
+  pS2 =  2.01212532134862925881e-01, 
+  pS3 = -4.00555345006794114027e-02, 
+  pS4 =  7.91534994289814532176e-04, 
+  pS5 =  3.47933107596021167570e-05, 
+  qS1 = -2.40339491173441421878e+00, 
+  qS2 =  2.02094576023350569471e+00, 
+  qS3 = -6.88283971605453293030e-01, 
+  qS4 =  7.70381505559019352791e-02; 
+
+  #ifdef __STDC__
+  	double __ieee754_asin(double x)
+  #else
+  	double __ieee754_asin(x)
+  	double x;
+  #endif
+  {
+  	double t,w,p,q,c,r,s;
+  	int hx,ix;
+  	hx = __HI(x);
+  	ix = hx&0x7fffffff;
+  	if(ix>= 0x3ff00000) {		
+  	    // Unexecuted code (lines 45-50) removed. Its line cov: 0/5 (0%)
+  	} else if (ix<0x3fe00000) {	
+  	    if(ix<0x3e400000) {		
+  		if(huge+x>one) 
+  		{
+  		    return x;
+  		}
+  		// Unexecuted code (line 57) removed. Its line cov: 0/1 (0%)
+  	    } else 
+  	    {
+  		// Unexecuted code (lines 60-64) removed. Its line cov: 0/5 (0%)
+  	    }
+  	}
+  	
+  	// Unexecuted code (lines 68-72) removed. Its line cov: 0/5 (0%)
+  	if(ix>=0x3FEF3333) { 	
+  	    // Unexecuted code (lines 74-75) removed. Its line cov: 0/2 (0%)
+  	} else {
+  	    // Unexecuted code (lines 77-83) removed. Its line cov: 0/7 (0%)
+  	}
+  	// Unexecuted code (lines 85-91) removed. Its line cov: 0/7 (0%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      if (argc != 2) {
+          // Unexecuted code (lines 99-100) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = __ieee754_asin(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [e_asin.c] enter main 1
+  [e_asin.c] enter main 3
+  [e_asin.c] enter __ieee754_asin 1
+  [e_asin.c] enter __ieee754_asin 5
+  [e_asin.c] enter __ieee754_asin 6
+  [e_asin.c] enter __ieee754_asin 7
+execution_summary: |2+
+
+  ```c
+  // e_asin.c (109 lines total)
+
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double 
+  #else
+  static double 
+  #endif
+  one =  1.00000000000000000000e+00, 
+  huge =  1.000e+300,
+  pio2_hi =  1.57079632679489655800e+00, 
+  pio2_lo =  6.12323399573676603587e-17, 
+  pio4_hi =  7.85398163397448278999e-01, 
+  	
+  pS0 =  1.66666666666666657415e-01, 
+  pS1 = -3.25565818622400915405e-01, 
+  pS2 =  2.01212532134862925881e-01, 
+  pS3 = -4.00555345006794114027e-02, 
+  pS4 =  7.91534994289814532176e-04, 
+  pS5 =  3.47933107596021167570e-05, 
+  qS1 = -2.40339491173441421878e+00, 
+  qS2 =  2.02094576023350569471e+00, 
+  qS3 = -6.88283971605453293030e-01, 
+  qS4 =  7.70381505559019352791e-02; 
+
+  #ifdef __STDC__
+  	double __ieee754_asin(double x)
+  #else
+  	double __ieee754_asin(x)
+  	double x;
+  #endif
+  {
+  	double t,w,p,q,c,r,s;
+  	int hx,ix;
+  	hx = __HI(x);
+  	ix = hx&0x7fffffff;
+  	if(ix>= 0x3ff00000) {		
+  	    // Unexecuted code (lines 45-50) removed. Its line cov: 0/5 (0%)
+  	} else if (ix<0x3fe00000) {	
+  	    if(ix<0x3e400000) {		
+  		if(huge+x>one) 
+  		{
+  		    return x;
+  		}
+  		// Unexecuted code (line 57) removed. Its line cov: 0/1 (0%)
+  	    } else 
+  	    {
+  		// Unexecuted code (lines 60-64) removed. Its line cov: 0/5 (0%)
+  	    }
+  	}
+  	
+  	// Unexecuted code (lines 68-72) removed. Its line cov: 0/5 (0%)
+  	if(ix>=0x3FEF3333) { 	
+  	    // Unexecuted code (lines 74-75) removed. Its line cov: 0/2 (0%)
+  	} else {
+  	    // Unexecuted code (lines 77-83) removed. Its line cov: 0/7 (0%)
+  	}
+  	// Unexecuted code (lines 85-91) removed. Its line cov: 0/7 (0%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      if (argc != 2) {
+          // Unexecuted code (lines 99-100) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = __ieee754_asin(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [e_asin.c] enter main 1
+  [e_asin.c] enter main 3
+  [e_asin.c] enter __ieee754_asin 1
+  [e_asin.c] enter __ieee754_asin 5
+  [e_asin.c] enter __ieee754_asin 6
+  [e_asin.c] enter __ieee754_asin 7

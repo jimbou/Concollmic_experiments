@@ -1,0 +1,331 @@
+id: 1
+src_id: 0
+create_time: '2025-12-14 21:48:36.488'
+time_taken: 335
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $1.75644000
+    call_cnt: 5
+    latency: 235.49s
+    input_tokens: 23970
+    output_tokens: 21284
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $1.48730000
+      call_cnt: 4
+      latency: 197.61s
+      input_tokens: 21046
+      output_tokens: 17773
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10268000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.28676000
+      call_cnt: 1
+      latency: 42.51s
+      input_tokens: 5134
+      output_tokens: 3040
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    non_tool:
+      model: gpt-5
+      cost: $0.59628000
+      call_cnt: 1
+      latency: 84.17s
+      input_tokens: 5218
+      output_tokens: 8192
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.46132000
+      call_cnt: 1
+      latency: 61.50s
+      input_tokens: 5238
+      output_tokens: 5870
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.04026000
+      call_cnt: 1
+      latency: 9.43s
+      input_tokens: 5456
+      output_tokens: 671
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.26914000
+      call_cnt: 1
+      latency: 37.88s
+      input_tokens: 2924
+      output_tokens: 3511
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05848000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.21066000
+      call_cnt: 1
+      latency: 37.88s
+      input_tokens: 2924
+      output_tokens: 3511
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (!finite(y) && finite(x)) -> true in w_lgamma.c:lgamma
+target_file_lines: w_lgamma.c:23-23
+target_lines_content: '                return __kernel_standard(x,x,15); '
+justification: This branch (domain/pole error handling) has 0% historical coverage
+  per the trace (line 23). Reaching it exercises nontrivial error paths in the libm
+  wrapper that were not executed in the current run, thereby improving coverage and
+  exploring behavior for invalid/pole inputs. It differs significantly from the currently
+  tested normal path (finite result). Although the wrapper may early-return in IEEE
+  mode, this branch remains reachable under a non-IEEE error-handling mode, which
+  can be set via environment/dynamic linking without modifying the harness.
+target_path_constraint: |-
+  Chronological, environment-level and input constraints to reach the target branch in w_lgamma.c:lgamma where (!finite(y) && finite(x)) is true:
+
+  1) Process invocation and arguments
+  - The program must be launched exactly as the harness does: a single command-line argument is provided (argc == 2). The argument string must represent a valid floating-point number in the C locale accepted by atof (e.g., optional leading/trailing whitespace, optional sign, digits with optional decimal point, optional exponent). Denote this parsed double value as X.
+
+  2) Runtime library configuration (disable IEEE short-circuit return path)
+  - The build/runtime must not define _IEEE_LIBM in a way that makes the lgamma wrapper return immediately without checking error conditions. Practically, ensure the lgamma wrapper executes the non-IEEE block that evaluates finite() and _LIB_VERSION. This can be achieved by running with a libm configuration where _LIB_VERSION is not forced to _IEEE_ or where the wrapper is not compiled with _IEEE_LIBM. Environment/dynamic linking should select such a non-IEEE variant.
+
+  3) Libm error-handling mode at runtime
+  - Ensure that _LIB_VERSION at runtime is not equal to _IEEE_. This forces the path past the initial check so that the conditional using finite() is evaluated.
+
+  4) Mathematical relation between input and lgamma result to satisfy the target predicate
+  - Require finite(X) to be true (X is not NaN and not an infinity), and require that the computed y = __ieee754_lgamma_r(X, &signgam) is not finite (i.e., y is NaN or ±Inf). This satisfies (!finite(y) && finite(x)).
+
+  5) Characterization of X values that achieve step 4 without violating other conditions
+  - Select X such that it is a non-NaN, non-infinite real where the gamma function has a pole or causes overflow in the lgamma computation, leading to a non-finite result from __ieee754_lgamma_r. Typical sufficient conditions:
+    a) X is a non-positive integer (…, -3, -2, -1, 0), where the gamma function has simple poles; lgamma at those points is +Inf, hence y is infinite.
+    b) Alternatively, any finite X whose lgamma magnitude overflows the floating-point range, making y ±Inf, also suffices.
+  - Do not choose X that is NaN or ±Inf, because finite(x) must be true.
+
+  6) Files, I/O, and locale
+  - No file I/O is required. Standard C locale assumptions hold for atof so that the decimal separator is a dot (.) to ensure the argument parses as intended.
+
+  In summary (SMT-style over reals/doubles with environment predicates):
+  - Argc == 2
+  - parse_double(argv[1]) = X
+  - isFinite(X) = true
+  - isIEEEWrapperEnabled = false
+  - _LIB_VERSION != _IEEE_
+  - let y = lgamma_ieee_r(X) in isFinite(y) = false
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import os
+      import signal
+      import subprocess
+
+      # We choose X = 0.0 to ensure:
+      # - finite(X) is true (0.0 is finite)
+      # - y = lgamma(X) is +Inf because gamma has a pole at non-positive integers
+      # This satisfies (!finite(y) && finite(x)).
+      # We also enforce the C locale to make atof parse consistently.
+
+      env = os.environ.copy()
+      env["LC_ALL"] = "C"
+      env["LANG"] = "C"
+
+      try:
+          # Keep the same structure (shell=True and single command string),
+          # but substitute the argument with our concrete value 0
+          result = subprocess.run(
+              ["./temp_executable 0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+              env=env,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // w_lgamma.c (49 lines total)
+  #include <stdio.h>
+  #include "fdlibm.h"
+
+  extern int signgam;
+
+  #ifdef __STDC__
+  	double lgamma(double x)
+  #else
+  	double lgamma(x)
+  	double x;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	// Unexecuted code (line 14) removed. Its line cov: 0/1 (0%)
+  #else
+          double y;
+          y = __ieee754_lgamma_r(x,&signgam);
+          if(_LIB_VERSION == _IEEE_) {
+              return y;
+          }
+          if(!finite(y)&&finite(x)) {
+              if(floor(x)==x&&x<=0.0) {
+                  // Unexecuted code (line 23) removed. Its line cov: 0/1 (0%)
+              } else {
+                  // Unexecuted code (line 25) removed. Its line cov: 0/1 (0%)
+              }
+          } else {
+              // Unexecuted code (line 28) removed. Its line cov: 0/1 (0%)
+          }
+  #endif
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 39-40) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = lgamma(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [w_lgamma.c] enter main 3
+  [w_lgamma.c] enter lgamma 2
+  [w_lgamma.c] enter lgamma 3
+execution_summary: |2+
+
+  ```c
+  // w_lgamma.c (49 lines total)
+  #include <stdio.h>
+  #include "fdlibm.h"
+
+  extern int signgam;
+
+  #ifdef __STDC__
+  	double lgamma(double x)
+  #else
+  	double lgamma(x)
+  	double x;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	// Unexecuted code (line 14) removed. Its line cov: 0/1 (0%)
+  #else
+          double y;
+          y = __ieee754_lgamma_r(x,&signgam);
+          if(_LIB_VERSION == _IEEE_) {
+              return y;
+          }
+          if(!finite(y)&&finite(x)) {
+              if(floor(x)==x&&x<=0.0) {
+                  // Unexecuted code (line 23) removed. Its line cov: 0/1 (0%)
+              } else {
+                  // Unexecuted code (line 25) removed. Its line cov: 0/1 (0%)
+              }
+          } else {
+              // Unexecuted code (line 28) removed. Its line cov: 0/1 (0%)
+          }
+  #endif
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 39-40) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = lgamma(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [w_lgamma.c] enter main 3
+  [w_lgamma.c] enter lgamma 2
+  [w_lgamma.c] enter lgamma 3

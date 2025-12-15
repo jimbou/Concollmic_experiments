@@ -1,0 +1,431 @@
+id: 1
+src_id: 0
+create_time: '2025-12-14 21:32:09.951'
+time_taken: 228
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $1.41498000
+    call_cnt: 4
+    latency: 163.57s
+    input_tokens: 19170
+    output_tokens: 17193
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.98490000
+      call_cnt: 3
+      latency: 116.32s
+      input_tokens: 16476
+      output_tokens: 10923
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10700000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.32948000
+      call_cnt: 1
+      latency: 46.49s
+      input_tokens: 5350
+      output_tokens: 3680
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.52220000
+      call_cnt: 1
+      latency: 64.49s
+      input_tokens: 5434
+      output_tokens: 6806
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.02622000
+      call_cnt: 1
+      latency: 5.34s
+      input_tokens: 5692
+      output_tokens: 437
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.43008000
+      call_cnt: 1
+      latency: 47.25s
+      input_tokens: 2694
+      output_tokens: 6270
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05388000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.37620000
+      call_cnt: 1
+      latency: 47.25s
+      input_tokens: 2694
+      output_tokens: 6270
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (fabs(x) > X_TLOSS) -> false in w_j0.c:j0
+target_file_lines: w_j0.c:27-27
+target_lines_content: "\t    return z;"
+justification: This branch (the else part when |x| ≤ X_TLOSS) has 0% historical coverage
+  and lies behind the early-return gate in j0. Exercising it would cover the non-IEEE
+  error-handling path of fdlibm’s Bessel wrapper, which is currently untested. It
+  is reachable without changing the fixed command-line argument by configuring the
+  math library’s runtime mode to non-IEEE (so the early return on _LIB_VERSION ==
+  _IEEE_ is avoided) while keeping the input finite and not NaN. Given the current
+  input value 1.0, once the early-return is disabled, the condition |x| ≤ X_TLOSS
+  will hold, leading to the else branch body with 0% coverage.
+target_path_constraint: |-
+  Chronological, input-level constraints to reach j0’s non-IEEE, |x| ≤ X_TLOSS path (the else body of `if (fabs(x) > X_TLOSS)`):
+
+  1. Process launch and arguments:
+     - The program must be launched with exactly two command-line arguments, where the first is the program path and the second is a single token representing a floating-point number in decimal notation.
+     - Ensure the shell invocation passes exactly one user argument to the process (no extra spaces or additional tokens). This satisfies the `argc == 2` check.
+
+  2. Argument format and value semantics:
+     - The second argument must be a valid textual representation of a finite, non-NaN, non-infinite double-precision number according to the C `atof` parsing rules. Examples of acceptable formats include optional leading sign, digits with optional decimal point, and optional exponent part. The value must parse successfully.
+     - The parsed numeric value x must satisfy: `isnan(x) == false` and `isfinite(x) == true`.
+
+  3. Library/runtime mode constraint:
+     - The math library’s runtime mode must be set to NON-IEEE (i.e., `_LIB_VERSION != _IEEE_`). This disables the early return path inside `j0` so that the subsequent `fabs(x) > X_TLOSS` check is reached. Achieve this through environment or build/runtime configuration such that `_LIB_VERSION` resolves at runtime to a non-IEEE mode. No source changes are allowed.
+
+  4. Threshold-loss check constraint:
+     - The magnitude of x must not exceed the loss-of-significance threshold `X_TLOSS` used by the library. Formally: `fabs(x) ≤ X_TLOSS`.
+
+  These constraints ensure: the program reaches `j0`, does not exit early via the IEEE guard, and evaluates `fabs(x) > X_TLOSS` to false, entering the else body that currently has 0% coverage.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import os
+      import signal
+      import subprocess
+      import tempfile
+      import textwrap
+      import shutil
+
+      # We satisfy the constraints as follows:
+      # 1) Pass exactly one user argument: a valid finite double in decimal form (use "0.5").
+      # 2) Ensure non-IEEE libm runtime mode by interposing the _LIB_VERSION symbol via LD_PRELOAD.
+      #    We build a tiny shared library that defines _LIB_VERSION as a non-IEEE value (2 == _POSIX_).
+      # 3) |x| <= X_TLOSS: choosing a small value like 0.5 trivially satisfies this since X_TLOSS is large.
+
+      # Prepare a temporary directory for the preload library
+      tmpdir = tempfile.mkdtemp(prefix="libm_preload_")
+      src_path = os.path.join(tmpdir, "libm_preload.c")
+      so_path = os.path.join(tmpdir, "libm_preload.so")
+
+      # C source: define _LIB_VERSION as non-IEEE (_POSIX_ == 2). This symbol is used by libm wrappers.
+      # Using a direct definition ensures symbol interposition via LD_PRELOAD so j0 sees non-IEEE mode.
+      c_source = textwrap.dedent(
+          r"""
+          // Interpose libm's runtime mode to NON-IEEE by defining _LIB_VERSION as _POSIX_ (2).
+          // Many libm wrappers check `_LIB_VERSION != _IEEE_` to enable error-handling paths
+          // and avoid early IEEE returns.
+          // We set it to 2, matching fdlibm/glibc's enum ordering:
+          // enum _LIB_VERSION_TYPE { _IEEE_ = -1, _SVID_, _XOPEN_, _POSIX_ };
+          // To avoid header dependencies, we directly use the integer value 2.
+          int _LIB_VERSION = 2; // _POSIX_
+          """
+      )
+
+      # Write the source file
+      with open(src_path, "w", encoding="utf-8") as f:
+          f.write(c_source)
+
+      # Compile the shared object
+      # Requires a C compiler (gcc/clang). We try gcc first; if unavailable, try clang.
+      compiler = shutil.which("gcc") or shutil.which("clang")
+      if compiler is None:
+          raise RuntimeError("No C compiler (gcc/clang) found to build LD_PRELOAD library")
+
+      compile_cmd = [
+          compiler,
+          "-shared",
+          "-fPIC",
+          "-O2",
+          "-o",
+          so_path,
+          src_path,
+      ]
+
+      try:
+          comp = subprocess.run(compile_cmd, capture_output=True, encoding="utf-8", errors="replace")
+          if comp.returncode != 0:
+              raise RuntimeError(
+                  f"Failed to compile preload library: rc={comp.returncode}\nSTDOUT:\n{comp.stdout}\nSTDERR:\n{comp.stderr}"
+              )
+
+          # Set environment to preload our library
+          env = os.environ.copy()
+          env["LD_PRELOAD"] = so_path
+
+          # Choose a valid finite decimal double that satisfies |x| <= X_TLOSS: use 0.5
+          cmd = "./temp_executable 0.5"
+
+          # Execute the original harness structure (shell=True, single token argument)
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+              env=env,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+      except Exception:
+          # Re-raise any other exceptions (e.g., build or execution failures)
+          raise
+      finally:
+          # Best-effort cleanup of temporary files
+          try:
+              if os.path.exists(src_path):
+                  os.remove(src_path)
+              if os.path.exists(so_path):
+                  os.remove(so_path)
+              if os.path.isdir(tmpdir):
+                  os.rmdir(tmpdir)
+          except Exception:
+              # Suppress cleanup errors
+              pass
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // w_j0.c (81 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double j0(double x)		
+  #else
+  	double j0(x)			
+  	double x;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	// Unexecuted code (line 18) removed. Its line cov: 0/1 (0%)
+  #else
+  	double z = __ieee754_j0(x);
+  	if(_LIB_VERSION == _IEEE_ || isnan(x)) {
+  		return z;
+  	}
+  	if(fabs(x)>X_TLOSS) {
+  	        // Unexecuted code (line 25) removed. Its line cov: 0/1 (0%)
+  	} else {
+  	    // Unexecuted code (line 27) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  }
+
+  #ifdef __STDC__
+  	double y0(double x)		
+  #else
+  	double y0(x)			
+  	double x;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	// Unexecuted code (line 40) removed. Its line cov: 0/1 (0%)
+  #else
+  	// Unexecuted code (lines 42-43) removed. Its line cov: 0/2 (0%)
+  	if(_LIB_VERSION == _IEEE_ || isnan(x) ) {
+  		// Unexecuted code (line 45) removed. Its line cov: 0/1 (0%)
+  	}
+          if(x <= 0.0){
+                  if(x==0.0) {
+                      // Unexecuted code (lines 49-50) removed. Its line cov: 0/1 (0%)
+                  } else {
+                      // Unexecuted code (lines 52-53) removed. Its line cov: 0/1 (0%)
+                  }
+          }
+  	if(x>X_TLOSS) {
+  	        // Unexecuted code (line 57) removed. Its line cov: 0/1 (0%)
+  	} else {
+  	    // Unexecuted code (line 59) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+
+      if (argc != 2) {
+          // Unexecuted code (lines 71-72) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = j0(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [w_j0.c] enter main 3
+  [w_j0.c] enter j0 2
+  [w_j0.c] enter j0 3
+execution_summary: |2+
+
+  ```c
+  // w_j0.c (81 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double j0(double x)		
+  #else
+  	double j0(x)			
+  	double x;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	// Unexecuted code (line 18) removed. Its line cov: 0/1 (0%)
+  #else
+  	double z = __ieee754_j0(x);
+  	if(_LIB_VERSION == _IEEE_ || isnan(x)) {
+  		return z;
+  	}
+  	if(fabs(x)>X_TLOSS) {
+  	        // Unexecuted code (line 25) removed. Its line cov: 0/1 (0%)
+  	} else {
+  	    // Unexecuted code (line 27) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  }
+
+  #ifdef __STDC__
+  	double y0(double x)		
+  #else
+  	double y0(x)			
+  	double x;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	// Unexecuted code (line 40) removed. Its line cov: 0/1 (0%)
+  #else
+  	// Unexecuted code (lines 42-43) removed. Its line cov: 0/2 (0%)
+  	if(_LIB_VERSION == _IEEE_ || isnan(x) ) {
+  		// Unexecuted code (line 45) removed. Its line cov: 0/1 (0%)
+  	}
+          if(x <= 0.0){
+                  if(x==0.0) {
+                      // Unexecuted code (lines 49-50) removed. Its line cov: 0/1 (0%)
+                  } else {
+                      // Unexecuted code (lines 52-53) removed. Its line cov: 0/1 (0%)
+                  }
+          }
+  	if(x>X_TLOSS) {
+  	        // Unexecuted code (line 57) removed. Its line cov: 0/1 (0%)
+  	} else {
+  	    // Unexecuted code (line 59) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+
+      if (argc != 2) {
+          // Unexecuted code (lines 71-72) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = j0(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [w_j0.c] enter main 3
+  [w_j0.c] enter j0 2
+  [w_j0.c] enter j0 3

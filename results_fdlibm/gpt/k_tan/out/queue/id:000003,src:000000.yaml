@@ -1,0 +1,396 @@
+id: 3
+src_id: 0
+create_time: '2025-12-14 16:59:20.745'
+time_taken: 500
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: true
+newly_covered_lines: 13
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.79350000
+    call_cnt: 3
+    latency: 144.97s
+    input_tokens: 14517
+    output_tokens: 8386
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.62434000
+      call_cnt: 2
+      latency: 128.97s
+      input_tokens: 11609
+      output_tokens: 6536
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.11432000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.47144000
+      call_cnt: 1
+      latency: 120.20s
+      input_tokens: 5716
+      output_tokens: 5893
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03858000
+      call_cnt: 1
+      latency: 8.77s
+      input_tokens: 5893
+      output_tokens: 643
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.16916000
+      call_cnt: 1
+      latency: 16.01s
+      input_tokens: 2908
+      output_tokens: 1850
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05816000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.11100000
+      call_cnt: 1
+      latency: 16.01s
+      input_tokens: 2908
+      output_tokens: 1850
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (iy == 1) -> false in k_tan.c:__kernel_tan
+target_file_lines: k_tan.c:98-99
+target_lines_content: |-
+  		
+  		
+justification: This else-branch (iy != 1) in __kernel_tan has 0/8 (0%) historical
+  coverage (lines 98-107). It is easily reachable via the third command-line argument
+  and exercises an alternative computation path of the kernel tangent routine (likely
+  reciprocal form), thus contributing significant behavioral coverage without altering
+  the harness.
+target_path_constraint: |-
+  To reach the target branch (iy == 1) -> false within __kernel_tan, configure the external inputs and environment as follows, in chronological order:
+
+  1) Process invocation via shell must pass exactly three command-line arguments to the executable (program name excluded):
+     - The test harness already invokes: "./temp_executable 1.0 1.0 1" with shell=True. Ensure the program is executed with argc == 4 at runtime (program name + 3 args). No modification to harness needed.
+
+  2) Argument types and parsability:
+     - argv[1] must be a valid string representation of a finite double-precision floating-point value (IEEE-754), parsable by C atof(). No NaN/Inf textual forms that atof might accept in some libcs should be used; require a finite numeric to ensure normal computation.
+     - argv[2] must be a valid string representation of a finite double-precision floating-point value, parsable by atof().
+     - argv[3] must be a valid string representation of a base-10 integer, parsable by atoi().
+
+  3) Constraint to select the else-branch (iy != 1):
+     - The integer parsed from argv[3] by atoi() must not equal 1. Formally: atoi(argv[3]) ≠ 1.
+
+  4) Constraints to avoid early special-case returns and keep the main polynomial path valid (not strictly required for branching, but to ensure we actually reach the iy!=1 code block and not trigger removed branches):
+     - Let x := atof(argv[1]) and y := atof(argv[2]). Ensure x is not so tiny that (int)x == 0 holds while also satisfying additional bitwise zero checks that could short-circuit; conservatively require |x| ≥ 2^-26 (approximately 1.49e-8) to avoid the ix < 0x3e300000 small-argument fast-path checks leading to early returns.
+     - Ensure |x| < 1.33 (so that ix < 0x3FE59428 is true) to avoid entering the high-argument handling blocks which have been removed and are fully covered elsewhere. This keeps execution on the common polynomial path leading to the iy-branch.
+     - Ensure y is finite (no NaN/Inf) so that arithmetic proceeds normally.
+
+  5) Summary of required relations (SMT-style):
+     - parse_double(argv1) is finite ∧ parse_double(argv2) is finite ∧ parse_int(argv3) ∈ Z ∧ parse_int(argv3) ≠ 1 ∧ |parse_double(argv1)| ≥ 2^-26 ∧ |parse_double(argv1)| < 1.33.
+
+  No file I/O or environment variables are used; only command-line arguments affect the path. Ensure the process has standard execution privileges so main can read argv and call __kernel_tan.
+selected_cnt: 1
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Concrete values chosen to satisfy constraints:
+      # argv[1] (x) = 0.5 -> finite, |x| >= 2^-26, and |x| < 1.33
+      # argv[2] (y) = 0.5 -> finite
+      # argv[3] (iy) = 2 -> integer != 1
+      # This ensures argc == 4 and the iy != 1 else-branch is taken in __kernel_tan.
+      try:
+          result = subprocess.run(
+              ["./temp_executable 0.5 0.5 2"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // k_tan.c (128 lines total)
+  #pragma ident "@(#)k_tan.c 1.5 04/04/22 SMI"
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  static const double xxx[] = {
+  		 3.33333333333334091986e-01,	
+  		 1.33333333333201242699e-01,	
+  		 5.39682539762260521377e-02,	
+  		 2.18694882948595424599e-02,	
+  		 8.86323982359930005737e-03,	
+  		 3.59207910759131235356e-03,	
+  		 1.45620945432529025516e-03,	
+  		 5.88041240820264096874e-04,	
+  		 2.46463134818469906812e-04,	
+  		 7.81794442939557092300e-05,	
+  		 7.14072491382608190305e-05,	
+  		-1.85586374855275456654e-05,	
+  		 2.59073051863633712884e-05,	
+  	 1.00000000000000000000e+00,	
+  	 7.85398163397448278999e-01,	
+  	 3.06161699786838301793e-17	
+  };
+  #define	one	xxx[13]
+  #define	pio4	xxx[14]
+  #define	pio4lo	xxx[15]
+  #define	T	xxx
+
+
+  double
+  __kernel_tan(double x, double y, int iy) {
+  	double z, r, v, w, s;
+  	int ix, hx;
+
+  	hx = __HI(x);		
+  	ix = hx & 0x7fffffff;			
+  	if (ix < 0x3e300000) {			
+  		if ((int) x == 0) {		
+  			if (((ix | __LO(x)) | (iy + 1)) == 0)
+  			{
+  				// Unexecuted code (line 46) removed. Its line cov: 1/1 (100%)
+  			}
+  			else {
+  				// Unexecuted code (lines 49-63) removed. Its line cov: 0/14 (0%)
+  			}
+  		}
+  	}
+  	if (ix >= 0x3FE59428) {	
+  		// Unexecuted code (lines 68-75) removed. Its line cov: 8/8 (100%)
+  	}
+  	z = x * x;
+  	w = z * z;
+  	
+  	r = T[1] + w * (T[3] + w * (T[5] + w * (T[7] + w * (T[9] +
+  		w * T[11]))));
+  	v = z * (T[2] + w * (T[4] + w * (T[6] + w * (T[8] + w * (T[10] +
+  		w * T[12])))));
+  	s = z * x;
+  	r = y + z * (s * (r + v) + y);
+  	r += T[0] * s;
+  	w = x + r;
+  	if (ix >= 0x3FE59428) {
+  		// Unexecuted code (lines 89-91) removed. Its line cov: 3/3 (100%)
+  	}
+  	if (iy == 1)
+  	{
+  		return w;
+  	}
+  	else {
+  		// Unexecuted code (lines 98-107) removed. Its line cov: 0/8 (0%)
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	if (argc != 4) {
+  		// Unexecuted code (lines 116-117) removed. Its line cov: 0/2 (0%)
+  	}
+
+  	double a0 = atof(argv[1]);
+  	double a1 = atof(argv[2]);
+  	int a2 = atoi(argv[3]);
+
+  	double r = __kernel_tan(a0, a1, a2);
+  	printf("%f\n", r);
+
+  	return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [k_tan.c] enter main 1
+  [k_tan.c] enter main 3
+  [k_tan.c] enter __kernel_tan 1
+  [k_tan.c] enter __kernel_tan 3
+  [k_tan.c] enter __kernel_tan 5
+execution_summary: |2+
+
+  ```c
+  // k_tan.c (128 lines total)
+  #pragma ident "@(#)k_tan.c 1.5 04/04/22 SMI"
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  static const double xxx[] = {
+  		 3.33333333333334091986e-01,	
+  		 1.33333333333201242699e-01,	
+  		 5.39682539762260521377e-02,	
+  		 2.18694882948595424599e-02,	
+  		 8.86323982359930005737e-03,	
+  		 3.59207910759131235356e-03,	
+  		 1.45620945432529025516e-03,	
+  		 5.88041240820264096874e-04,	
+  		 2.46463134818469906812e-04,	
+  		 7.81794442939557092300e-05,	
+  		 7.14072491382608190305e-05,	
+  		-1.85586374855275456654e-05,	
+  		 2.59073051863633712884e-05,	
+  	 1.00000000000000000000e+00,	
+  	 7.85398163397448278999e-01,	
+  	 3.06161699786838301793e-17	
+  };
+  #define	one	xxx[13]
+  #define	pio4	xxx[14]
+  #define	pio4lo	xxx[15]
+  #define	T	xxx
+
+
+  double
+  __kernel_tan(double x, double y, int iy) {
+  	double z, r, v, w, s;
+  	int ix, hx;
+
+  	hx = __HI(x);		
+  	ix = hx & 0x7fffffff;			
+  	if (ix < 0x3e300000) {			
+  		if ((int) x == 0) {		
+  			if (((ix | __LO(x)) | (iy + 1)) == 0)
+  			{
+  				// Unexecuted code (line 46) removed. Its line cov: 1/1 (100%)
+  			}
+  			else {
+  				if (iy == 1)
+  				{
+  					// Unexecuted code (line 51) removed. Its line cov: 0/1 (0%)
+  				}
+  				else {	
+  					double a, t;
+
+  					z = w = x + y;
+  					__LO(z) = 0;
+  					v = y - (z - x);
+  					t = a = -one / w;
+  					__LO(t) = 0;
+  					s = one + t * z;
+  					return t + a * (s + t * v);
+  				}
+  			}
+  		}
+  	}
+  	if (ix >= 0x3FE59428) {	
+  		// Unexecuted code (lines 68-75) removed. Its line cov: 8/8 (100%)
+  	}
+  	// Unexecuted code (lines 77-92) removed. Its line cov: 15/15 (100%)
+  	if (iy == 1)
+  	{
+  		// Unexecuted code (line 95) removed. Its line cov: 1/1 (100%)
+  	}
+  	else {
+  		// Unexecuted code (lines 98-107) removed. Its line cov: 0/8 (0%)
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	if (argc != 4) {
+  		// Unexecuted code (lines 116-117) removed. Its line cov: 0/2 (0%)
+  	}
+
+  	double a0 = atof(argv[1]);
+  	double a1 = atof(argv[2]);
+  	int a2 = atoi(argv[3]);
+
+  	double r = __kernel_tan(a0, a1, a2);
+  	printf("%f\n", r);
+
+  	return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0 1.0 1"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [k_tan.c] enter main 1
+  [k_tan.c] enter main 3
+  [k_tan.c] enter __kernel_tan 1
+  [k_tan.c] enter __kernel_tan 8
+  [k_tan.c] enter __kernel_tan 10

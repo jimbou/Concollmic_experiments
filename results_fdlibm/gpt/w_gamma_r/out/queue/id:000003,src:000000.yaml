@@ -1,0 +1,323 @@
+id: 3
+src_id: 0
+create_time: '2025-12-14 21:28:08.975'
+time_taken: 771
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $1.61080000
+    call_cnt: 5
+    latency: 196.07s
+    input_tokens: 25892
+    output_tokens: 18216
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $1.46352000
+      call_cnt: 4
+      latency: 180.64s
+      input_tokens: 22968
+      output_tokens: 16736
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10274000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.79512000
+      call_cnt: 2
+      latency: 100.95s
+      input_tokens: 10940
+      output_tokens: 9354
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.52546000
+      call_cnt: 1
+      latency: 64.18s
+      input_tokens: 5891
+      output_tokens: 6712
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.04020000
+      call_cnt: 1
+      latency: 15.51s
+      input_tokens: 6137
+      output_tokens: 670
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.14728000
+      call_cnt: 1
+      latency: 15.43s
+      input_tokens: 2924
+      output_tokens: 1480
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05848000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.08880000
+      call_cnt: 1
+      latency: 15.43s
+      input_tokens: 2924
+      output_tokens: 1480
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (!finite(y) && finite(x)) -> true AND if (floor(x) == x && x <=
+  0.0) -> true in w_gamma_r.c:gamma_r
+target_file_lines: w_gamma_r.c:28-30
+target_lines_content: |2-
+                  return __kernel_standard(x,x,41); 
+              } else {
+                  return __kernel_standard(x,x,40); 
+justification: The error-handling path guarded by `if (!finite(y) && finite(x))` and
+  its inner branch for non-positive integers has 0% historical coverage (lines 26-34).
+  Exercising this path will cover the core error handling in fdlibm’s gamma implementation,
+  which is important for robustness (handling poles of Γ at non-positive integers).
+  This branch is reachable via command-line input (the program reads a single floating-point
+  parameter) and appropriate runtime library configuration, without modifying the
+  harness.
+target_path_constraint: |-
+  Chronological, external-input and environment-level constraints to reach: (1) the outer branch `if (!finite(y) && finite(x))` -> true, and (2) the inner branch `if (floor(x) == x && x <= 0.0)` -> true in w_gamma_r.c:gamma_r.
+
+  1. Command invocation format and argument count:
+     - The program must be launched such that the target executable receives exactly one command-line argument representing a floating-point value. The harness uses a shell invocation string, but the executable itself expects: argc == 2 and argv[1] is a parsable numeric string.
+
+  2. Argument parsing requirements:
+     - argv[1] must be a string that atof parses to a finite, exact integer-valued double that is less than or equal to 0.0.
+     - Formally: let x = atof(argv[1]). Constraints:
+       a) finite(x) == true (x is not NaN, not ±Inf).
+       b) floor(x) == x (x is an integer value in double representation).
+       c) x <= 0.0.
+     - This ensures the inner branch condition `floor(x) == x && x <= 0.0` evaluates to true.
+
+  3. Library configuration constraint for branch availability:
+     - The build/runtime must not define the preprocessor macro _IEEE_LIBM. This is already implied by the executed path (lines inside #else were executed). No action required at runtime, but this constraint must hold for the compiled binary.
+
+  4. Behavior of the gamma implementation to trigger the outer branch:
+     - When calling gamma_r(x, &signgamp), the implementation sets y = __ieee754_gamma_r(x, signgamp). For integer x <= 0, the gamma function has a pole, and the IEEE754 gamma routine returns a non-finite value (typically ±Inf or NaN). To satisfy the outer branch, require:
+       d) The math library’s __ieee754_gamma_r for the given x returns a non-finite y (NaN or ±Inf).
+       e) x itself remains finite (reinforced by 2a).
+     - At the input level, this is ensured by constraint 2 (x is a non-positive integer), which places x at a pole of Γ.
+
+  5. Side-effect expectations (for completeness, not additional constraints):
+     - Passing the outer branch leads to the inner classification and then to calling __kernel_standard(x, x, 41) for non-positive integers, per the code. No further external inputs are needed.
+
+  Summary of required external constraints:
+  - Provide a single command-line argument string such that atof(argv[1]) yields a finite, integer-valued double ≤ 0.0.
+  - Ensure the compiled binary is built without defining _IEEE_LIBM, so the non-IEEE error-handling branch is present.
+  - Rely on standard libm behavior where Γ(x) for integer x ≤ 0 is non-finite, making `!finite(y)` true.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # We choose argv[1] = "0" so that:
+      # - atof("0") -> x = 0.0 (finite)
+      # - floor(x) == x and x <= 0.0 -> true
+      # - gamma_r(0, &signgamp) is at a pole, so __ieee754_gamma_r returns non-finite (Inf/NaN),
+      #   making !finite(y) true while finite(x) remains true.
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // w_gamma_r.c (57 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+
+  #ifdef __STDC__
+  	double gamma_r(double x, int *signgamp) 
+  #else
+  	double gamma_r(x,signgamp)              
+          double x; int *signgamp;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	// Unexecuted code (line 19) removed. Its line cov: 0/1 (0%)
+  #else
+          double y;
+          y = __ieee754_gamma_r(x,signgamp);
+          if(_LIB_VERSION == _IEEE_) {
+              return y;
+          }
+          // Unexecuted code (lines 26-34) removed. Its line cov: 0/9 (0%)
+  #endif
+  }             
+
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      if (argc != 2) {
+          // Unexecuted code (lines 44-45) removed. Its line cov: 2/2 (100%)
+      }
+
+      double x = atof(argv[1]);
+      int sign = 0;
+
+      double r = gamma_r(x, &sign);
+
+      printf("result = %f\n", r);
+      printf("signgamp = %d\n", sign);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [w_gamma_r.c] enter main 1
+  [w_gamma_r.c] enter main 3
+  [w_gamma_r.c] enter main 4
+  [w_gamma_r.c] enter gamma_r 2
+  [w_gamma_r.c] enter gamma_r 3
+  [w_gamma_r.c] enter main 5
+  [w_gamma_r.c] enter main 6
+execution_summary: |2+
+
+  ```c
+  // w_gamma_r.c (57 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+
+  #ifdef __STDC__
+  	double gamma_r(double x, int *signgamp) 
+  #else
+  	double gamma_r(x,signgamp)              
+          double x; int *signgamp;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	// Unexecuted code (line 19) removed. Its line cov: 0/1 (0%)
+  #else
+          double y;
+          y = __ieee754_gamma_r(x,signgamp);
+          if(_LIB_VERSION == _IEEE_) {
+              return y;
+          }
+          // Unexecuted code (lines 26-34) removed. Its line cov: 0/9 (0%)
+  #endif
+  }             
+
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      if (argc != 2) {
+          // Unexecuted code (lines 44-45) removed. Its line cov: 2/2 (100%)
+      }
+
+      double x = atof(argv[1]);
+      int sign = 0;
+
+      double r = gamma_r(x, &sign);
+
+      printf("result = %f\n", r);
+      printf("signgamp = %d\n", sign);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [w_gamma_r.c] enter main 1
+  [w_gamma_r.c] enter main 3
+  [w_gamma_r.c] enter main 4
+  [w_gamma_r.c] enter gamma_r 2
+  [w_gamma_r.c] enter gamma_r 3
+  [w_gamma_r.c] enter main 5
+  [w_gamma_r.c] enter main 6

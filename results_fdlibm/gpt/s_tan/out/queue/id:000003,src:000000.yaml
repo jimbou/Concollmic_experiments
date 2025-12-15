@@ -1,0 +1,311 @@
+id: 3
+src_id: 0
+create_time: '2025-12-14 20:28:53.717'
+time_taken: 340
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.61988000
+    call_cnt: 3
+    latency: 59.87s
+    input_tokens: 13255
+    output_tokens: 5913
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.46316000
+      call_cnt: 2
+      latency: 45.75s
+      input_tokens: 10375
+      output_tokens: 4261
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10158000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.32348000
+      call_cnt: 1
+      latency: 37.59s
+      input_tokens: 5079
+      output_tokens: 3626
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03810000
+      call_cnt: 1
+      latency: 8.16s
+      input_tokens: 5296
+      output_tokens: 635
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.15672000
+      call_cnt: 1
+      latency: 14.12s
+      input_tokens: 2880
+      output_tokens: 1652
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05760000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.09912000
+      call_cnt: 1
+      latency: 14.12s
+      input_tokens: 2880
+      output_tokens: 1652
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: else if (ix >= 0x7ff00000) -> true in s_tan.c:tan
+target_file_lines: s_tan.c:31-31
+target_lines_content: "\t\treturn x-x;"
+justification: 'This branch handles NaN/Infinity inputs to tan() and currently has
+  0% historical coverage (the branch body shows “line cov: 0/1 (0%)”). Exercising
+  it will cover a distinct and important numerical edge-case path (non-finite inputs)
+  that is not reached by the current execution. It is reachable via the existing harness
+  by supplying a single command-line argument that atof parses to a non-finite double
+  (NaN or ±Inf), without needing to change the harness structure.'
+target_path_constraint: |-
+  Chronological, external-input constraints to reach s_tan.c:tan branch `else if (ix >= 0x7ff00000)` -> true:
+
+  1. Command invocation format:
+     - The program is launched via a shell with a single argument string. The harness executes: `./temp_executable 1.0` using `shell=True`. This means the OS will parse the command line as a single shell command. To reach the target branch, the effective program invocation must be: `./temp_executable <ARG>` where `<ARG>` is one token supplied to the executable as its first argument.
+     - Ensure exactly one user-supplied argument is passed to the executable at runtime (argc must be 2 in C: program name + one argument). The shell command must be constructed such that no extra tokens are introduced (e.g., no unintended quoting expansion that yields multiple arguments).
+
+  2. Argument parsing requirement:
+     - The program converts the argument string to a double using `atof(argv[1])`. `atof` follows C locale parsing rules: it accepts optional leading/trailing whitespace, an optional sign (+/-), decimal digits, an optional decimal point, an optional exponent part (e/E followed by an optional sign and digits), and certain special case keywords for non-finite values depending on implementation.
+
+  3. Non-finite input requirement (to trigger ix >= 0x7ff00000):
+     - The double value produced by `atof(argv[1])` must be non-finite: either positive infinity, negative infinity, or NaN (Not-a-Number). In IEEE-754 double precision, non-finite values have an exponent field of all ones (0x7ff) and thus the high 32-bit word (ix = __HI(x)) masked with 0x7fffffff is >= 0x7ff00000.
+     - Therefore, constrain `<ARG>` such that `atof(<ARG>)` yields:
+       a) Positive infinity, or
+       b) Negative infinity, or
+       c) NaN.
+
+  4. Shell/locale considerations:
+     - The argument must be a single token that `atof` recognizes as one of the above non-finite values. Avoid characters that the shell would expand or split into multiple arguments unless properly quoted such that the executable still receives a single argv[1] string.
+     - No environment variable or locale changes are required; the default C locale is assumed. The constraint must hold under default parsing rules.
+
+  5. Resulting path effects:
+     - With `a0 = atof(argv[1])` being non-finite, calling `tan(a0)` will enter the branch `else if (ix >= 0x7ff00000)` -> true.
+
+  These constraints focus solely on external inputs (the single command-line argument) and ensure the program follows the path into tan’s non-finite handling branch.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          # Provide a single non-finite argument token recognized by atof/strtod
+          # Using 'inf' ensures atof(argv[1]) yields positive infinity, satisfying ix >= 0x7ff00000
+          result = subprocess.run(
+              ["./temp_executable inf"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // s_tan.c (57 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double tan(double x)
+  #else
+  	double tan(x)
+  	double x;
+  #endif
+  {
+  	double y[2],z=0.0;
+  	int n, ix;
+
+      
+  	ix = __HI(x);
+
+      
+  	ix &= 0x7fffffff;
+  	if(ix <= 0x3fe921fb) {
+  		return __kernel_tan(x,z,1);
+  	}
+
+      
+  	else if (ix>=0x7ff00000) {
+  		// Unexecuted code (line 31) removed. Its line cov: 0/1 (0%)
+  	}
+
+      
+  	else {
+  	    // Unexecuted code (lines 36-37) removed. Its line cov: 2/2 (100%)
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 47-48) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = tan(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [s_tan.c] enter main 3
+  [s_tan.c] enter tan 1
+  [s_tan.c] enter tan 2
+execution_summary: |2+
+
+  ```c
+  // s_tan.c (57 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double tan(double x)
+  #else
+  	double tan(x)
+  	double x;
+  #endif
+  {
+  	double y[2],z=0.0;
+  	int n, ix;
+
+      
+  	ix = __HI(x);
+
+      
+  	ix &= 0x7fffffff;
+  	if(ix <= 0x3fe921fb) {
+  		return __kernel_tan(x,z,1);
+  	}
+
+      
+  	else if (ix>=0x7ff00000) {
+  		// Unexecuted code (line 31) removed. Its line cov: 0/1 (0%)
+  	}
+
+      
+  	else {
+  	    // Unexecuted code (lines 36-37) removed. Its line cov: 2/2 (100%)
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 47-48) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = tan(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [s_tan.c] enter main 3
+  [s_tan.c] enter tan 1
+  [s_tan.c] enter tan 2

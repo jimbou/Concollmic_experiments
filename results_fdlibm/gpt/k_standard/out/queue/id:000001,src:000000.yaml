@@ -1,0 +1,529 @@
+id: 1
+src_id: 0
+create_time: '2025-12-14 16:37:55.369'
+time_taken: 108
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 17
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.70880000
+    call_cnt: 3
+    latency: 81.93s
+    input_tokens: 16039
+    output_tokens: 6467
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.58224000
+      call_cnt: 2
+      latency: 71.84s
+      input_tokens: 13281
+      output_tokens: 5277
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.13068000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.42108000
+      call_cnt: 1
+      latency: 64.01s
+      input_tokens: 6534
+      output_tokens: 4769
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03048000
+      call_cnt: 1
+      latency: 7.82s
+      input_tokens: 6747
+      output_tokens: 508
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.12656000
+      call_cnt: 1
+      latency: 10.09s
+      input_tokens: 2758
+      output_tokens: 1190
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05516000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.07140000
+      call_cnt: 1
+      latency: 10.09s
+      input_tokens: 2758
+      output_tokens: 1190
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: switch (type) -> case 21 in k_standard.c::__kernel_standard (i.e.,
+  execute the body of case 21)
+target_file_lines: k_standard.c:333-334
+target_lines_content: |-
+  		exc.type = OVERFLOW;
+  		exc.name = "pow";
+justification: 'This branch has zero historical coverage: the code block for case
+  21 shows line cov: 0/17 (0%). Taking this case will exercise a distinct error-handling
+  path in the libm kernel dispatcher and cover a relatively large block compared to
+  many other cases, thus contributing meaningfully to overall coverage. It is directly
+  controllable via program input because the case selection depends solely on the
+  third command-line argument (parsed as an integer).'
+target_path_constraint: |-
+  Inputs and environment must satisfy the following to reach k_standard.c::__kernel_standard, switch(type) -> case 21:
+
+  1) Program invocation via shell must provide exactly 4 arguments to main (program name plus three user-supplied arguments): argc == 4. In practice, the test harness already invokes the program with three space-separated arguments, so ensure no quoting/whitespace anomalies that would merge or split arguments.
+
+  2) Argument formats and parsing:
+  - argv[1] must be a syntactically valid decimal floating-point string parsable by atof (C locale decimal point '.') yielding some double value a0. No constraints on magnitude except it must not be NaN text that atof rejects; atof accepts special strings like "inf" or "nan" case-insensitively; these are allowed unless disallowed by downstream logic (not required for reaching the branch).
+  - argv[2] must be a syntactically valid decimal floating-point string parsable by atof yielding some double value a1. Same notes as argv[1].
+  - argv[3] must be a syntactically valid decimal integer string (optionally with leading spaces and an optional leading '+' or '-' sign) parsable by atoi yielding an int value a2.
+
+  3) Case-selection constraint:
+  - The integer parsed from argv[3] by atoi must equal 21 precisely: a2 == 21. This is the only selector used by the switch to enter case 21.
+
+  4) No further environmental constraints are required: __kernel_standard is a pure computation based on the three parsed values; file system, environment variables, and locale should be standard C defaults ('.' as decimal separator). The program writes to stderr/stdout; permissions for these streams must be available.
+
+  5) End-to-end path shape to ensure the branch body executes:
+  - With argc == 4, the early-argument-count error branch in main is bypassed.
+  - atof successfully produces doubles for argv[1] and argv[2].
+  - atoi on argv[3] produces 21, causing __kernel_standard(a0, a1, 21) to be called.
+  - Inside __kernel_standard, the switch dispatches on type==21, entering case 21, thus executing the case 21 body (lines 333-349 in k_standard.c).
+selected_cnt: 2
+successful_generation_cnt: 2
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Concrete inputs chosen to satisfy constraints:
+      # argv[1] = "1.0" (valid decimal float)
+      # argv[2] = "1.0" (valid decimal float)
+      # argv[3] = "21"  (valid decimal integer; atoi == 21)
+      # Invocation via shell ensures exactly three separate arguments after program name -> argc == 4
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0 1.0 21"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # Ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // k_standard.c (654 lines total)
+
+
+
+
+  #include "fdlibm.h"
+  #include <errno.h>
+
+  #ifndef _USE_WRITE
+  #include <stdio.h>			
+  #define	WRITE2(u,v)	fputs(u, stderr)
+  #else	
+  #include <unistd.h>			
+  #define	WRITE2(u,v)	write(2, u, v)
+  #undef fflush
+  #endif	
+
+  static double zero = 0.0;	
+
+
+
+
+  #ifdef __STDC__
+  	double __kernel_standard(double x, double y, int type) 
+  #else
+  	double __kernel_standard(x,y,type) 
+  	double x,y; int type;
+  #endif
+  {
+  	struct exception exc;
+  #ifndef HUGE_VAL	 
+  #define HUGE_VAL inf
+  	double inf = 0.0;
+
+  	__HI(inf) = 0x7ff00000;	
+  #endif
+
+  #ifdef _USE_WRITE
+  	(void) fflush(stdout);
+  #endif
+  	exc.arg1 = x;
+  	exc.arg2 = y;
+  	switch(type) {
+  	    case 1:
+  		exc.type = DOMAIN;
+  		exc.name = "acos";
+  		exc.retval = zero;
+  		if (_LIB_VERSION == _POSIX_)
+  		  errno = EDOM;
+  		else if (!matherr(&exc)) {
+  		  if(_LIB_VERSION == _SVID_) {
+  		    (void) WRITE2("acos: DOMAIN error\n", 19);
+  		  }
+  		  errno = EDOM;
+  		}
+  		break;
+  	    case 2:
+  		// Unexecuted code (lines 57-68) removed. Its line cov: 0/12 (0%)
+  	    case 3:
+  		// Unexecuted code (lines 70-83) removed. Its line cov: 0/14 (0%)
+  	    case 4:
+  		// Unexecuted code (lines 85-96) removed. Its line cov: 0/12 (0%)
+  	    case 5:
+  		// Unexecuted code (lines 98-109) removed. Its line cov: 0/12 (0%)
+  	    case 6:
+  		// Unexecuted code (lines 111-122) removed. Its line cov: 0/12 (0%)
+  	    case 7:
+  		// Unexecuted code (lines 124-132) removed. Its line cov: 0/9 (0%)
+  	    case 8:
+  		// Unexecuted code (lines 134-148) removed. Its line cov: 0/15 (0%)
+  	    case 9:
+  		// Unexecuted code (lines 150-164) removed. Its line cov: 0/15 (0%)
+  	    case 10:
+  		// Unexecuted code (lines 166-180) removed. Its line cov: 0/15 (0%)
+  	    case 11:
+  		// Unexecuted code (lines 182-196) removed. Its line cov: 0/15 (0%)
+  	    case 12:
+  		// Unexecuted code (lines 198-212) removed. Its line cov: 0/15 (0%)
+  	    case 13:
+  		// Unexecuted code (lines 214-228) removed. Its line cov: 0/15 (0%)
+  	    case 14:
+  		// Unexecuted code (lines 230-241) removed. Its line cov: 0/12 (0%)
+  	    case 15:
+  		// Unexecuted code (lines 243-257) removed. Its line cov: 0/15 (0%)
+  	    case 16:
+  		// Unexecuted code (lines 259-273) removed. Its line cov: 0/15 (0%)
+  	    case 17:
+  		// Unexecuted code (lines 275-289) removed. Its line cov: 0/15 (0%)
+  	    case 18:
+  		// Unexecuted code (lines 291-305) removed. Its line cov: 0/15 (0%)
+  	    case 19:
+  		// Unexecuted code (lines 307-321) removed. Its line cov: 0/15 (0%)
+  	    case 20:
+  		// Unexecuted code (lines 323-331) removed. Its line cov: 0/9 (0%)
+  	    case 21:
+  		// Unexecuted code (lines 333-349) removed. Its line cov: 0/17 (0%)
+  	    case 22:
+  		// Unexecuted code (lines 351-359) removed. Its line cov: 0/9 (0%)
+  	    case 23:
+  		// Unexecuted code (lines 361-375) removed. Its line cov: 0/15 (0%)
+  	    case 24:
+  		// Unexecuted code (lines 377-391) removed. Its line cov: 0/15 (0%)
+  	    case 25:
+  		// Unexecuted code (lines 393-404) removed. Its line cov: 0/12 (0%)
+  	    case 26:
+  		// Unexecuted code (lines 406-420) removed. Its line cov: 0/15 (0%)
+              case 27:
+                  // Unexecuted code (lines 422-436) removed. Its line cov: 0/15 (0%)
+              case 28:
+                  // Unexecuted code (lines 438-449) removed. Its line cov: 0/12 (0%)
+              case 29:
+                  // Unexecuted code (lines 451-462) removed. Its line cov: 0/12 (0%)
+              case 30:
+                  // Unexecuted code (lines 464-475) removed. Its line cov: 0/12 (0%)
+              case 31:
+                  // Unexecuted code (lines 477-488) removed. Its line cov: 0/12 (0%)
+  	    case 32:
+  		// Unexecuted code (lines 490-498) removed. Its line cov: 0/9 (0%)
+  	    case 33:
+  		// Unexecuted code (lines 500-508) removed. Its line cov: 0/9 (0%)
+  	    case 34:
+                  // Unexecuted code (lines 510-522) removed. Its line cov: 0/13 (0%)
+  	    case 35:
+                  // Unexecuted code (lines 524-536) removed. Its line cov: 0/13 (0%)
+  	    case 36:
+                  // Unexecuted code (lines 538-550) removed. Its line cov: 0/13 (0%)
+  	    case 37:
+                  // Unexecuted code (lines 552-564) removed. Its line cov: 0/13 (0%)
+  	    case 38:
+                  // Unexecuted code (lines 566-578) removed. Its line cov: 0/13 (0%)
+  	    case 39:
+                  // Unexecuted code (lines 580-592) removed. Its line cov: 0/13 (0%)
+  	    case 40:
+  		// Unexecuted code (lines 594-605) removed. Its line cov: 0/12 (0%)
+  	    case 41:
+  		// Unexecuted code (lines 607-621) removed. Its line cov: 0/15 (0%)
+  	    case 42:
+  		// Unexecuted code (lines 623-631) removed. Its line cov: 0/9 (0%)
+  	}
+  	return exc.retval; 
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 4) {
+          // Unexecuted code (lines 642-643) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      double a1 = atof(argv[2]);
+      int a2 = atoi(argv[3]);
+
+      double r = __kernel_standard(a0, a1, a2);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [k_standard.c] enter main 3
+  [k_standard.c] enter main 4
+  [k_standard.c] enter __kernel_standard 1
+  [k_standard.c] enter __kernel_standard 22
+  [k_standard.c] enter __kernel_standard 44
+execution_summary: |2+
+
+  ```c
+  // k_standard.c (654 lines total)
+
+
+
+
+  #include "fdlibm.h"
+  #include <errno.h>
+
+  #ifndef _USE_WRITE
+  #include <stdio.h>			
+  #define	WRITE2(u,v)	fputs(u, stderr)
+  #else	
+  #include <unistd.h>			
+  #define	WRITE2(u,v)	write(2, u, v)
+  #undef fflush
+  #endif	
+
+  static double zero = 0.0;	
+
+
+
+
+  #ifdef __STDC__
+  	double __kernel_standard(double x, double y, int type) 
+  #else
+  	double __kernel_standard(x,y,type) 
+  	double x,y; int type;
+  #endif
+  {
+  	struct exception exc;
+  #ifndef HUGE_VAL	 
+  #define HUGE_VAL inf
+  	double inf = 0.0;
+
+  	__HI(inf) = 0x7ff00000;	
+  #endif
+
+  #ifdef _USE_WRITE
+  	(void) fflush(stdout);
+  #endif
+  	exc.arg1 = x;
+  	exc.arg2 = y;
+  	switch(type) {
+  	    case 1:
+  		// Unexecuted code (lines 44-55) removed. Its line cov: 12/12 (100%)
+  	    case 2:
+  		// Unexecuted code (lines 57-68) removed. Its line cov: 0/12 (0%)
+  	    case 3:
+  		// Unexecuted code (lines 70-83) removed. Its line cov: 0/14 (0%)
+  	    case 4:
+  		// Unexecuted code (lines 85-96) removed. Its line cov: 0/12 (0%)
+  	    case 5:
+  		// Unexecuted code (lines 98-109) removed. Its line cov: 0/12 (0%)
+  	    case 6:
+  		// Unexecuted code (lines 111-122) removed. Its line cov: 0/12 (0%)
+  	    case 7:
+  		// Unexecuted code (lines 124-132) removed. Its line cov: 0/9 (0%)
+  	    case 8:
+  		// Unexecuted code (lines 134-148) removed. Its line cov: 0/15 (0%)
+  	    case 9:
+  		// Unexecuted code (lines 150-164) removed. Its line cov: 0/15 (0%)
+  	    case 10:
+  		// Unexecuted code (lines 166-180) removed. Its line cov: 0/15 (0%)
+  	    case 11:
+  		// Unexecuted code (lines 182-196) removed. Its line cov: 0/15 (0%)
+  	    case 12:
+  		// Unexecuted code (lines 198-212) removed. Its line cov: 0/15 (0%)
+  	    case 13:
+  		// Unexecuted code (lines 214-228) removed. Its line cov: 0/15 (0%)
+  	    case 14:
+  		// Unexecuted code (lines 230-241) removed. Its line cov: 0/12 (0%)
+  	    case 15:
+  		// Unexecuted code (lines 243-257) removed. Its line cov: 0/15 (0%)
+  	    case 16:
+  		// Unexecuted code (lines 259-273) removed. Its line cov: 0/15 (0%)
+  	    case 17:
+  		// Unexecuted code (lines 275-289) removed. Its line cov: 0/15 (0%)
+  	    case 18:
+  		// Unexecuted code (lines 291-305) removed. Its line cov: 0/15 (0%)
+  	    case 19:
+  		// Unexecuted code (lines 307-321) removed. Its line cov: 0/15 (0%)
+  	    case 20:
+  		// Unexecuted code (lines 323-331) removed. Its line cov: 0/9 (0%)
+  	    case 21:
+  		exc.type = OVERFLOW;
+  		exc.name = "pow";
+  		if (_LIB_VERSION == _SVID_) {
+  		  exc.retval = HUGE;
+  		  y *= 0.5;
+  		  if(x<zero&&rint(y)!=y) exc.retval = -HUGE;
+  		} else {
+  		  exc.retval = HUGE_VAL;
+  		  y *= 0.5;
+  		  if(x<zero&&rint(y)!=y) exc.retval = -HUGE_VAL;
+  		}
+  		if (_LIB_VERSION == _POSIX_)
+  		  errno = ERANGE;
+  		else if (!matherr(&exc)) {
+  			errno = ERANGE;
+  		}
+  		break;
+  	    case 22:
+  		// Unexecuted code (lines 351-359) removed. Its line cov: 0/9 (0%)
+  	    case 23:
+  		// Unexecuted code (lines 361-375) removed. Its line cov: 0/15 (0%)
+  	    case 24:
+  		// Unexecuted code (lines 377-391) removed. Its line cov: 0/15 (0%)
+  	    case 25:
+  		// Unexecuted code (lines 393-404) removed. Its line cov: 0/12 (0%)
+  	    case 26:
+  		// Unexecuted code (lines 406-420) removed. Its line cov: 0/15 (0%)
+              case 27:
+                  // Unexecuted code (lines 422-436) removed. Its line cov: 0/15 (0%)
+              case 28:
+                  // Unexecuted code (lines 438-449) removed. Its line cov: 0/12 (0%)
+              case 29:
+                  // Unexecuted code (lines 451-462) removed. Its line cov: 0/12 (0%)
+              case 30:
+                  // Unexecuted code (lines 464-475) removed. Its line cov: 0/12 (0%)
+              case 31:
+                  // Unexecuted code (lines 477-488) removed. Its line cov: 0/12 (0%)
+  	    case 32:
+  		// Unexecuted code (lines 490-498) removed. Its line cov: 0/9 (0%)
+  	    case 33:
+  		// Unexecuted code (lines 500-508) removed. Its line cov: 0/9 (0%)
+  	    case 34:
+                  // Unexecuted code (lines 510-522) removed. Its line cov: 0/13 (0%)
+  	    case 35:
+                  // Unexecuted code (lines 524-536) removed. Its line cov: 0/13 (0%)
+  	    case 36:
+                  // Unexecuted code (lines 538-550) removed. Its line cov: 0/13 (0%)
+  	    case 37:
+                  // Unexecuted code (lines 552-564) removed. Its line cov: 0/13 (0%)
+  	    case 38:
+                  // Unexecuted code (lines 566-578) removed. Its line cov: 0/13 (0%)
+  	    case 39:
+                  // Unexecuted code (lines 580-592) removed. Its line cov: 0/13 (0%)
+  	    case 40:
+  		// Unexecuted code (lines 594-605) removed. Its line cov: 0/12 (0%)
+  	    case 41:
+  		// Unexecuted code (lines 607-621) removed. Its line cov: 0/15 (0%)
+  	    case 42:
+  		// Unexecuted code (lines 623-631) removed. Its line cov: 0/9 (0%)
+  	}
+  	return exc.retval; 
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 4) {
+          // Unexecuted code (lines 642-643) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      double a1 = atof(argv[2]);
+      int a2 = atoi(argv[3]);
+
+      double r = __kernel_standard(a0, a1, a2);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0 1.0 1"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [k_standard.c] enter main 3
+  [k_standard.c] enter main 4
+  [k_standard.c] enter __kernel_standard 1
+  [k_standard.c] enter __kernel_standard 2
+  [k_standard.c] enter __kernel_standard 44

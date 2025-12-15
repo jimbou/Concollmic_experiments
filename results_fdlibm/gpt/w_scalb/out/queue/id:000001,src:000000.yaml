@@ -1,0 +1,337 @@
+id: 1
+src_id: 0
+create_time: '2025-12-14 22:20:39.667'
+time_taken: 137
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.77818000
+    call_cnt: 3
+    latency: 89.45s
+    input_tokens: 13433
+    output_tokens: 8492
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.57710000
+      call_cnt: 2
+      latency: 61.85s
+      input_tokens: 10615
+      output_tokens: 6080
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10436000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.43884000
+      call_cnt: 1
+      latency: 53.77s
+      input_tokens: 5218
+      output_tokens: 5515
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03390000
+      call_cnt: 1
+      latency: 8.08s
+      input_tokens: 5397
+      output_tokens: 565
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.20108000
+      call_cnt: 1
+      latency: 27.60s
+      input_tokens: 2818
+      output_tokens: 2412
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05636000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.14472000
+      call_cnt: 1
+      latency: 27.60s
+      input_tokens: 2818
+      output_tokens: 2412
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: 'if (!finite(fn)) -> true in w_scalb.c: scalb'
+target_file_lines: w_scalb.c:43-43
+target_lines_content: "\t\terrno = ERANGE;"
+justification: This branch has 0% historical coverage and is directly controlled by
+  an external input (the second command-line argument). Reaching it exercises error
+  handling for a non-finite scaling factor (NaN or Infinity), which is critical numeric-edge
+  behavior and distinct from the currently executed path with finite inputs. It will
+  increase coverage within the math-library wrapper code and may trigger different
+  reporting or handling paths.
+target_path_constraint: |-
+  Goal: Reach the branch in scalb where the check for non-finite second argument evaluates to true: `!finite(fn)`.
+
+  Constraints in chronological execution order:
+
+  1) Process invocation via shell must supply exactly two arguments to the executable (excluding argv[0]). The current harness invokes: `./temp_executable 1.0 1.0` with `shell=True`. Maintain the structure: a single command string that runs the target binary with two space-separated arguments.
+
+  2) Argument count and parsing:
+  - Ensure there are exactly two arguments so that `argc == 3` holds and main proceeds past the argument-count check.
+  - The first argument must parse as a finite double-precision floating-point number (IEEE-754), e.g., not NaN or ±Infinity, so that the path focuses on the second parameter. Formally: `a0 = atof(argv[1])` yields a finite value.
+  - The second argument must parse to a non-finite double. Specifically, when converted by `atof`, it must produce either NaN or Infinity. Formally: `a1 = atof(argv[2])` such that `!finite(a1)` is true.
+
+  3) Platform string-to-double mapping for non-finite values:
+  - Provide a string for argv[2] that the C standard library’s `atof` recognizes as a non-finite value (implementation typically accepts case-insensitive tokens for Infinity or NaN). Do not rely on locale-specific decimal separators.
+  - Examples are not provided, but the token must be one that maps to NaN or Infinity under `atof` per the platform’s libc conventions.
+
+  4) Environmental conditions:
+  - No special environment variables are required. The executable must be present and executable in the working directory, and the process must have permission to execute it.
+
+  5) Numerical relationship conditions for scalb:
+  - None beyond non-finiteness of the second parameter. The first parameter’s value is unrestricted except it should be finite to avoid triggering other earlier exception paths related to x being non-finite; keeping it finite ensures the target branch for non-finite `fn` is reached deterministically.
+
+  6) Summary as SMT-like predicates on inputs:
+  - Let S1, S2 be the two command-line strings following the program name.
+  - ParseDouble(S1) is defined as the result of C `atof(S1)`; ParseDouble(S2) likewise.
+  - Constraints:
+    a) IsFinite(ParseDouble(S1)) = true.
+    b) IsFinite(ParseDouble(S2)) = false.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          # Provide exactly two arguments: first finite, second non-finite
+          # Using 'inf' ensures atof(argv[2]) is non-finite (Infinity) on standard libc implementations
+          cmd = "./temp_executable 1.0 inf"
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred; return any captured stderr and a negative signal code
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # Propagate unexpected errors
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // w_scalb.c (67 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+
+  #include <errno.h>
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  #ifdef _SCALB_INT
+  	double scalb(double x, int fn)		
+  #else
+  	double scalb(double x, double fn)	
+  #endif
+  #else
+  	double scalb(x,fn)			
+  #ifdef _SCALB_INT
+  	double x; int fn;
+  #else
+  	double x,fn;
+  #endif
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	return __ieee754_scalb(x,fn);
+  #else
+  	double z;
+  	z = __ieee754_scalb(x,fn);
+  	if(_LIB_VERSION == _IEEE_) {
+  		return z;
+  	}
+  	if(!(finite(z)||isnan(z))&&finite(x)) {
+  		// Unexecuted code (line 36) removed. Its line cov: 0/1 (0%)
+  	}
+  	if(z==0.0&&z!=x) {
+  		// Unexecuted code (line 39) removed. Its line cov: 0/1 (0%)
+  	} 
+  #ifndef _SCALB_INT
+  	if(!finite(fn)) {
+  		// Unexecuted code (line 43) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  	// Unexecuted code (line 46) removed. Its line cov: 0/1 (0%)
+  #endif 
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 3) {
+          // Unexecuted code (lines 56-57) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = scalb(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [w_scalb.c] enter main 3
+  [w_scalb.c] enter scalb 1
+  [w_scalb.c] enter scalb 2
+execution_summary: |2+
+
+  ```c
+  // w_scalb.c (67 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+
+  #include <errno.h>
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  #ifdef _SCALB_INT
+  	double scalb(double x, int fn)		
+  #else
+  	double scalb(double x, double fn)	
+  #endif
+  #else
+  	double scalb(x,fn)			
+  #ifdef _SCALB_INT
+  	double x; int fn;
+  #else
+  	double x,fn;
+  #endif
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	return __ieee754_scalb(x,fn);
+  #else
+  	double z;
+  	z = __ieee754_scalb(x,fn);
+  	if(_LIB_VERSION == _IEEE_) {
+  		return z;
+  	}
+  	if(!(finite(z)||isnan(z))&&finite(x)) {
+  		// Unexecuted code (line 36) removed. Its line cov: 0/1 (0%)
+  	}
+  	if(z==0.0&&z!=x) {
+  		// Unexecuted code (line 39) removed. Its line cov: 0/1 (0%)
+  	} 
+  #ifndef _SCALB_INT
+  	if(!finite(fn)) {
+  		// Unexecuted code (line 43) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  	// Unexecuted code (line 46) removed. Its line cov: 0/1 (0%)
+  #endif 
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 3) {
+          // Unexecuted code (lines 56-57) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = scalb(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [w_scalb.c] enter main 3
+  [w_scalb.c] enter scalb 1
+  [w_scalb.c] enter scalb 2

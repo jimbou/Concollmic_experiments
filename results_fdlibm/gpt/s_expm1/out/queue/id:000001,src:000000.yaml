@@ -1,0 +1,446 @@
+id: 1
+src_id: 0
+create_time: '2025-12-14 17:58:08.683'
+time_taken: 442
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $2.68564000
+    call_cnt: 6
+    latency: 326.26s
+    input_tokens: 39689
+    output_tokens: 31531
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $2.50692000
+      call_cnt: 5
+      latency: 303.68s
+      input_tokens: 36888
+      output_tokens: 29486
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.11714000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.53612000
+      call_cnt: 1
+      latency: 68.14s
+      input_tokens: 5857
+      output_tokens: 6375
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    non_tool:
+      model: gpt-5
+      cost: $1.29148000
+      call_cnt: 2
+      latency: 155.80s
+      input_tokens: 15382
+      output_tokens: 16384
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.52900000
+      call_cnt: 1
+      latency: 70.80s
+      input_tokens: 7721
+      output_tokens: 6174
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03318000
+      call_cnt: 1
+      latency: 8.94s
+      input_tokens: 7928
+      output_tokens: 553
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.17872000
+      call_cnt: 1
+      latency: 22.59s
+      input_tokens: 2801
+      output_tokens: 2045
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05602000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.12270000
+      call_cnt: 1
+      latency: 22.59s
+      input_tokens: 2801
+      output_tokens: 2045
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (hx >= 0x7ff00000) -> true in s_expm1.c:expm1
+target_file_lines: s_expm1.c:49-51
+target_lines_content: |-
+  		    if(((hx&0xfffff)|__LO(x))!=0) 
+  		         return x+x; 	 
+  		    else return (xsb==0)? x:-1.0;
+justification: 'This branch handles IEEE-754 special inputs (NaN/Infinity) and has
+  0% historical coverage: lines 49-51 are entirely uncovered. Exercising this path
+  verifies correctness for exceptional floating-point inputs and will add new behavior
+  distinct from regular finite inputs. The current harness supplies a single numeric
+  argument; by changing that argument to a NaN/Infinity representation parsable by
+  atof, this branch becomes reachable without modifying the program.'
+target_path_constraint: |-
+  Chronological, external-input-level constraints to reach: if (hx >= 0x7ff00000) -> true in s_expm1.c:expm1
+
+  1) Process invocation (command-line):
+     - The program must be launched with exactly one command-line argument in addition to the executable name: argc == 2.
+     - The single argument must be a string that the C library function atof can parse as a non-finite IEEE-754 double-precision value (NaN or Infinity). Examples include textual forms that standard atof recognizes for Inf/+Inf/-Inf or NaN. Do not rely on locale-specific representations.
+
+  2) Parsing/Conversion requirement:
+     - Let S be argv[1] as a byte string encoded in the platform default encoding (ASCII-compatible). When atof(S) is evaluated, it must yield a non-finite double so that the high 32-bit word of the resulting double has its exponent bits all ones (i.e., the resulting value is either ±Infinity or NaN). This ensures hx >= 0x7ff00000 is true.
+     - The string must not contain leading/trailing characters that prevent atof from recognizing it as a valid non-finite token; optional leading/trailing whitespace is acceptable as long as atof still returns a non-finite double.
+
+  3) Environment assumptions:
+     - No environment variables are required. The process must have permission to run and write to stderr/stdout. No file I/O is involved for this path.
+
+  4) Additional distinctions within the target branch (not required to reach the branch, but acceptable):
+     - If the argument is a quiet/signaling NaN (any NaN payload), the inner condition ((hx & 0xfffff) | __LO(x)) != 0 will be true, selecting the path that returns x + x (i.e., NaN).
+     - If the argument is exactly +Infinity or -Infinity (no NaN payload), the inner condition will be false and the path will return x unchanged for +Infinity or -1.0 for -Infinity due to xsb sign test. Any of these still satisfy hx >= 0x7ff00000 and thus reach the target branch.
+
+  Compact SMT-style summary:
+     - Declare an input string S.
+     - Constraint: atof(S) is a double value d such that isFinite(d) == false, i.e., exponent(d) = 0x7ff.
+     - No further constraints on d’s sign or payload are necessary to reach the target branch.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # We pass exactly one command-line argument that atof recognizes as non-finite (Infinity)
+      # This ensures hx >= 0x7ff00000 in s_expm1.c:expm1
+      try:
+          cmd = "./temp_executable inf"  # single non-finite argument; argc == 2
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, return stderr captured before timeout and indicate killed by SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # Propagate unexpected execution failures
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // s_expm1.c (137 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double
+  #else
+  static double
+  #endif
+  one		= 1.0,
+  huge		= 1.0e+300,
+  tiny		= 1.0e-300,
+  o_threshold	= 7.09782712893383973096e+02,
+  ln2_hi		= 6.93147180369123816490e-01,
+  ln2_lo		= 1.90821492927058770002e-10,
+  invln2		= 1.44269504088896338700e+00,
+  	
+  Q1  =  -3.33333333333331316428e-02, 
+  Q2  =   1.58730158725481460165e-03, 
+  Q3  =  -7.93650757867487942473e-05, 
+  Q4  =   4.00821782732936239552e-06, 
+  Q5  =  -2.01099218183624371326e-07; 
+
+  #ifdef __STDC__
+  	double expm1(double x)
+  #else
+  	double expm1(x)
+  	double x;
+  #endif
+  {
+  	double y,hi,lo,c,t,e,hxs,hfx,r1;
+  	int k,xsb;
+  	unsigned hx;
+
+  	hx  = __HI(x);	
+  	xsb = hx&0x80000000;		
+  	if(xsb==0) y=x; else y= -x;	
+  	hx &= 0x7fffffff;		
+
+      
+  	if(hx >= 0x4043687A) {			
+  	    if(hx >= 0x40862E42) {		
+                  if(hx>=0x7ff00000) {
+  		    // Unexecuted code (lines 49-51) removed. Its line cov: 0/3 (0%)
+  	        }
+  	        // Unexecuted code (line 53) removed. Its line cov: 0/1 (0%)
+  	    }
+  	    // Unexecuted code (lines 55-58) removed. Its line cov: 0/4 (0%)
+  	}
+
+      
+  	if(hx > 0x3fd62e42) {		 
+  	    if(hx < 0x3FF0A2B2) {	
+  		// Unexecuted code (lines 64-67) removed. Its line cov: 0/4 (0%)
+  	    } else {
+  		// Unexecuted code (lines 69-72) removed. Its line cov: 0/4 (0%)
+  	    }
+  	    // Unexecuted code (lines 74-75) removed. Its line cov: 0/2 (0%)
+  	} 
+  	else if(hx < 0x3c900000) {  	
+  	    t = huge+x;	
+  	    return x - (t-(huge+x));	
+  	}
+  	else {
+  	    // Unexecuted code (line 82) removed. Its line cov: 0/1 (0%)
+  	}
+
+      
+  	fprintf(stderr, "\n");
+  	hfx = 0.5*x;
+  	hxs = x*hfx;
+  	r1 = one+hxs*(Q1+hxs*(Q2+hxs*(Q3+hxs*(Q4+hxs*Q5))));
+  	t  = 3.0-r1*hfx;
+  	e  = hxs*((r1-t)/(6.0 - x*t));
+  	if(k==0) return x - (x*e-hxs);		
+  	else {
+  	    fprintf(stderr, "\n");
+  	    e  = (x*(e-c)-c);
+  	    e -= hxs;
+  	    if(k== -1) return 0.5*(x-e)-0.5;
+  	    if(k==1) 
+  	       	if(x < -0.25) return -2.0*(e-(x+0.5));
+  	       	else 	      return  one+2.0*(x-e);
+  	    if (k <= -2 || k>56) {   
+  	        // Unexecuted code (lines 102-104) removed. Its line cov: 0/3 (0%)
+  	    }
+  	    // Unexecuted code (lines 106-116) removed. Its line cov: 0/11 (0%)
+  	}
+  	// Unexecuted code (line 118) removed. Its line cov: 0/1 (0%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 127-128) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = expm1(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [s_expm1.c] enter main 3
+  [s_expm1.c] enter main 4
+  [s_expm1.c] enter expm1 1
+  [s_expm1.c] enter expm1 9
+execution_summary: |2+
+
+  ```c
+  // s_expm1.c (137 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double
+  #else
+  static double
+  #endif
+  one		= 1.0,
+  huge		= 1.0e+300,
+  tiny		= 1.0e-300,
+  o_threshold	= 7.09782712893383973096e+02,
+  ln2_hi		= 6.93147180369123816490e-01,
+  ln2_lo		= 1.90821492927058770002e-10,
+  invln2		= 1.44269504088896338700e+00,
+  	
+  Q1  =  -3.33333333333331316428e-02, 
+  Q2  =   1.58730158725481460165e-03, 
+  Q3  =  -7.93650757867487942473e-05, 
+  Q4  =   4.00821782732936239552e-06, 
+  Q5  =  -2.01099218183624371326e-07; 
+
+  #ifdef __STDC__
+  	double expm1(double x)
+  #else
+  	double expm1(x)
+  	double x;
+  #endif
+  {
+  	double y,hi,lo,c,t,e,hxs,hfx,r1;
+  	int k,xsb;
+  	unsigned hx;
+
+  	hx  = __HI(x);	
+  	xsb = hx&0x80000000;		
+  	if(xsb==0) y=x; else y= -x;	
+  	hx &= 0x7fffffff;		
+
+      
+  	if(hx >= 0x4043687A) {			
+  	    if(hx >= 0x40862E42) {		
+                  if(hx>=0x7ff00000) {
+  		    // Unexecuted code (lines 49-51) removed. Its line cov: 0/3 (0%)
+  	        }
+  	        // Unexecuted code (line 53) removed. Its line cov: 0/1 (0%)
+  	    }
+  	    // Unexecuted code (lines 55-58) removed. Its line cov: 0/4 (0%)
+  	}
+
+      
+  	if(hx > 0x3fd62e42) {		 
+  	    if(hx < 0x3FF0A2B2) {	
+  		// Unexecuted code (lines 64-67) removed. Its line cov: 0/4 (0%)
+  	    } else {
+  		// Unexecuted code (lines 69-72) removed. Its line cov: 0/4 (0%)
+  	    }
+  	    // Unexecuted code (lines 74-75) removed. Its line cov: 0/2 (0%)
+  	} 
+  	else if(hx < 0x3c900000) {  	
+  	    t = huge+x;	
+  	    return x - (t-(huge+x));	
+  	}
+  	else {
+  	    // Unexecuted code (line 82) removed. Its line cov: 0/1 (0%)
+  	}
+
+      
+  	fprintf(stderr, "\n");
+  	hfx = 0.5*x;
+  	hxs = x*hfx;
+  	r1 = one+hxs*(Q1+hxs*(Q2+hxs*(Q3+hxs*(Q4+hxs*Q5))));
+  	t  = 3.0-r1*hfx;
+  	e  = hxs*((r1-t)/(6.0 - x*t));
+  	if(k==0) return x - (x*e-hxs);		
+  	else {
+  	    fprintf(stderr, "\n");
+  	    e  = (x*(e-c)-c);
+  	    e -= hxs;
+  	    if(k== -1) return 0.5*(x-e)-0.5;
+  	    if(k==1) 
+  	       	if(x < -0.25) return -2.0*(e-(x+0.5));
+  	       	else 	      return  one+2.0*(x-e);
+  	    if (k <= -2 || k>56) {   
+  	        // Unexecuted code (lines 102-104) removed. Its line cov: 0/3 (0%)
+  	    }
+  	    // Unexecuted code (lines 106-116) removed. Its line cov: 0/11 (0%)
+  	}
+  	// Unexecuted code (line 118) removed. Its line cov: 0/1 (0%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 127-128) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = expm1(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [s_expm1.c] enter main 3
+  [s_expm1.c] enter main 4
+  [s_expm1.c] enter expm1 1
+  [s_expm1.c] enter expm1 9

@@ -1,0 +1,332 @@
+id: 3
+src_id: 0
+create_time: '2025-12-14 13:17:26.485'
+time_taken: 343
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.75610000
+    call_cnt: 3
+    latency: 75.66s
+    input_tokens: 13868
+    output_tokens: 7979
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.59910000
+      call_cnt: 2
+      latency: 61.00s
+      input_tokens: 11001
+      output_tokens: 6318
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10748000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.45466000
+      call_cnt: 1
+      latency: 51.33s
+      input_tokens: 5374
+      output_tokens: 5702
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03696000
+      call_cnt: 1
+      latency: 9.67s
+      input_tokens: 5627
+      output_tokens: 616
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.15700000
+      call_cnt: 1
+      latency: 14.66s
+      input_tokens: 2867
+      output_tokens: 1661
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05734000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.09966000
+      call_cnt: 1
+      latency: 14.66s
+      input_tokens: 2867
+      output_tokens: 1661
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: 'In e_acosh.c::__ieee754_acosh(x): the branch `else if (hx > 0x40000000)`
+  -> true'
+target_file_lines: e_acosh.c:40-41
+target_lines_content: |-
+  	    t=x*x;
+  	    return __ieee754_log(2.0*x-one/(x+sqrt(t-one)));
+justification: This branch protects the computation path for inputs strictly greater
+  than 2.0 and below a very large threshold. The lines inside this branch (reported
+  as lines 40-41) have 0% historical coverage, making it a high-priority target to
+  improve coverage. It exercises a distinct numeric regime (moderate-to-large finite
+  values) different from the currently observed execution and from previously attempted
+  branches (which focused on x == 1.0 and extremely large/inf values). Reaching it
+  will validate behavior for 2 < x < 2^28, which is an important domain for acosh.
+target_path_constraint: |-
+  Constraints to reach e_acosh.c::__ieee754_acosh(x): branch `else if (hx > 0x40000000)` -> true
+
+  Environment and invocation constraints
+  1. Program invocation uses the existing harness exactly as specified: a single command-line argument is provided to the executable. The process must be able to run with default environment (no special env vars required).
+  2. Argument count must be exactly 2 at program entry (program name plus one argument). This ensures main() does not take the error branch.
+
+  Input format constraints (command-line argument)
+  3. The sole command-line argument must be a string representing a finite double-precision floating-point number parsable by the C function atof, with no leading or trailing non-numeric characters beyond what atof accepts (e.g., optional leading whitespace, optional sign, digits with optional decimal point, and optional exponent part).
+  4. The parsed value x must be a normal finite double (not NaN or ±Inf).
+
+  Numeric value constraints to steer __ieee754_acosh
+  5. x must be strictly greater than 2.0 and strictly less than 2^28 (approximately 268,435,456). These conditions correspond to the bit-pattern test hx > 0x40000000 while also avoiding the prior branch hx >= 0x41b00000 (x ≥ 2^28):
+     - Let hx be the 32-bit high word of the IEEE-754 double representation of x. The condition hx > 0x40000000 is equivalent to x > 2.0 for positive x with normalized representation.
+     - To avoid taking the earlier large-value branch `hx >= 0x41b00000`, require x < 2^28.
+  6. Additionally, x must not equal exactly 1.0 to avoid the equality branch; but this is already implied by x > 2.0.
+  7. x must be positive (implicit from x > 2.0) to avoid the first branch for x < 1.
+
+  Summary (SMT-style)
+  - Domain: x ∈ R representable as IEEE-754 double, finite
+  - Constraints:
+    a) x > 2.0
+    b) x < 2^28
+    c) isFinite(x) && !isNaN(x)
+  - Encoding constraint: the command-line string encodes x in decimal so that atof parses it exactly (no extra trailing garbage causing partial parse to 0), e.g., [optional sign][digits][optional '.' digits][optional exponent]
+
+  Outcome guarantee
+  These constraints ensure that in __ieee754_acosh(x), the control flow reaches the branch guarded by `else if (hx > 0x40000000)` and takes it, executing the code located at lines 40-41 inside e_acosh.c.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Choose x = 3.0 which satisfies: x > 2.0, x < 2^28, finite, normal, and parsable by atof
+      arg_value = "3.0"
+      cmd = f"./temp_executable {arg_value}"
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred; return captured stderr (if any) and return code -SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # Ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // e_acosh.c (64 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double 
+  #else
+  static double 
+  #endif
+  one	= 1.0,
+  ln2	= 6.93147180559945286227e-01;  
+
+  #ifdef __STDC__
+  	double __ieee754_acosh(double x)
+  #else
+  	double __ieee754_acosh(x)
+  	double x;
+  #endif
+  {	
+  	double t;
+  	int hx;
+  	hx = __HI(x);
+  	if(hx<0x3ff00000) {		
+  	    return (x-x)/(x-x);
+  	} else if(hx >=0x41b00000) {	
+  	    fprintf(stderr, "\n");
+  	    if(hx >=0x7ff00000) {	
+  	        // Unexecuted code (line 33) removed. Its line cov: 0/1 (0%)
+  	    } else {
+  		// Unexecuted code (line 35) removed. Its line cov: 0/1 (0%)
+  	    }
+  	} else if(((hx-0x3ff00000)|__LO(x))==0) {
+  	    // Unexecuted code (line 38) removed. Its line cov: 0/1 (0%)
+  	} else if (hx > 0x40000000) {	
+  	    // Unexecuted code (lines 40-41) removed. Its line cov: 0/2 (0%)
+  	} else {			
+  	    // Unexecuted code (lines 43-44) removed. Its line cov: 0/2 (0%)
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 54-55) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = __ieee754_acosh(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [e_acosh.c] enter main 3
+  [e_acosh.c] enter __ieee754_acosh 1
+  [e_acosh.c] enter __ieee754_acosh 2
+execution_summary: |2+
+
+  ```c
+  // e_acosh.c (64 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double 
+  #else
+  static double 
+  #endif
+  one	= 1.0,
+  ln2	= 6.93147180559945286227e-01;  
+
+  #ifdef __STDC__
+  	double __ieee754_acosh(double x)
+  #else
+  	double __ieee754_acosh(x)
+  	double x;
+  #endif
+  {	
+  	double t;
+  	int hx;
+  	hx = __HI(x);
+  	if(hx<0x3ff00000) {		
+  	    return (x-x)/(x-x);
+  	} else if(hx >=0x41b00000) {	
+  	    fprintf(stderr, "\n");
+  	    if(hx >=0x7ff00000) {	
+  	        // Unexecuted code (line 33) removed. Its line cov: 0/1 (0%)
+  	    } else {
+  		// Unexecuted code (line 35) removed. Its line cov: 0/1 (0%)
+  	    }
+  	} else if(((hx-0x3ff00000)|__LO(x))==0) {
+  	    // Unexecuted code (line 38) removed. Its line cov: 0/1 (0%)
+  	} else if (hx > 0x40000000) {	
+  	    // Unexecuted code (lines 40-41) removed. Its line cov: 0/2 (0%)
+  	} else {			
+  	    // Unexecuted code (lines 43-44) removed. Its line cov: 0/2 (0%)
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 54-55) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = __ieee754_acosh(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [e_acosh.c] enter main 3
+  [e_acosh.c] enter __ieee754_acosh 1
+  [e_acosh.c] enter __ieee754_acosh 2

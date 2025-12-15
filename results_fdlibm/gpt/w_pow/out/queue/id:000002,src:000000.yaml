@@ -1,0 +1,374 @@
+id: 2
+src_id: 0
+create_time: '2025-12-14 22:12:17.727'
+time_taken: 412
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $1.23690000
+    call_cnt: 4
+    latency: 124.83s
+    input_tokens: 21204
+    output_tokens: 13547
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $1.07946000
+      call_cnt: 3
+      latency: 106.03s
+      input_tokens: 18420
+      output_tokens: 11851
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10872000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.39502000
+      call_cnt: 1
+      latency: 35.84s
+      input_tokens: 5436
+      output_tokens: 4464
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.54320000
+      call_cnt: 1
+      latency: 62.10s
+      input_tokens: 6359
+      output_tokens: 6845
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03252000
+      call_cnt: 1
+      latency: 8.09s
+      input_tokens: 6625
+      output_tokens: 542
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.15744000
+      call_cnt: 1
+      latency: 18.80s
+      input_tokens: 2784
+      output_tokens: 1696
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05568000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.10176000
+      call_cnt: 1
+      latency: 18.80s
+      input_tokens: 2784
+      output_tokens: 1696
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: In w_pow.c:pow, take `if (x == 0.0) { if (finite(y) && y < 0.0) { ...
+  } }` -> inner condition true, reaching the error-handling return at line 40
+target_file_lines: w_pow.c:40-40
+target_lines_content: "\t        return __kernel_standard(x,y,23); "
+justification: This branch protects domain-error handling for 0 raised to a negative
+  power, which is completely uncovered (line 40 shows 0/1, 0%). Exercising it will
+  add new behavior distinct from the default path (special error handling via __kernel_standard).
+  It is reachable via command-line inputs without modifying the harness and does not
+  depend on file I/O. Given many downstream pow() checks are currently uncovered,
+  prioritizing this error path yields meaningful coverage.
+target_path_constraint: |-
+  Chronological constraints to reach the target branch (w_pow.c:pow, line 40):
+
+  1. Program invocation format:
+     - The program is executed via a shell command line that must pass exactly two whitespace-separated arguments to the executable (excluding the program name). The harness already invokes: "./temp_executable 1.0 1.0" with shell=True. To reach the selected branch, ensure the shell command results in argc == 3 in main (program name + two arguments). No quotes or extra spaces that would change argument count.
+
+  2. Argument parsing expectations:
+     - The program reads two arguments as text and converts them to double using atof.
+     - Therefore, each argument must be a valid textual representation of a real number in C locale (e.g., optional sign, digits, optional decimal point, optional exponent). Avoid representations that produce NaN or Infinity via atof, as later checks rely on finiteness.
+
+  3. Constraints on numerical values to drive pow() into the target branch:
+     - First numeric argument (interpreted by main as a0 and passed to pow(x, y) as x) must be exactly 0.0 when parsed by atof. Acceptable textual forms include "0", "0.0", or variants that atof converts to +0.0.
+     - Second numeric argument (interpreted as a1 and passed as y) must be finite and strictly negative after atof conversion. That is:
+       * It must not be NaN.
+       * It must not be +Inf or -Inf.
+       * Its value must be y < 0.0.
+     - These ensure the outer condition x == 0.0 is true, and the inner condition (finite(y) && y < 0.0) is true.
+
+  4. Environment assumptions:
+     - No special environment variables are required; default C locale behavior applies.
+     - Standard I/O must be available. The program writes a newline to stderr unconditionally before calling pow; this does not affect control flow but confirms execution.
+
+  5. Summary as SMT-style constraints on parsed doubles (post-atof values):
+     - Let x, y be the doubles after parsing argv[1], argv[2]. Then:
+       * x == 0.0
+       * isFinite(y) == true
+       * y < 0.0
+     - And argc == 3 must hold at program start (program name + two arguments).
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Concrete inputs derived to satisfy the target constraints:
+      # - First argument parses to exactly +0.0 -> "0"
+      # - Second argument is finite and strictly negative -> "-1"
+      # This ensures argc == 3 (program + two args) and satisfies x == 0.0, y < 0.0, finite(y).
+      cmd = "./temp_executable 0 -1"
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // w_pow.c (77 lines total)
+
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include "stdio.h"
+
+
+  #ifdef __STDC__
+  	double pow(double x, double y)	
+  #else
+  	double pow(x,y)			
+  	double x,y;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	// Unexecuted code (line 20) removed. Its line cov: 0/1 (0%)
+  #else
+  	fprintf(stderr, "\n");
+  	double z;
+  	z=__ieee754_pow(x,y);
+  	if(_LIB_VERSION == _IEEE_|| isnan(y)) {
+  	    return z;
+  	}
+  	if(isnan(x)) {
+  	    if(y==0.0) {
+  	        // Unexecuted code (line 30) removed. Its line cov: 0/1 (0%)
+  	    } else {
+  		// Unexecuted code (line 32) removed. Its line cov: 0/1 (0%)
+  	    }
+  	}
+  	if(x==0.0){ 
+  	    if(y==0.0) {
+  	        // Unexecuted code (line 37) removed. Its line cov: 0/1 (0%)
+  	    }
+  	    if(finite(y)&&y<0.0) {
+  	        // Unexecuted code (line 40) removed. Its line cov: 0/1 (0%)
+  	    }
+  	    // Unexecuted code (line 42) removed. Its line cov: 0/1 (0%)
+  	}
+  	if(!finite(z)) {
+  	    if(finite(x)&&finite(y)) {
+  	        if(isnan(z)) {
+  	            // Unexecuted code (line 47) removed. Its line cov: 0/1 (0%)
+  	        } else {
+  	            // Unexecuted code (line 49) removed. Its line cov: 0/1 (0%)
+  	        }
+  	    }
+  	} 
+  	if(z==0.0&&finite(x)&&finite(y)) {
+  	    // Unexecuted code (line 54) removed. Its line cov: 0/1 (0%)
+  	}
+  	// Unexecuted code (line 56) removed. Its line cov: 0/1 (0%)
+  #endif
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      fprintf(stderr, "\n");
+      if (argc != 3) {
+          // Unexecuted code (lines 66-67) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = pow(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [w_pow.c] enter main 3
+  [w_pow.c] enter main 4
+
+  [w_pow.c] enter pow 3
+  [w_pow.c] enter main 5
+execution_summary: |2+
+
+  ```c
+  // w_pow.c (77 lines total)
+
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include "stdio.h"
+
+
+  #ifdef __STDC__
+  	double pow(double x, double y)	
+  #else
+  	double pow(x,y)			
+  	double x,y;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	// Unexecuted code (line 20) removed. Its line cov: 0/1 (0%)
+  #else
+  	fprintf(stderr, "\n");
+  	double z;
+  	z=__ieee754_pow(x,y);
+  	if(_LIB_VERSION == _IEEE_|| isnan(y)) {
+  	    return z;
+  	}
+  	if(isnan(x)) {
+  	    if(y==0.0) {
+  	        // Unexecuted code (line 30) removed. Its line cov: 0/1 (0%)
+  	    } else {
+  		// Unexecuted code (line 32) removed. Its line cov: 0/1 (0%)
+  	    }
+  	}
+  	if(x==0.0){ 
+  	    if(y==0.0) {
+  	        // Unexecuted code (line 37) removed. Its line cov: 0/1 (0%)
+  	    }
+  	    if(finite(y)&&y<0.0) {
+  	        // Unexecuted code (line 40) removed. Its line cov: 0/1 (0%)
+  	    }
+  	    // Unexecuted code (line 42) removed. Its line cov: 0/1 (0%)
+  	}
+  	if(!finite(z)) {
+  	    if(finite(x)&&finite(y)) {
+  	        if(isnan(z)) {
+  	            // Unexecuted code (line 47) removed. Its line cov: 0/1 (0%)
+  	        } else {
+  	            // Unexecuted code (line 49) removed. Its line cov: 0/1 (0%)
+  	        }
+  	    }
+  	} 
+  	if(z==0.0&&finite(x)&&finite(y)) {
+  	    // Unexecuted code (line 54) removed. Its line cov: 0/1 (0%)
+  	}
+  	// Unexecuted code (line 56) removed. Its line cov: 0/1 (0%)
+  #endif
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      fprintf(stderr, "\n");
+      if (argc != 3) {
+          // Unexecuted code (lines 66-67) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = pow(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [w_pow.c] enter main 3
+  [w_pow.c] enter main 4
+
+  [w_pow.c] enter pow 3
+  [w_pow.c] enter main 5

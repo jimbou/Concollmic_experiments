@@ -1,0 +1,274 @@
+id: 1
+src_id: 0
+create_time: '2025-12-14 18:42:04.821'
+time_taken: 111
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 1
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.68732000
+    call_cnt: 3
+    latency: 81.26s
+    input_tokens: 13048
+    output_tokens: 7106
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.52406000
+      call_cnt: 2
+      latency: 64.03s
+      input_tokens: 10306
+      output_tokens: 5299
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10130000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.39282000
+      call_cnt: 1
+      latency: 55.96s
+      input_tokens: 5065
+      output_tokens: 4800
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.02994000
+      call_cnt: 1
+      latency: 8.08s
+      input_tokens: 5241
+      output_tokens: 499
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.16326000
+      call_cnt: 1
+      latency: 17.23s
+      input_tokens: 2742
+      output_tokens: 1807
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05484000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.10842000
+      call_cnt: 1
+      latency: 17.23s
+      input_tokens: 2742
+      output_tokens: 1807
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (!finite(value) || value == 0.0) -> true in s_ldexp.c:ldexp
+target_file_lines: s_ldexp.c:17-17
+target_lines_content: "\t\treturn value;"
+justification: This pre-scaling validity check inside ldexp has 0% historical coverage
+  (the branch body at line 17 was never executed). It guards core behavior for zero
+  or non-finite inputs and exploring it will exercise error/edge handling around IEEE-754
+  semantics, increasing coverage of important logic.
+target_path_constraint: |-
+  To reach the branch inside ldexp where the pre-scaling check evaluates to true, the program must be invoked and provided with inputs that cause the first argument to ldexp (named "value") to be either zero or a non-finite IEEE-754 double value. Follow these constraints in order:
+
+  1) Process invocation (command-line):
+  - The program must be executed with exactly two command-line arguments in addition to the program name. This is already enforced by the harness via: `./temp_executable 1.0 1`. You must preserve the structure: `<program> <arg1> <arg2>`.
+
+  2) Argument count and parsing:
+  - argc must equal 3 at runtime so the program proceeds past the `argc != 3` guard.
+  - The first argument (argv[1]) is parsed as a double using a C `atof`-style conversion that accepts decimal floating-point literals and special strings like "inf", "infinity", and "nan" (case-insensitive), as well as signed variants.
+  - The second argument (argv[2]) is parsed as a base-10 integer using `atoi`.
+
+  3) Required property for ldexp pre-check to be true BEFORE scaling:
+  - Let A be the value obtained from parsing argv[1] as a double.
+  - The condition entering ldexp must satisfy: (A is not finite) OR (A equals +0.0 or -0.0).
+    That is, A must be one of: +0.0, -0.0, +inf, -inf, or NaN (any quiet/signaling NaN representation a typical atof accepts via string tokens like "nan").
+  - This property must hold regardless of the integer exponent parsed from argv[2] because the check occurs before any scaling.
+
+  4) No additional file, environment, or I/O constraints are required:
+  - The program does not read files or environment variables; only the two CLI arguments affect the path to the target branch.
+
+  In summary, to drive execution into the target branch body, ensure argv[1] parses to a double that is either zero or non-finite; argv[2] can be any valid decimal integer string. The argument count must remain exactly three including program name.
+selected_cnt: 3
+successful_generation_cnt: 2
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # We set argv[1] to a non-finite double ("nan") so the ldexp pre-check is true.
+      # argv[2] can be any decimal integer; we use "1".
+      # This preserves the original harness structure: <program> <arg1> <arg2>.
+      try:
+          result = subprocess.run(
+              ["./temp_executable nan 1"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // s_ldexp.c (39 lines total)
+
+
+
+
+  #include "fdlibm.h"
+  #include <errno.h>
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double ldexp(double value, int exp)
+  #else
+  	double ldexp(value, exp)
+  	double value; int exp;
+  #endif
+  {
+  	if(!finite(value)||value==0.0) {
+  		// Unexecuted code (line 17) removed. Its line cov: 0/1 (0%)
+  	}
+  	value = scalbn(value,exp);
+  	if(!finite(value)||value==0.0) {
+  		// Unexecuted code (line 21) removed. Its line cov: 0/1 (0%)
+  	}
+  	return value;
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	if (argc != 3) {
+  		// Unexecuted code (lines 31-32) removed. Its line cov: 0/2 (0%)
+  	}
+  	double a0 = atof(argv[1]);
+  	int a1 = atoi(argv[2]);
+  	double r = ldexp(a0, a1);
+  	printf("%f\n", r);
+  	return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [s_ldexp.c] enter main 1
+  [s_ldexp.c] enter main 3
+  [s_ldexp.c] enter main 4
+  [s_ldexp.c] enter ldexp 1
+  [s_ldexp.c] enter ldexp 2
+  [s_ldexp.c] enter main 5
+execution_summary: |2+
+
+  ```c
+  // s_ldexp.c (39 lines total)
+
+
+
+
+  #include "fdlibm.h"
+  #include <errno.h>
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double ldexp(double value, int exp)
+  #else
+  	double ldexp(value, exp)
+  	double value; int exp;
+  #endif
+  {
+  	if(!finite(value)||value==0.0) {
+  		return value;
+  	}
+  	// Unexecuted code (lines 19-23) removed. Its line cov: 4/5 (80%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	if (argc != 3) {
+  		// Unexecuted code (lines 31-32) removed. Its line cov: 0/2 (0%)
+  	}
+  	double a0 = atof(argv[1]);
+  	int a1 = atoi(argv[2]);
+  	double r = ldexp(a0, a1);
+  	printf("%f\n", r);
+  	return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0 1"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [s_ldexp.c] enter main 1
+  [s_ldexp.c] enter main 3
+  [s_ldexp.c] enter main 4
+  [s_ldexp.c] enter ldexp 1
+  [s_ldexp.c] enter ldexp 3
+  [s_ldexp.c] enter ldexp 4
+  [s_ldexp.c] enter ldexp 6
+  [s_ldexp.c] enter main 5

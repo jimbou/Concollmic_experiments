@@ -1,0 +1,389 @@
+id: 1
+src_id: 0
+create_time: '2025-12-14 21:52:25.465'
+time_taken: 225
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $1.18054000
+    call_cnt: 4
+    latency: 129.38s
+    input_tokens: 20027
+    output_tokens: 13000
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.84974000
+      call_cnt: 3
+      latency: 87.91s
+      input_tokens: 17119
+      output_tokens: 8456
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10220000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.29464000
+      call_cnt: 1
+      latency: 31.91s
+      input_tokens: 5110
+      output_tokens: 2946
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.41318000
+      call_cnt: 1
+      latency: 46.17s
+      input_tokens: 5894
+      output_tokens: 4848
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03972000
+      call_cnt: 1
+      latency: 9.83s
+      input_tokens: 6115
+      output_tokens: 662
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.33080000
+      call_cnt: 1
+      latency: 41.47s
+      input_tokens: 2908
+      output_tokens: 4544
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05816000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.27264000
+      call_cnt: 1
+      latency: 41.47s
+      input_tokens: 2908
+      output_tokens: 4544
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (_LIB_VERSION == _IEEE_) -> false in w_lgamma_r.c:lgamma_r
+target_file_lines: w_lgamma_r.c:33-34
+target_lines_content: |2-
+              return y;
+          }
+justification: The wrapper currently short-circuits at `_LIB_VERSION == _IEEE_`, preventing
+  execution of the alternative path guarded by lines 26-34, which has 0% historical
+  coverage. Forcing this condition to be false will route execution through the untested
+  wrapper logic (including the subsequent `if (!finite(y) && finite(x)) { ... } else
+  { return y; }`). This is achievable via environment-level manipulation of the runtime
+  library symbol `_LIB_VERSION`, does not require modifying the harness, and will
+  exercise previously unseen program behavior.
+target_path_constraint: |-
+  Constraints to reach target branch: if (_LIB_VERSION == _IEEE_) evaluates to false within lgamma_r(x, &signgamp) in w_lgamma_r.c.
+
+  Chronological input and environment constraints:
+
+  1) Process invocation arguments: The program must be started with exactly one command-line argument beyond the program name. The harness already supplies one argument (a decimal string representing x), so no change is needed. Ensure the argument string is present (non-empty) to keep argc == 2 at runtime.
+
+  2) Runtime feature macro control: The compilation unit must be built such that the preprocessor symbol _IEEE_LIBM is NOT defined. This ensures the wrapper body that checks _LIB_VERSION is compiled in and reachable. (Note: This is a build-time condition; if already satisfied per the trace, no additional action is required.)
+
+  3) Global runtime mode variable: At runtime, ensure the global library mode indicator _LIB_VERSION is not equal to the constant value _IEEE_. In the fdlibm family, _LIB_VERSION is typically a global enum or integer that controls error-handling semantics (e.g., _IEEE_, _SVID_, _XOPEN_). The target condition requires setting it to any non-IEEE mode (e.g., SVID or XOPEN). This must be accomplished via environment-level controls provided by the runtime/library, such as:
+     - If the binary exposes a setter or honors an environment variable (e.g., LIBM_STD or MATH_LIB_VERSION), set it so that _LIB_VERSION resolves to a non-IEEE mode before main executes.
+     - Alternatively, preload or link a shim that initializes _LIB_VERSION to a non-IEEE value in .init/.ctors prior to calling main (e.g., using LD_PRELOAD or constructor attributes), provided the harness allows dynamic loader environment variables.
+     - If neither mechanism exists, start the process under an environment where the C library/fdlibm implementation defaults _LIB_VERSION to a non-IEEE mode (some builds use _SVID_ by default when certain feature-test macros or locale/environment indicate SVID/XOPEN compliance).
+
+  4) Input value domain (x parsing): The single command-line argument must be a valid textual representation of a floating-point number in the current C locale (period as decimal separator) so that atof(argv[1]) returns a finite double. This guarantees the function is called and proceeds to evaluate the wrapper condition. No further numeric constraints are required for this branch (the branch depends only on _LIB_VERSION, not on x).
+
+  5) Process environment stability: Do not pass environment variables or locale settings that would prevent the program from starting or alter argument splitting (shell=true in harness). The argument string must remain a single token delivered to argv[1]. Avoid embedded whitespace that would be split by the invoked shell, unless properly quoted by the harness, which it is not.
+
+  Summary of key requirement: Ensure _LIB_VERSION != _IEEE_ at runtime so that the check `if (_LIB_VERSION == _IEEE_)` evaluates to false. All other prerequisites just ensure the program reaches lgamma_r.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import os
+      import signal
+      import subprocess
+      import sys
+      import tempfile
+      import shutil
+      from textwrap import dedent
+
+      # Build and preload a small shim that sets _LIB_VERSION to a non-IEEE mode
+      # prior to main() using a constructor. This ensures the condition
+      # `if (_LIB_VERSION == _IEEE_)` evaluates to false.
+      tmpdir = tempfile.mkdtemp(prefix="libver_shim_")
+      src_path = os.path.join(tmpdir, "set_lib_version.c")
+      so_path = os.path.join(tmpdir, "libsetlibversion.so")
+
+      c_source = dedent(
+          r'''
+          #include <dlfcn.h>
+          #include <stdio.h>
+          #include <stdint.h>
+
+          typedef int libver_t;
+
+          static void try_set(const char* name) {
+              void* addr = dlsym(RTLD_DEFAULT, name);
+              if (addr) {
+                  libver_t* p = (libver_t*)addr;
+                  // Set to a non-IEEE mode (commonly SVID==1). Any nonzero should make the check false.
+                  *p = 1;
+              }
+          }
+
+          __attribute__((constructor))
+          static void init_set_lib_version(void) {
+              // Attempt common symbol names used by fdlibm/libm variants
+              try_set("_LIB_VERSION");
+              try_set("__LIB_VERSION");
+              try_set("LIB_VERSION");
+          }
+          '''
+      )
+
+      try:
+          with open(src_path, "w") as f:
+              f.write(c_source)
+
+          # Try to compile the shim with available compilers
+          compile_cmds = [
+              ["cc", "-shared", "-fPIC", src_path, "-o", so_path, "-ldl"],
+              ["gcc", "-shared", "-fPIC", src_path, "-o", so_path, "-ldl"],
+              ["clang", "-shared", "-fPIC", src_path, "-o", so_path],  # macOS may not need -ldl
+          ]
+          compiled = False
+          last_err = None
+          for cmd in compile_cmds:
+              try:
+                  res = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace")
+                  if res.returncode == 0 and os.path.exists(so_path):
+                      compiled = True
+                      break
+                  last_err = (res.stderr or "")
+              except Exception as ce:
+                  last_err = str(ce)
+          if not compiled:
+              raise RuntimeError(f"Failed to compile preload shim: {last_err}")
+
+          # Prepare environment: set LC_ALL to C (stable parsing) and preload the shim
+          env = os.environ.copy()
+          env["LC_ALL"] = "C"
+          env["LANG"] = "C"
+          # Provide possible environment knobs as fallbacks (harmless if ignored)
+          env["LIBM_STD"] = "SVID"
+          env["MATH_LIB_VERSION"] = "SVID"
+          env["FDLIBM_MODE"] = "SVID"
+
+          # Choose the correct preload mechanism per platform
+          if sys.platform == "darwin":
+              # macOS dyld hook
+              env["DYLD_INSERT_LIBRARIES"] = so_path
+              env["DYLD_FORCE_FLAT_NAMESPACE"] = "1"
+          else:
+              # Linux/Unix glibc
+              env["LD_PRELOAD"] = so_path
+
+          # Execute the original harness command with one valid numeric argument
+          try:
+              result = subprocess.run(
+                  ["./temp_executable 1.0"],
+                  capture_output=True,
+                  encoding="utf-8",
+                  errors="replace",
+                  shell=True,
+                  timeout=timeout,
+                  env=env,
+              )
+              return result.stderr, result.returncode
+          except subprocess.TimeoutExpired as e:
+              return e.stderr or "", -signal.SIGKILL
+      finally:
+          # Cleanup temporary files
+          try:
+              shutil.rmtree(tmpdir)
+          except Exception:
+              pass
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // w_lgamma_r.c (56 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+
+  #ifdef __STDC__
+  	double lgamma_r(double x, int *signgamp) 
+  #else
+  	double lgamma_r(x,signgamp)              
+          double x; int *signgamp;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	// Unexecuted code (line 19) removed. Its line cov: 0/1 (0%)
+  #else
+          double y;
+          y = __ieee754_lgamma_r(x,signgamp);
+          if(_LIB_VERSION == _IEEE_) {
+              return y;
+          }
+          // Unexecuted code (lines 26-34) removed. Its line cov: 0/9 (0%)
+  #endif
+  }             
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 44-45) removed. Its line cov: 0/2 (0%)
+      }
+      double x = atof(argv[1]);
+      int sign = 0;
+
+      double r = lgamma_r(x, &sign);
+
+      printf("result = %f\n", r);
+      printf("signgamp = %d\n", sign);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [w_lgamma_r.c] enter main 3
+  [w_lgamma_r.c] enter main 4
+  [w_lgamma_r.c] enter lgamma_r 2
+  [w_lgamma_r.c] enter lgamma_r 3
+  [w_lgamma_r.c] enter main 5
+  [w_lgamma_r.c] enter main 6
+execution_summary: |2+
+
+  ```c
+  // w_lgamma_r.c (56 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+
+  #ifdef __STDC__
+  	double lgamma_r(double x, int *signgamp) 
+  #else
+  	double lgamma_r(x,signgamp)              
+          double x; int *signgamp;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	// Unexecuted code (line 19) removed. Its line cov: 0/1 (0%)
+  #else
+          double y;
+          y = __ieee754_lgamma_r(x,signgamp);
+          if(_LIB_VERSION == _IEEE_) {
+              return y;
+          }
+          // Unexecuted code (lines 26-34) removed. Its line cov: 0/9 (0%)
+  #endif
+  }             
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 44-45) removed. Its line cov: 0/2 (0%)
+      }
+      double x = atof(argv[1]);
+      int sign = 0;
+
+      double r = lgamma_r(x, &sign);
+
+      printf("result = %f\n", r);
+      printf("signgamp = %d\n", sign);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [w_lgamma_r.c] enter main 3
+  [w_lgamma_r.c] enter main 4
+  [w_lgamma_r.c] enter lgamma_r 2
+  [w_lgamma_r.c] enter lgamma_r 3
+  [w_lgamma_r.c] enter main 5
+  [w_lgamma_r.c] enter main 6

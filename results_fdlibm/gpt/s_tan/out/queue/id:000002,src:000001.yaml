@@ -1,0 +1,322 @@
+id: 2
+src_id: 1
+create_time: '2025-12-14 20:27:10.480'
+time_taken: 241
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.69134000
+    call_cnt: 3
+    latency: 75.20s
+    input_tokens: 13354
+    output_tokens: 7071
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.52304000
+      call_cnt: 2
+      latency: 57.02s
+      input_tokens: 10534
+      output_tokens: 5206
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10332000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.38936000
+      call_cnt: 1
+      latency: 47.64s
+      input_tokens: 5166
+      output_tokens: 4700
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03036000
+      call_cnt: 1
+      latency: 9.38s
+      input_tokens: 5368
+      output_tokens: 506
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.16830000
+      call_cnt: 1
+      latency: 18.18s
+      input_tokens: 2820
+      output_tokens: 1865
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05640000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.11190000
+      call_cnt: 1
+      latency: 18.18s
+      input_tokens: 2820
+      output_tokens: 1865
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: else if (ix>=0x7ff00000) -> true in s_tan.c:tan
+target_file_lines: s_tan.c:31-31
+target_lines_content: "\t\treturn x-x;"
+justification: 'This branch handles non-finite inputs (Infinity or NaN) and currently
+  has zero historical coverage (line cov: 0/1). Exercising it will explore a distinct
+  error/edge-case path in the math routine, different from the small-angle and range-reduction
+  paths. It is reachable via command-line input because the program parses argv[1]
+  with atof/strtod, which can produce NaN/Infinity for certain textual forms.'
+target_path_constraint: |-
+  Chronological, self-contained constraints to reach tan() branch: else if (ix>=0x7ff00000) -> true (non-finite x)
+
+  1) Process invocation and argument count
+  - The program must be launched with exactly one user-supplied numeric argument in addition to the program name, so total argc == 2 at entry to main.
+  - The shell or execution environment must pass argv[1] unchanged to the process; no quoting/expansion side effects should alter the token.
+
+  2) Argument parsability by atof
+  - argv[1] must be a string that the C standard library function atof converts to a non-finite double (IEEE-754): either positive/negative infinity or NaN. Examples of textual forms typically recognized by common libc implementations include case-insensitive tokens representing infinity (e.g., "inf", "+inf", "infinity", with optional sign) or Not-a-Number (e.g., "nan", optionally with a payload), but do not rely on implementation-specific payload details.
+  - The string must not contain leading/trailing characters that cause atof to parse a finite number instead; it should be a canonical non-finite token so that the resulting double is not finite.
+
+  3) Resulting floating-point value properties (post atof)
+  - Let x = atof(argv[1]). The produced double must be either:
+    a) Infinity: x is +∞ or -∞; or
+    b) NaN: x is a quiet or signaling NaN (payload irrelevant). 
+  - In IEEE-754 representation, this implies the high 32-bit word of x (on the target platform) has all exponent bits set (0x7ff00000 mask) when inspected by the tan implementation. Equivalently, x is not finite.
+
+  4) Platform and locale assumptions
+  - The locale must not redefine decimal/number parsing such that the selected non-finite token becomes unrecognized; use the default C locale semantics for atof.
+  - No environment variables should coerce the program into treating the argument differently (e.g., no custom input files are read; only argv[1] matters).
+
+  Satisfaction of these constraints ensures tan() receives a non-finite x so that the condition (ix >= 0x7ff00000) is true and execution enters the targeted branch.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+      import os
+
+      # Choose a non-finite token that atof parses to a non-finite double (Infinity)
+      # This ensures tan() sees a non-finite x and the branch (ix >= 0x7ff00000) is true
+      arg = "inf"
+
+      # Ensure default C locale semantics so atof recognizes the token reliably
+      env = os.environ.copy()
+      env["LC_ALL"] = "C"
+      env["LC_NUMERIC"] = "C"
+      env["LANG"] = "C"
+
+      try:
+          result = subprocess.run(
+              [f"./temp_executable {arg}"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+              env=env,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // s_tan.c (57 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double tan(double x)
+  #else
+  	double tan(x)
+  	double x;
+  #endif
+  {
+  	double y[2],z=0.0;
+  	int n, ix;
+
+      
+  	ix = __HI(x);
+
+      
+  	ix &= 0x7fffffff;
+  	if(ix <= 0x3fe921fb) {
+  		// Unexecuted code (line 26) removed. Its line cov: 1/1 (100%)
+  	}
+
+      
+  	else if (ix>=0x7ff00000) {
+  		// Unexecuted code (line 31) removed. Its line cov: 0/1 (0%)
+  	}
+
+      
+  	else {
+  	    n = __ieee754_rem_pio2(x,y);
+  	    return __kernel_tan(y[0],y[1],1-((n&1)<<1));
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 47-48) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = tan(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [s_tan.c] enter main 3
+  [s_tan.c] enter tan 1
+  [s_tan.c] enter tan 2
+execution_summary: |2+
+
+  ```c
+  // s_tan.c (57 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double tan(double x)
+  #else
+  	double tan(x)
+  	double x;
+  #endif
+  {
+  	double y[2],z=0.0;
+  	int n, ix;
+
+      
+  	ix = __HI(x);
+
+      
+  	ix &= 0x7fffffff;
+  	if(ix <= 0x3fe921fb) {
+  		return __kernel_tan(x,z,1);
+  	}
+
+      
+  	else if (ix>=0x7ff00000) {
+  		// Unexecuted code (line 31) removed. Its line cov: 0/1 (0%)
+  	}
+
+      
+  	else {
+  	    // Unexecuted code (lines 36-37) removed. Its line cov: 2/2 (100%)
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 47-48) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = tan(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Choose a single numeric argument that atof parses as a finite double and with |x| > pi/4
+      # 0.786 > 0.7853981633974483, ensuring the small-angle branch is avoided and the value is finite
+      arg = "0.786"
+
+      try:
+          result = subprocess.run(
+              [f"./temp_executable {arg}"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [s_tan.c] enter main 3
+  [s_tan.c] enter tan 1
+  [s_tan.c] enter tan 4

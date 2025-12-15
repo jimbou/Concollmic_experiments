@@ -1,0 +1,472 @@
+id: 1
+src_id: 0
+create_time: '2025-12-14 13:37:16.513'
+time_taken: 236
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $1.20654000
+    call_cnt: 4
+    latency: 126.93s
+    input_tokens: 23790
+    output_tokens: 12179
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $1.05736000
+      call_cnt: 3
+      latency: 108.51s
+      input_tokens: 20915
+      output_tokens: 10651
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.11358000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.35944000
+      call_cnt: 1
+      latency: 46.21s
+      input_tokens: 5679
+      output_tokens: 3495
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.54666000
+      call_cnt: 1
+      latency: 50.75s
+      input_tokens: 7487
+      output_tokens: 6528
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03768000
+      call_cnt: 1
+      latency: 11.55s
+      input_tokens: 7749
+      output_tokens: 628
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.14918000
+      call_cnt: 1
+      latency: 18.42s
+      input_tokens: 2875
+      output_tokens: 1528
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05750000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.09168000
+      call_cnt: 1
+      latency: 18.42s
+      input_tokens: 2875
+      output_tokens: 1528
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: 'if (ix == 0x7ff00000) -> true with inner path if (iy == 0x7ff00000)
+  -> false in e_atan2.c: __ieee754_atan2'
+target_file_lines: e_atan2.c:88-88
+target_lines_content: "\t\t\t\treturn  zero  ;\t"
+justification: 'This branch handles the case where the x-argument is IEEE-754 infinity
+  while y is finite. It protects a large block of logic (26 lines, 0% historical coverage:
+  lines 71-96) with quadrant-specific returns, representing a major untested behavior
+  of atan2. Reaching it will diversify execution beyond the currently explored finite/regular
+  path and meaningfully increase coverage. We explicitly guide the inner condition
+  to the false path (y not infinite) for deterministic coverage within that block.'
+target_path_constraint: |
+  Environment and invocation format:
+  - The program is invoked from a POSIX-like shell as a single string with shell=True. It expects exactly 2 command-line arguments after the program name, both parsed as decimal floating-point numbers using C atof(). If argc != 3, the program prints usage and exits; therefore ensure exactly two arguments are provided.
+
+  Chronological constraints on inputs to reach the selected branch in __ieee754_atan2(y, x):
+  1) Argument count:
+     - Provide exactly two whitespace-separated tokens after the executable name. No surrounding quotes needed. This ensures argc == 3 inside main.
+
+  2) Parsing as doubles:
+     - Each token must be in a format recognized by C atof() as a finite or special floating literal. atof() accepts strings like "inf", "+inf", "infinity" (case-insensitive), and also numeric forms. The first token becomes y, the second becomes x.
+
+  3) Force x to be IEEE-754 infinity to satisfy ix == 0x7ff00000:
+     - Choose the second argument string such that atof() converts it to positive or negative infinity. Acceptable examples include tokens that atof() recognizes as infinity (e.g., representations of infinity). The sign of x can be chosen arbitrarily; both yield ix == 0x7ff00000.
+     - Note: ix corresponds to the absolute-value exponent field being all 1s for double; infinity or NaN both satisfy this, but we must avoid NaN because earlier code checks for NaN or signaling NaN and would return x+y. Therefore, ensure the token decodes to an infinity value, not NaN.
+
+  4) Ensure y is finite and not infinity to take the inner path iy != 0x7ff00000:
+     - Choose the first argument string so that atof() yields a finite double (not NaN, not ±infinity). Any finite value is acceptable, including zero or non-zero, positive or negative.
+     - Also avoid y being NaN to prevent the earlier NaN check path from triggering.
+
+  5) Avoid triggering earlier exceptional-return paths:
+     - Both arguments must not be NaN. This ensures the combined check for NaN is false and execution continues to the targeted branch.
+
+  6) No special environment files or I/O are needed. Standard error is writable (the code writes a newline to stderr early); this does not affect control flow.
+
+  Summary as SMT-like predicates over abstract inputs s0 (string for y) and s1 (string for x), interpreted by atof:
+  - argc == 3
+  - y = atof(s0), x = atof(s1)
+  - isfinite(y)
+  - isinf(x)
+  - not isNaN(y)
+  - not isNaN(x)
+  - Optional: y is arbitrary finite real; x is +∞ or −∞.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Constraints satisfaction reasoning:
+      # - Exactly two arguments after program name: provided as "1.0 inf"
+      # - y (first arg) is finite: "1.0" -> finite double
+      # - x (second arg) is infinity: "inf" -> atof/strtod recognizes as infinity (case-insensitive)
+      # - Neither argument is NaN
+      # - Invocation uses shell=True with a single command string, matching the original harness pattern
+
+      try:
+          cmd = "./temp_executable 1.0 inf"
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // e_atan2.c (150 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double 
+  #else
+  static double 
+  #endif
+  tiny  = 1.0e-300,
+  zero  = 0.0,
+  pi_o_4  = 7.8539816339744827900E-01, 
+  pi_o_2  = 1.5707963267948965580E+00, 
+  pi      = 3.1415926535897931160E+00, 
+  pi_lo   = 1.2246467991473531772E-16; 
+
+  #ifdef __STDC__
+  	double __ieee754_atan2(double y, double x)
+  #else
+  	double __ieee754_atan2(y,x)
+  	double  y,x;
+  #endif
+  {  
+  	double z;
+  	int k,m,hx,hy,ix,iy;
+  	unsigned lx,ly;
+
+  	hx = __HI(x); ix = hx&0x7fffffff;
+  	lx = __LO(x);
+  	hy = __HI(y); iy = hy&0x7fffffff;
+  	ly = __LO(y);
+  	if(((ix|((lx|-lx)>>31))>0x7ff00000)||
+  	   ((iy|((ly|-ly)>>31))>0x7ff00000))	
+  	{
+  		// Unexecuted code (line 40) removed. Its line cov: 0/1 (0%)
+  	}
+  	fprintf(stderr, "\n");
+  	if((hx-0x3ff00000|lx)==0)
+  	{
+  		// Unexecuted code (line 45) removed. Its line cov: 0/1 (0%)
+  	}
+  	m = ((hy>>31)&1)|((hx>>30)&2);	
+
+      
+  	if((iy|ly)==0)
+  	{
+  		// Unexecuted code (lines 52-60) removed. Its line cov: 0/9 (0%)
+  	}
+      
+  	if((ix|lx)==0)
+  	{
+  		// Unexecuted code (line 65) removed. Its line cov: 0/1 (0%)
+  	}
+  	    
+      
+  	if(ix==0x7ff00000)
+  	{
+  		// Unexecuted code (lines 71-96) removed. Its line cov: 0/26 (0%)
+  	}
+      
+  	if(iy==0x7ff00000)
+  	{
+  		// Unexecuted code (line 101) removed. Its line cov: 0/1 (0%)
+  	}
+
+      
+  	k = (iy-ix)>>20;
+  	if(k > 60)
+  	{
+  		// Unexecuted code (line 108) removed. Its line cov: 0/1 (0%)
+  	}
+  	else if(hx<0&&k<-60)
+  	{
+  		// Unexecuted code (line 112) removed. Its line cov: 0/1 (0%)
+  	}
+  	else
+  	{
+  		z=atan(fabs(y/x));
+  	}
+  	
+  	switch (m) {
+  	    case 0:
+  		return       z  ;	
+  	    case 1:
+  		// Unexecuted code (lines 123-124) removed. Its line cov: 0/2 (0%)
+  	    case 2:
+  		// Unexecuted code (line 126) removed. Its line cov: 0/1 (0%)
+  	    default: 
+  	    	// Unexecuted code (line 128) removed. Its line cov: 0/1 (0%)
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+
+  	if (argc != 3)
+  	{
+  		// Unexecuted code (lines 139-140) removed. Its line cov: 0/2 (0%)
+  	}
+
+  	double a0 = atof(argv[1]);
+  	double a1 = atof(argv[2]);
+
+  	double r = __ieee754_atan2(a0, a1);
+  	printf("%f\n", r);
+
+  	return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [e_atan2.c] enter main 1
+  [e_atan2.c] enter main 3
+  [e_atan2.c] enter __ieee754_atan2 1
+
+  [e_atan2.c] enter __ieee754_atan2 5
+  [e_atan2.c] enter __ieee754_atan2 6
+  [e_atan2.c] enter __ieee754_atan2 11
+  [e_atan2.c] enter __ieee754_atan2 13
+  [e_atan2.c] enter __ieee754_atan2 25
+  [e_atan2.c] enter __ieee754_atan2 27
+  [e_atan2.c] enter __ieee754_atan2 30
+  [e_atan2.c] enter __ieee754_atan2 31
+  [e_atan2.c] enter __ieee754_atan2 32
+execution_summary: |2+
+
+  ```c
+  // e_atan2.c (150 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double 
+  #else
+  static double 
+  #endif
+  tiny  = 1.0e-300,
+  zero  = 0.0,
+  pi_o_4  = 7.8539816339744827900E-01, 
+  pi_o_2  = 1.5707963267948965580E+00, 
+  pi      = 3.1415926535897931160E+00, 
+  pi_lo   = 1.2246467991473531772E-16; 
+
+  #ifdef __STDC__
+  	double __ieee754_atan2(double y, double x)
+  #else
+  	double __ieee754_atan2(y,x)
+  	double  y,x;
+  #endif
+  {  
+  	double z;
+  	int k,m,hx,hy,ix,iy;
+  	unsigned lx,ly;
+
+  	hx = __HI(x); ix = hx&0x7fffffff;
+  	lx = __LO(x);
+  	hy = __HI(y); iy = hy&0x7fffffff;
+  	ly = __LO(y);
+  	if(((ix|((lx|-lx)>>31))>0x7ff00000)||
+  	   ((iy|((ly|-ly)>>31))>0x7ff00000))	
+  	{
+  		// Unexecuted code (line 40) removed. Its line cov: 0/1 (0%)
+  	}
+  	fprintf(stderr, "\n");
+  	if((hx-0x3ff00000|lx)==0)
+  	{
+  		// Unexecuted code (line 45) removed. Its line cov: 0/1 (0%)
+  	}
+  	m = ((hy>>31)&1)|((hx>>30)&2);	
+
+      
+  	if((iy|ly)==0)
+  	{
+  		// Unexecuted code (lines 52-60) removed. Its line cov: 0/9 (0%)
+  	}
+      
+  	if((ix|lx)==0)
+  	{
+  		// Unexecuted code (line 65) removed. Its line cov: 0/1 (0%)
+  	}
+  	    
+      
+  	if(ix==0x7ff00000)
+  	{
+  		// Unexecuted code (lines 71-96) removed. Its line cov: 0/26 (0%)
+  	}
+      
+  	if(iy==0x7ff00000)
+  	{
+  		// Unexecuted code (line 101) removed. Its line cov: 0/1 (0%)
+  	}
+
+      
+  	k = (iy-ix)>>20;
+  	if(k > 60)
+  	{
+  		// Unexecuted code (line 108) removed. Its line cov: 0/1 (0%)
+  	}
+  	else if(hx<0&&k<-60)
+  	{
+  		// Unexecuted code (line 112) removed. Its line cov: 0/1 (0%)
+  	}
+  	else
+  	{
+  		z=atan(fabs(y/x));
+  	}
+  	
+  	switch (m) {
+  	    case 0:
+  		return       z  ;	
+  	    case 1:
+  		// Unexecuted code (lines 123-124) removed. Its line cov: 0/2 (0%)
+  	    case 2:
+  		// Unexecuted code (line 126) removed. Its line cov: 0/1 (0%)
+  	    default: 
+  	    	// Unexecuted code (line 128) removed. Its line cov: 0/1 (0%)
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+
+  	if (argc != 3)
+  	{
+  		// Unexecuted code (lines 139-140) removed. Its line cov: 0/2 (0%)
+  	}
+
+  	double a0 = atof(argv[1]);
+  	double a1 = atof(argv[2]);
+
+  	double r = __ieee754_atan2(a0, a1);
+  	printf("%f\n", r);
+
+  	return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [e_atan2.c] enter main 1
+  [e_atan2.c] enter main 3
+  [e_atan2.c] enter __ieee754_atan2 1
+
+  [e_atan2.c] enter __ieee754_atan2 5
+  [e_atan2.c] enter __ieee754_atan2 6
+  [e_atan2.c] enter __ieee754_atan2 11
+  [e_atan2.c] enter __ieee754_atan2 13
+  [e_atan2.c] enter __ieee754_atan2 25
+  [e_atan2.c] enter __ieee754_atan2 27
+  [e_atan2.c] enter __ieee754_atan2 30
+  [e_atan2.c] enter __ieee754_atan2 31
+  [e_atan2.c] enter __ieee754_atan2 32

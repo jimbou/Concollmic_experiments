@@ -1,0 +1,292 @@
+id: 1
+src_id: 0
+create_time: '2025-12-14 21:07:44.892'
+time_taken: 143
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.74428000
+    call_cnt: 3
+    latency: 103.02s
+    input_tokens: 13259
+    output_tokens: 7985
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.59562000
+      call_cnt: 2
+      latency: 85.95s
+      input_tokens: 10416
+      output_tokens: 6455
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10216000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.45734000
+      call_cnt: 1
+      latency: 78.98s
+      input_tokens: 5108
+      output_tokens: 5853
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03612000
+      call_cnt: 1
+      latency: 6.97s
+      input_tokens: 5308
+      output_tokens: 602
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.14866000
+      call_cnt: 1
+      latency: 17.06s
+      input_tokens: 2843
+      output_tokens: 1530
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05686000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.09180000
+      call_cnt: 1
+      latency: 17.06s
+      input_tokens: 2843
+      output_tokens: 1530
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (y == 0.0) -> true in w_fmod.c:fmod
+target_file_lines: w_fmod.c:21-21
+target_lines_content: "\t        return __kernel_standard(x,y,27); "
+justification: 'This branch guards the domain-error handling path for modulus with
+  zero divisor. It has zero historical coverage (line cov: 0/1 (0%)) and exploring
+  it will exercise error-handling logic distinct from the currently taken fast-return
+  path. Although the wrapper early-returns under IEEE mode or NaN inputs, reaching
+  this branch requires non-IEEE mode with finite inputs and a zero second argument,
+  which represents a meaningful new behavior not covered by the current run.'
+target_path_constraint: |-
+  1. Command invocation format:
+     - The program is executed via a shell with a single command string. Therefore, provide exactly two whitespace-separated tokens after the executable name so that the process sees three arguments total: argv[0] (program), argv[1], argv[2]. Ensure no extra spaces or quoting that would change tokenization.
+     - Constraint: argc must equal 3 at program start.
+
+  2. Argument parsing expectations:
+     - The program reads two command-line arguments and converts them to double-precision floating-point numbers using a decimal parser (like strtod/atof). Each argument must be a valid textual representation of a finite double.
+     - Constraint: argv[1] parses as a finite double a0; argv[2] parses as a finite double a1.
+
+  3. Library mode/environment constraint (to avoid early return that bypasses the branch):
+     - The fmod wrapper returns immediately when the library is in IEEE mode or when either input is NaN. To reach the y==0.0 branch, the environment must not define IEEE-only behavior.
+     - Constraint: The runtime configuration or compilation must be such that the _IEEE_LIBM macro is not active and _LIB_VERSION != _IEEE_. No NaN inputs are allowed.
+     - Note: Since we cannot change compilation at runtime, assume the binary was built with non-IEEE wrapper paths enabled. Inputs must be finite (not NaN).
+
+  4. Target branch numeric condition:
+     - The branch requires the second argument to be exactly zero in double representation after parsing.
+     - Constraint: argv[2] must parse to the double value 0.0. Acceptable textual forms include "0", "0.0", or representations that the parser maps to +0.0. Avoid "-0" if the wrapper treats signed zero differently; require +0.0.
+
+  5. Non-early-return constraints within wrapper:
+     - To avoid the earlier return path (which returns z when _LIB_VERSION == _IEEE_ or inputs are NaN), ensure that both inputs are finite, not NaN, and that the library version is not IEEE-only.
+     - Constraint: argv[1] must parse to a finite double not equal to NaN or infinity; argv[2] must parse to +0.0; the library version condition _LIB_VERSION != _IEEE_ holds at runtime.
+
+  Chronological summary:
+  - Provide exactly two numeric tokens as command-line arguments (argc==3).
+  - Ensure both parse to finite doubles.
+  - Ensure environment/library is non-IEEE and not in NaN mode (cannot be set via input; assumed from build).
+  - Ensure the second argument parses to +0.0 to take the y==0.0 branch.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          # Provide exactly two whitespace-separated tokens after the executable name
+          # argv[1] = 2.5 (finite double), argv[2] = 0.0 (exact +0.0)
+          cmd = "./temp_executable 2.5 0.0"
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # Raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // w_fmod.c (45 lines total)
+  #include <stdio.h>
+  #include "fdlibm.h"
+
+
+  #ifdef __STDC__
+  	double fmod(double x, double y)	
+  #else
+  	double fmod(x,y)		
+  	double x,y;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	// Unexecuted code (line 13) removed. Its line cov: 0/1 (0%)
+  #else
+  	double z;
+  	z = __ieee754_fmod(x,y);
+  	if(_LIB_VERSION == _IEEE_ ||isnan(y)||isnan(x)) {
+  		return z;
+  	}
+  	if(y==0.0) {
+  	        // Unexecuted code (line 21) removed. Its line cov: 0/1 (0%)
+  	} else {
+  	    // Unexecuted code (line 23) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 3) {
+          // Unexecuted code (lines 34-35) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = fmod(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [w_fmod.c] enter main 3
+  [w_fmod.c] enter fmod 2
+  [w_fmod.c] enter fmod 3
+execution_summary: |2+
+
+  ```c
+  // w_fmod.c (45 lines total)
+  #include <stdio.h>
+  #include "fdlibm.h"
+
+
+  #ifdef __STDC__
+  	double fmod(double x, double y)	
+  #else
+  	double fmod(x,y)		
+  	double x,y;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	// Unexecuted code (line 13) removed. Its line cov: 0/1 (0%)
+  #else
+  	double z;
+  	z = __ieee754_fmod(x,y);
+  	if(_LIB_VERSION == _IEEE_ ||isnan(y)||isnan(x)) {
+  		return z;
+  	}
+  	if(y==0.0) {
+  	        // Unexecuted code (line 21) removed. Its line cov: 0/1 (0%)
+  	} else {
+  	    // Unexecuted code (line 23) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 3) {
+          // Unexecuted code (lines 34-35) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = fmod(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [w_fmod.c] enter main 3
+  [w_fmod.c] enter fmod 2
+  [w_fmod.c] enter fmod 3

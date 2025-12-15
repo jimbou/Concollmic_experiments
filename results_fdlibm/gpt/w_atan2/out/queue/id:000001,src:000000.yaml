@@ -1,0 +1,311 @@
+id: 1
+src_id: 0
+create_time: '2025-12-14 20:54:14.224'
+time_taken: 108
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.73228000
+    call_cnt: 3
+    latency: 76.77s
+    input_tokens: 13460
+    output_tokens: 7718
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.55544000
+      call_cnt: 2
+      latency: 57.56s
+      input_tokens: 10474
+      output_tokens: 5766
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10246000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.40942000
+      call_cnt: 1
+      latency: 46.61s
+      input_tokens: 5123
+      output_tokens: 5040
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.04356000
+      call_cnt: 1
+      latency: 10.95s
+      input_tokens: 5351
+      output_tokens: 726
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.17684000
+      call_cnt: 1
+      latency: 19.21s
+      input_tokens: 2986
+      output_tokens: 1952
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05972000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.11712000
+      call_cnt: 1
+      latency: 19.21s
+      input_tokens: 2986
+      output_tokens: 1952
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (x == 0.0 && y == 0.0) -> true in w_atan2.c:atan2
+target_file_lines: w_atan2.c:23-23
+target_lines_content: "\t        return __kernel_standard(y,x,3); "
+justification: This branch has 0% historical coverage (line 23) and guards special-case
+  behavior for atan2 when both inputs are exactly zero. Exercising this path broadens
+  coverage of error-handling/special-case logic in the math library wrapper. Although
+  the current run returned early (likely due to IEEE mode), this branch is still reachable
+  by ensuring the math library’s runtime mode is non-IEEE and providing zero-valued
+  inputs via command-line arguments, both of which are permissible external conditions
+  per the harness constraints.
+target_path_constraint: |-
+  To reach the branch where both arguments to atan2 are exactly zero (the condition x == 0.0 AND y == 0.0 evaluates to true), ensure the following input and environment constraints hold, in the order they are encountered by the program:
+
+  1) Process invocation (command-line interface):
+  - The process must be started with exactly two arguments after the program name (so argc == 3). The existing harness already satisfies this (it calls the executable with two arguments), but the arguments’ content must meet constraints below.
+
+  2) Argument parsing semantics:
+  - The program parses both arguments using the C function atof, which interprets text in the current C locale using standard rules for floating-point constants. Therefore, each argument string must be a valid textual representation of a double.
+  - Avoid locale changes (use default "C" locale semantics); do not set environment variables (e.g., LC_ALL, LC_NUMERIC) to non-C locales that would use a comma as decimal separator, since atof expects a dot. If the environment is changed, the strings must match that locale’s format yet still represent zero; to keep constraints simple and robust, require the numeric locale to be C/POSIX.
+
+  3) Values required after parsing:
+  - Let A0 be the numeric value produced by parsing argv[1] with atof, and A1 be the value produced by parsing argv[2]. The following must hold:
+    • A0 == 0.0 (exact double zero)
+    • A1 == 0.0 (exact double zero)
+  - This implies each argument string must represent a value that atof converts to +0.0 (examples include textual zero in any supported form). Do not provide signed NaN/Inf or subnormal values; they must be exactly zero.
+
+  4) Library mode/runtime feature gate:
+  - The special-case branch is compiled under the non-IEEE libm path. Ensure the runtime/library mode does not define _IEEE_LIBM and that _LIB_VERSION is not _IEEE_. As these are usually compile-time or global runtime flags, the environment must allow the program to execute the non-IEEE path of atan2. Concretely:
+    • The executable must be built/linked such that the macro _IEEE_LIBM is NOT in effect at runtime.
+    • The global variable or configuration _LIB_VERSION must not equal _IEEE_.
+  - If either _IEEE_LIBM is defined or _LIB_VERSION == _IEEE_, the function returns early with z and the zero-zero branch will not be reached.
+
+  5) NaN guards:
+  - Ensure neither argument string parses to NaN. If NaN is produced for either A0 or A1, the early return path is taken due to isnan(x) || isnan(y) and the zero-zero branch will not be reached. This is already satisfied by step 3 since both must be exactly 0.0.
+
+  Combined constraints summary (sufficient conditions):
+  - argc == 3
+  - Locale for numeric parsing is C/POSIX (or otherwise consistent with the provided strings) so that two valid numeric strings are parsed
+  - atof(argv[1]) == 0.0 and atof(argv[2]) == 0.0
+  - Runtime/library configuration: non-IEEE path active (i.e., NOT (_IEEE_LIBM defined OR _LIB_VERSION == _IEEE_))
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import os
+      import signal
+      import subprocess
+
+      # Prepare environment to ensure C/POSIX numeric locale
+      env = os.environ.copy()
+      env["LC_ALL"] = "C"
+      env["LANG"] = "C"
+      env["LC_NUMERIC"] = "C"
+      # Remove potential environment modifiers that could alter runtime behavior unexpectedly
+      for var in ("LD_PRELOAD", "LD_LIBRARY_PATH"):
+          env.pop(var, None)
+
+      try:
+          # Provide exactly two arguments that parse to +0.0 via atof in C locale
+          # Keep the same structure (shell=True, single string command) as the original harness
+          cmd = ["./temp_executable 0 0"]
+          result = subprocess.run(
+              cmd,
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+              env=env,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // w_atan2.c (47 lines total)
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  #include "fdlibm.h"
+
+
+  #ifdef __STDC__
+  	double atan2(double y, double x)	
+  #else
+  	double atan2(y,x)			
+  	double y,x;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	// Unexecuted code (line 15) removed. Its line cov: 0/1 (0%)
+  #else
+  	double z;
+  	z = __ieee754_atan2(y,x);
+  	if(_LIB_VERSION == _IEEE_||isnan(x)||isnan(y)) {
+  		return z;
+  	}
+  	if(x==0.0&&y==0.0) {
+  	        // Unexecuted code (line 23) removed. Its line cov: 0/1 (0%)
+  	} else {
+  	    // Unexecuted code (line 25) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 3) {
+          // Unexecuted code (lines 36-37) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = atan2(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [w_atan2.c] enter main 3
+  [w_atan2.c] enter atan2 2
+  [w_atan2.c] enter atan2 3
+execution_summary: |2+
+
+  ```c
+  // w_atan2.c (47 lines total)
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  #include "fdlibm.h"
+
+
+  #ifdef __STDC__
+  	double atan2(double y, double x)	
+  #else
+  	double atan2(y,x)			
+  	double y,x;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	// Unexecuted code (line 15) removed. Its line cov: 0/1 (0%)
+  #else
+  	double z;
+  	z = __ieee754_atan2(y,x);
+  	if(_LIB_VERSION == _IEEE_||isnan(x)||isnan(y)) {
+  		return z;
+  	}
+  	if(x==0.0&&y==0.0) {
+  	        // Unexecuted code (line 23) removed. Its line cov: 0/1 (0%)
+  	} else {
+  	    // Unexecuted code (line 25) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 3) {
+          // Unexecuted code (lines 36-37) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = atan2(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [w_atan2.c] enter main 3
+  [w_atan2.c] enter atan2 2
+  [w_atan2.c] enter atan2 3

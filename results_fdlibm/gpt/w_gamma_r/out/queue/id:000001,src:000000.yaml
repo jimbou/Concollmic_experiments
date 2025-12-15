@@ -1,0 +1,357 @@
+id: 1
+src_id: 0
+create_time: '2025-12-14 21:17:53.173'
+time_taken: 198
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $1.22710000
+    call_cnt: 4
+    latency: 165.31s
+    input_tokens: 17045
+    output_tokens: 14770
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.68460000
+      call_cnt: 2
+      latency: 106.99s
+      input_tokens: 10413
+      output_tokens: 7939
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10188000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.55122000
+      call_cnt: 1
+      latency: 94.50s
+      input_tokens: 5094
+      output_tokens: 7414
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03150000
+      call_cnt: 1
+      latency: 12.49s
+      input_tokens: 5319
+      output_tokens: 525
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.54250000
+      call_cnt: 2
+      latency: 58.32s
+      input_tokens: 6632
+      output_tokens: 6831
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05548000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.48702000
+      call_cnt: 2
+      latency: 58.32s
+      input_tokens: 6632
+      output_tokens: 6831
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (_LIB_VERSION == _IEEE_) -> false in w_gamma_r.c:gamma_r
+target_file_lines: w_gamma_r.c:26-27
+target_lines_content: |2-
+          if(!finite(y)&&finite(x)) {
+              if(floor(x)==x&&x<=0.0) {
+justification: This branch controls whether the wrapper executes the non-IEEE error-handling
+  path around gamma. The code guarded by its else-block (lines 26-34) has 0/9 (0%)
+  historical coverage, so reaching it will add entirely new coverage in this file.
+  It is reachable under the existing harness by configuring the math library’s runtime
+  error-handling mode (an external environment-level condition) without changing program
+  arguments. Once the condition is false, the wrapper evaluates additional logic (e.g.,
+  finite/overflow/singularity checks) that is otherwise completely skipped, expanding
+  behavioral coverage.
+target_path_constraint: |-
+  Chronological constraints to reach the branch "if (_LIB_VERSION == _IEEE_) -> false" inside gamma_r:
+
+  1) Program invocation via shell must pass exactly one argument (besides program name):
+     - Command line must provide exactly one positional argument representing a floating-point number string. The test harness already invokes the executable as: "./temp_executable 1.0" with shell=True, which satisfies argc == 2 and ensures argv[1] parses successfully.
+
+  2) Environment/runtime math library mode must be set so that the libm wrapper does NOT operate in IEEE-only mode:
+     - The global runtime configuration symbol corresponding to the math library version selector ("_LIB_VERSION") must be present and set to a value different from the token representing IEEE mode ("_IEEE_"). This is typically controlled via the libm’s error-handling mode (SVID, POSIX, or other non-IEEE modes). Constraints at environment level:
+       a) Ensure the program is linked against a libm implementation that exposes and honors _LIB_VERSION and allows non-IEEE modes.
+       b) Prior to program start, set the process-wide math error mode to a non-IEEE setting (e.g., SVID or POSIX), using any available mechanism supported by the platform (environment variables, initialization functions, or linker flags). The requirement is: _LIB_VERSION != _IEEE_.
+
+  3) Input value constraints for gamma to execute normally within the non-IEEE path (to avoid early exits or domain errors that might bypass the intended else-block’s logic):
+     - argv[1] must be a valid decimal string that atof can parse into a double. The harness provides "1.0" which suffices; more generally: the string must represent a finite double (not NaN/Inf) to ensure __ieee754_gamma_r(x, signgamp) returns a finite value or at least triggers non-IEEE handling.
+
+  4) File system and permissions:
+     - No special files are required. The executable must be present and runnable. Standard I/O must be available to print results.
+
+  These constraints, when satisfied, will cause gamma_r to compute y = __ieee754_gamma_r(x, signgamp), evaluate the condition _LIB_VERSION == _IEEE_, and, with _LIB_VERSION set to a non-IEEE value, take the false branch to execute code inside lines 26-34.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import os
+      import signal
+      import subprocess
+      import tempfile
+      import textwrap
+      import shutil
+
+      # Build and LD_PRELOAD a tiny shared object that sets _LIB_VERSION to a non-IEEE value
+      # at process start (constructor). This satisfies the path constraint: _LIB_VERSION != _IEEE_.
+
+      c_source = textwrap.dedent(
+          r"""
+          #include <dlfcn.h>
+          #include <stddef.h> // for NULL
+
+          __attribute__((constructor))
+          static void init(void) {
+              void *self = dlopen(NULL, RTLD_LAZY);
+              if (!self) return;
+              void *sym = dlsym(self, "_LIB_VERSION");
+              if (!sym) return;
+              // fdlibm-style values: _IEEE_=0, _XOPEN_=1, _POSIX_=2, _SVID_=3 (typical)
+              // We set to a non-IEEE mode to ensure the condition (_LIB_VERSION == _IEEE_) is false.
+              int *p = (int*)sym;
+              *p = 3; // _SVID_
+          }
+          """
+      )
+
+      temp_dir = tempfile.mkdtemp(prefix="setlibversion_")
+      try:
+          c_path = os.path.join(temp_dir, "setlibversion.c")
+          so_path = os.path.join(temp_dir, "libsetlibversion.so")
+          with open(c_path, "w", encoding="utf-8") as f:
+              f.write(c_source)
+
+          # Try compiling with cc, fallback to gcc
+          compile_cmds = [
+              ["bash", "-lc", f"cc -shared -fPIC -ldl -o '{so_path}' '{c_path}'"],
+              ["bash", "-lc", f"gcc -shared -fPIC -ldl -o '{so_path}' '{c_path}'"],
+          ]
+          compiled = False
+          last_compile_err = None
+          for cmd in compile_cmds:
+              try:
+                  res = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace")
+                  if res.returncode == 0 and os.path.exists(so_path):
+                      compiled = True
+                      break
+                  else:
+                      last_compile_err = (res.stdout or "") + (res.stderr or "")
+              except Exception as e:
+                  last_compile_err = str(e)
+          if not compiled:
+              raise RuntimeError(f"Failed to build preload library to set _LIB_VERSION. Details: {last_compile_err}")
+
+          # Prepare environment with LD_PRELOAD to enforce non-IEEE mode
+          env = os.environ.copy()
+          env["LD_PRELOAD"] = so_path
+
+          try:
+              result = subprocess.run(
+                  ["./temp_executable 1.0"],
+                  capture_output=True,
+                  encoding="utf-8",
+                  errors="replace",
+                  shell=True,
+                  timeout=timeout,
+                  env=env,
+              )
+              return result.stderr, result.returncode
+          except subprocess.TimeoutExpired as e:
+              return e.stderr, -signal.SIGKILL
+      finally:
+          # Best-effort cleanup
+          try:
+              shutil.rmtree(temp_dir)
+          except Exception:
+              pass
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // w_gamma_r.c (57 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+
+  #ifdef __STDC__
+  	double gamma_r(double x, int *signgamp) 
+  #else
+  	double gamma_r(x,signgamp)              
+          double x; int *signgamp;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	// Unexecuted code (line 19) removed. Its line cov: 0/1 (0%)
+  #else
+          double y;
+          y = __ieee754_gamma_r(x,signgamp);
+          if(_LIB_VERSION == _IEEE_) {
+              return y;
+          }
+          // Unexecuted code (lines 26-34) removed. Its line cov: 0/9 (0%)
+  #endif
+  }             
+
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      if (argc != 2) {
+          // Unexecuted code (lines 44-45) removed. Its line cov: 0/2 (0%)
+      }
+
+      double x = atof(argv[1]);
+      int sign = 0;
+
+      double r = gamma_r(x, &sign);
+
+      printf("result = %f\n", r);
+      printf("signgamp = %d\n", sign);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [w_gamma_r.c] enter main 1
+  [w_gamma_r.c] enter main 3
+  [w_gamma_r.c] enter main 4
+  [w_gamma_r.c] enter gamma_r 2
+  [w_gamma_r.c] enter gamma_r 3
+  [w_gamma_r.c] enter main 5
+  [w_gamma_r.c] enter main 6
+execution_summary: |2+
+
+  ```c
+  // w_gamma_r.c (57 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+
+  #ifdef __STDC__
+  	double gamma_r(double x, int *signgamp) 
+  #else
+  	double gamma_r(x,signgamp)              
+          double x; int *signgamp;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	// Unexecuted code (line 19) removed. Its line cov: 0/1 (0%)
+  #else
+          double y;
+          y = __ieee754_gamma_r(x,signgamp);
+          if(_LIB_VERSION == _IEEE_) {
+              return y;
+          }
+          // Unexecuted code (lines 26-34) removed. Its line cov: 0/9 (0%)
+  #endif
+  }             
+
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      if (argc != 2) {
+          // Unexecuted code (lines 44-45) removed. Its line cov: 0/2 (0%)
+      }
+
+      double x = atof(argv[1]);
+      int sign = 0;
+
+      double r = gamma_r(x, &sign);
+
+      printf("result = %f\n", r);
+      printf("signgamp = %d\n", sign);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [w_gamma_r.c] enter main 1
+  [w_gamma_r.c] enter main 3
+  [w_gamma_r.c] enter main 4
+  [w_gamma_r.c] enter gamma_r 2
+  [w_gamma_r.c] enter gamma_r 3
+  [w_gamma_r.c] enter main 5
+  [w_gamma_r.c] enter main 6

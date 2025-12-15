@@ -1,0 +1,339 @@
+id: 1
+src_id: 0
+create_time: '2025-12-14 18:18:49.732'
+time_taken: 152
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.74990000
+    call_cnt: 3
+    latency: 93.97s
+    input_tokens: 13654
+    output_tokens: 7947
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.55286000
+      call_cnt: 2
+      latency: 76.76s
+      input_tokens: 10789
+      output_tokens: 5618
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10456000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.41254000
+      call_cnt: 1
+      latency: 68.05s
+      input_tokens: 5228
+      output_tokens: 5022
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03576000
+      call_cnt: 1
+      latency: 8.71s
+      input_tokens: 5561
+      output_tokens: 596
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.19704000
+      call_cnt: 1
+      latency: 17.20s
+      input_tokens: 2865
+      output_tokens: 2329
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05730000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.13974000
+      call_cnt: 1
+      latency: 17.20s
+      input_tokens: 2865
+      output_tokens: 2329
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: 'In s_floor.c: floor(double x) — take the final else branch of the
+  chain `if (j0<20) { ... } else if (j0>51) { ... } else { ... }`, i.e., execute the
+  `else { ... }` block for values with 20 ≤ j0 ≤ 51 (corresponding to magnitudes between
+  2^20 and 2^52).'
+target_file_lines: s_floor.c:49-50
+target_lines_content: |-
+  	    if(huge+x>0.0) { 		
+  		if(i0<0) {
+justification: This branch body (lines 47-59) has 0% historical coverage (0/13) and
+  represents the core logic for flooring finite doubles whose exponent indicates 20
+  ≤ j0 ≤ 51. Exercising it will cover significantly more lines than other uncovered
+  branches and reveal behaviors for large-but-not-extreme magnitudes where bit-masking
+  and fractional-part handling occur. It is fully reachable by controlling the single
+  numeric command-line argument parsed via atof.
+target_path_constraint: |
+  Inputs and environment are constrained as follows, in the order they are encountered by the program:
+
+  1) Program invocation via shell:
+  - The executable is invoked exactly as a single shell command string: "./temp_executable 1.0" in the harness. We MUST adapt only the numeric argument portion by changing the literal after the program name while preserving a single space delimiter. The operating system must allow process creation and standard C library behavior. No environment variables are required.
+
+  2) Command-line arguments count and parsing:
+  - The program must start with exactly two arguments (argc == 2): argv[0] is the executable path; argv[1] is a textual representation of a floating-point number acceptable to the C function atof using the current C locale (decimal point is '.'). No leading/trailing non-numeric characters other than permitted whitespace and sign characters are allowed. Scientific notation is permitted (e.g., digits with an optional exponent), but do not rely on locale-specific decimal separators.
+
+  3) Numeric properties of argv[1] to select the target floor() branch (the final else branch):
+  - Let x be the double-precision value produced by atof(argv[1]). It must be a finite, normal IEEE-754 double (not NaN, not infinity, and not subnormal/denormal).
+  - Define j0 = exponent(x) - 1023, where exponent(x) is the unbiased 11-bit exponent of x’s IEEE-754 representation. The target branch requires 20 ≤ j0 ≤ 51 inclusive. Equivalently, the absolute value of x must satisfy: 2^20 ≤ |x| < 2^52.
+  - Additionally, x must NOT be an exact integer value in double precision; it must have a non-zero fractional part so that the branch’s internal masking/rounding logic executes meaningfully. Formally, there exists an integer k such that k < x < k+1 or k-1 < x < k for negative x, with x ∉ Z in double.
+  - x must not be so large that j0 > 51 (which would take the j0>51 branch), and must not be so small that j0 < 20 (which would take the first branch). The sign of x can be positive or negative; both are acceptable in this branch range.
+
+  4) I/O behavior:
+  - Standard output and error must be writable; no further constraints.
+
+  Summary as SMT-like constraints:
+  - argc = 2
+  - parse_double(argv[1]) = x
+  - is_finite(x) ∧ is_normal(x)
+  - 2^20 ≤ |x| < 2^52
+  - frac(x) ≠ 0  (x ∉ Z)
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Use a numeric argument that satisfies: is_finite & is_normal, 2^20 <= |x| < 2^52, and frac(x) != 0
+      # Chosen value: 1048576.5 (which is 2^20 + 0.5), ensuring j0 = 20 and non-integer fractional part
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1048576.5"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // s_floor.c (82 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double huge = 1.0e300;
+  #else
+  static double huge = 1.0e300;
+  #endif
+
+  #ifdef __STDC__
+  	double floor(double x)
+  #else
+  	double floor(x)
+  	double x;
+  #endif
+  {
+  	int i0,i1,j0;
+  	unsigned i,j;
+  	i0 =  __HI(x);
+  	i1 =  __LO(x);
+  	j0 = ((i0>>20)&0x7ff)-0x3ff;
+  	if(j0<20) {
+  	    if(j0<0) { 	
+  		if(huge+x>0.0) {
+  		    if(i0>=0) {i0=i1=0;} 
+  		    else if(((i0&0x7fffffff)|i1)!=0)
+  			{ i0=0xbff00000;i1=0;}
+  		}
+  	    } else {
+  		// Unexecuted code (lines 36-41) removed. Its line cov: 0/6 (0%)
+  	    }
+  	} else if (j0>51) {
+  	    // Unexecuted code (lines 44-45) removed. Its line cov: 0/2 (0%)
+  	} else {
+  	    // Unexecuted code (lines 47-59) removed. Its line cov: 0/13 (0%)
+  	}
+  	__HI(x) = i0;
+  	__LO(x) = i1;
+  	return x;
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 72-73) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = floor(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [s_floor.c] enter main 3
+  [s_floor.c] enter main 4
+  [s_floor.c] enter floor 1
+  [s_floor.c] enter floor 2
+  [s_floor.c] enter floor 3
+  [s_floor.c] enter floor 4
+  [s_floor.c] enter floor 12
+execution_summary: |2+
+
+  ```c
+  // s_floor.c (82 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double huge = 1.0e300;
+  #else
+  static double huge = 1.0e300;
+  #endif
+
+  #ifdef __STDC__
+  	double floor(double x)
+  #else
+  	double floor(x)
+  	double x;
+  #endif
+  {
+  	int i0,i1,j0;
+  	unsigned i,j;
+  	i0 =  __HI(x);
+  	i1 =  __LO(x);
+  	j0 = ((i0>>20)&0x7ff)-0x3ff;
+  	if(j0<20) {
+  	    if(j0<0) { 	
+  		if(huge+x>0.0) {
+  		    if(i0>=0) {i0=i1=0;} 
+  		    else if(((i0&0x7fffffff)|i1)!=0)
+  			{ i0=0xbff00000;i1=0;}
+  		}
+  	    } else {
+  		// Unexecuted code (lines 36-41) removed. Its line cov: 0/6 (0%)
+  	    }
+  	} else if (j0>51) {
+  	    // Unexecuted code (lines 44-45) removed. Its line cov: 0/2 (0%)
+  	} else {
+  	    // Unexecuted code (lines 47-59) removed. Its line cov: 0/13 (0%)
+  	}
+  	__HI(x) = i0;
+  	__LO(x) = i1;
+  	return x;
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 72-73) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = floor(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [s_floor.c] enter main 3
+  [s_floor.c] enter main 4
+  [s_floor.c] enter floor 1
+  [s_floor.c] enter floor 2
+  [s_floor.c] enter floor 3
+  [s_floor.c] enter floor 4
+  [s_floor.c] enter floor 12

@@ -1,0 +1,574 @@
+id: 4
+src_id: 2
+create_time: '2025-12-14 15:31:00.886'
+time_taken: 818
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 1
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.88376000
+    call_cnt: 3
+    latency: 90.12s
+    input_tokens: 16606
+    output_tokens: 9194
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.67386000
+      call_cnt: 2
+      latency: 68.63s
+      input_tokens: 13689
+      output_tokens: 6668
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.13476000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.50154000
+      call_cnt: 1
+      latency: 58.87s
+      input_tokens: 6738
+      output_tokens: 6042
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03756000
+      call_cnt: 1
+      latency: 9.76s
+      input_tokens: 6951
+      output_tokens: 626
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.20990000
+      call_cnt: 1
+      latency: 21.49s
+      input_tokens: 2917
+      output_tokens: 2526
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05834000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.15156000
+      call_cnt: 1
+      latency: 21.49s
+      input_tokens: 2917
+      output_tokens: 2526
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if ((iy | ly) == 0) -> true in e_pow.c:__ieee754_pow (i.e., y is exactly
+  ±0.0)
+target_file_lines: e_pow.c:71-71
+target_lines_content: "\t\treturn one;"
+justification: 'This branch handles the fundamental special case x^0 and currently
+  shows zero historical coverage (line cov: 0/1 (0%)). Exercising it will cover an
+  early-return path and validate zero-exponent handling, which is a core behavior
+  of pow. It is easily reachable via command-line inputs parsed by atof and does not
+  depend on internal states beyond the parsed doubles.'
+target_path_constraint: |-
+  To drive execution into the branch that checks (iy | ly) == 0 (interpreted as: exponent y is exactly +0.0 or -0.0 in IEEE-754 double) inside __ieee754_pow, enforce the following input and environment constraints in chronological order:
+
+  1) Process invocation:
+  - Invoke the program with exactly three command-line arguments (argc == 3): the program name, followed by two tokens representing floating-point numbers x and y. No additional arguments.
+
+  2) Parsing behavior via atof:
+  - The second token (argv[1]) can be any valid decimal representation of a finite IEEE-754 double value x. Avoid encodings that would produce NaN or ±Inf (no "inf", "infinity", or "nan" strings; magnitude must be finite).
+  - The third token (argv[2]) MUST be parsed by atof as exactly a signed zero double (±0.0). This requires the token to lexically represent zero without any fractional or exponent part that would yield a nonzero value. Permissible forms include optional sign followed by a zero value, with optional surrounding whitespace that atof ignores. Examples of canonical forms (for specification, not concrete test suggestions): "+0", "0", "-0", "+0.0", "-0.0", "0.000", optionally with leading/trailing spaces. Do NOT include any nonzero digits anywhere. Do NOT include an exponent with a nonzero mantissa (e.g., "0e0" is allowed, but not "0e-0" with nonzero mantissa; ensure resultant numeric value equals 0). The exact numeric value after parsing must be ±0.0.
+
+  3) Finiteness and normality requirements:
+  - Ensure both parsed values are finite (not NaN, not ±Inf). This is inherently satisfied if the tokens are finite decimal numerals as described. This prevents early bailout via the NaN/Inf checking branch.
+
+  4) No reliance on subnormal-specific formatting:
+  - It is acceptable if x is zero or nonzero; the target branch only depends on y being exactly zero. However, to avoid falling into later special-case branches dependent on x being exactly ±1 when y is large integers, ensure y is zero; these later checks will be bypassed after the zero-exponent case is handled.
+
+  5) Locale and encoding assumptions:
+  - Use the C/POSIX locale semantics for atof: decimal point is '.', no thousands separators. Input must be ASCII/UTF-8 encodable plain text.
+
+  6) Summary of the decisive mathematical condition for the target branch:
+  - After atof parsing, let y denote the second double argument. The decisive constraint is y == +0.0 or y == -0.0 exactly, in IEEE-754 double representation. This ensures (iy | ly) == 0 and takes the zero-exponent branch.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Concrete inputs satisfying the target constraints:
+      # - x: finite, non-special decimal
+      # - y: exactly signed zero parsed by atof
+      # Using x = 1.23456789 and y = +0.0
+      cmd = "./temp_executable 1.23456789 +0.0"
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // e_pow.c (295 lines total)
+
+  #ifndef lint
+  static  char sccsid[] = "@(#)e_pow.c 1.5 04/04/22 SMI"; 
+  #endif
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double 
+  #else
+  static double 
+  #endif
+  bp[] = {1.0, 1.5,},
+  dp_h[] = { 0.0, 5.84962487220764160156e-01,}, 
+  dp_l[] = { 0.0, 1.35003920212974897128e-08,}, 
+  zero    =  0.0,
+  one	=  1.0,
+  two	=  2.0,
+  two53	=  9007199254740992.0,	
+  huge	=  1.0e300,
+  tiny    =  1.0e-300,
+  	
+  L1  =  5.99999999999994648725e-01, 
+  L2  =  4.28571428578550184252e-01, 
+  L3  =  3.33333329818377432918e-01, 
+  L4  =  2.72728123808534006489e-01, 
+  L5  =  2.30660745775561754067e-01, 
+  L6  =  2.06975017800338417784e-01, 
+  P1   =  1.66666666666666019037e-01, 
+  P2   = -2.77777777770155933842e-03, 
+  P3   =  6.61375632143793436117e-05, 
+  P4   = -1.65339022054652515390e-06, 
+  P5   =  4.13813679705723846039e-08, 
+  lg2  =  6.93147180559945286227e-01, 
+  lg2_h  =  6.93147182464599609375e-01, 
+  lg2_l  = -1.90465429995776804525e-09, 
+  ovt =  8.0085662595372944372e-0017, 
+  cp    =  9.61796693925975554329e-01, 
+  cp_h  =  9.61796700954437255859e-01, 
+  cp_l  = -7.02846165095275826516e-09, 
+  ivln2    =  1.44269504088896338700e+00, 
+  ivln2_h  =  1.44269502162933349609e+00, 
+  ivln2_l  =  1.92596299112661746887e-08; 
+
+  #ifdef __STDC__
+  	double __ieee754_pow(double x, double y)
+  #else
+  	double __ieee754_pow(x,y)
+  	double x, y;
+  #endif
+  {
+  	fprintf(stderr, "\n");
+  	double z,ax,z_h,z_l,p_h,p_l;
+  	double y1,t1,t2,r,s,t,u,v,w;
+  	int i0,i1,i,j,k,yisint,n;
+  	int hx,hy,ix,iy;
+  	unsigned lx,ly;
+
+  	i0 = ((*(int*)&one)>>29)^1; i1=1-i0;
+  	hx = __HI(x); lx = __LO(x);
+  	hy = __HI(y); ly = __LO(y);
+  	ix = hx&0x7fffffff;  iy = hy&0x7fffffff;
+
+      
+  	if((iy|ly)==0) {
+  		// Unexecuted code (line 71) removed. Its line cov: 0/1 (0%)
+  	}
+
+      
+  	if(ix > 0x7ff00000 || ((ix==0x7ff00000)&&(lx!=0)) ||
+  	   iy > 0x7ff00000 || ((iy==0x7ff00000)&&(ly!=0))) {
+  		// Unexecuted code (line 77) removed. Its line cov: 0/1 (0%)
+  	}
+
+      
+  	yisint  = 0;
+  	if(hx<0) {	
+  	    if(iy>=0x43400000) yisint = 2; 
+  	    else if(iy>=0x3ff00000) {
+  		k = (iy>>20)-0x3ff;	   
+  		if(k>20) {
+  		    j = ly>>(52-k);
+  		    if((j<<(52-k))==ly) yisint = 2-(j&1);
+  		} else if(ly==0) {
+  		    j = iy>>(20-k);
+  		    if((j<<(20-k))==iy) yisint = 2-(j&1);
+  		}
+  	    }		
+  	} 
+
+      
+  	if(ly==0) { 	
+  	    if (iy==0x7ff00000) {	
+  	        if(((ix-0x3ff00000)|lx)==0) {
+  		    // Unexecuted code (line 100) removed. Its line cov: 0/1 (0%)
+  		}
+  	        else if (ix >= 0x3ff00000) {
+  		    // Unexecuted code (line 103) removed. Its line cov: 0/1 (0%)
+  		}
+  	        else {
+  		    // Unexecuted code (line 106) removed. Its line cov: 0/1 (0%)
+  		}
+  	    } 
+  	    if(iy==0x3ff00000) {	
+  		if(hy<0) {
+  		    // Unexecuted code (line 111) removed. Its line cov: 0/1 (0%)
+  		} else {
+  		    // Unexecuted code (line 113) removed. Its line cov: 0/1 (0%)
+  		}
+  	    }
+  	    if(hy==0x40000000) {
+  		// Unexecuted code (line 117) removed. Its line cov: 0/1 (0%)
+  	    }
+  	    if(hy==0x3fe00000) {	
+  		if(hx>=0) {
+  		    // Unexecuted code (line 121) removed. Its line cov: 0/1 (0%)
+  		}
+  	    }
+  	}
+
+  	ax   = fabs(x);
+      
+  	if(lx==0) {
+  	    if(ix==0x7ff00000||ix==0||ix==0x3ff00000){
+  		// Unexecuted code (lines 130-138) removed. Its line cov: 0/9 (0%)
+  	    }
+  	}
+      
+  	n = (hx>>31)+1;
+
+      
+  	if((n|yisint)==0) {
+  		// Unexecuted code (line 146) removed. Its line cov: 1/1 (100%)
+  	}
+
+  	s = one; 
+  	if((n|(yisint-1))==0) s = -one;
+
+      
+  	if(iy>0x41e00000) { 
+  	    if(iy>0x43f00000){	
+  		if(ix<=0x3fefffff) {
+  		    // Unexecuted code (line 156) removed. Its line cov: 0/1 (0%)
+  		}
+  		if(ix>=0x3ff00000) {
+  		    return (hy>0)? huge*huge:tiny*tiny;
+  		}
+  	    }
+  	
+  	    if(ix<0x3fefffff) {
+  		// Unexecuted code (line 164) removed. Its line cov: 0/1 (0%)
+  	    }
+  	    if(ix>0x3ff00000) {
+  		// Unexecuted code (line 167) removed. Its line cov: 0/1 (0%)
+  	    }
+  	
+  	    // Unexecuted code (lines 170-176) removed. Its line cov: 0/7 (0%)
+  	} else {
+  	    // Unexecuted code (lines 178-224) removed. Its line cov: 38/38 (100%)
+  	}
+
+      
+  	// Unexecuted code (lines 228-275) removed. Its line cov: 44/47 (94%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      fprintf(stderr, "\n");
+      if (argc != 3) {
+          // Unexecuted code (lines 284-285) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = __ieee754_pow(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [e_pow.c] enter main 3
+
+  [e_pow.c] enter __ieee754_pow 2
+execution_summary: |2+
+
+  ```c
+  // e_pow.c (295 lines total)
+
+  #ifndef lint
+  static  char sccsid[] = "@(#)e_pow.c 1.5 04/04/22 SMI"; 
+  #endif
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double 
+  #else
+  static double 
+  #endif
+  bp[] = {1.0, 1.5,},
+  dp_h[] = { 0.0, 5.84962487220764160156e-01,}, 
+  dp_l[] = { 0.0, 1.35003920212974897128e-08,}, 
+  zero    =  0.0,
+  one	=  1.0,
+  two	=  2.0,
+  two53	=  9007199254740992.0,	
+  huge	=  1.0e300,
+  tiny    =  1.0e-300,
+  	
+  L1  =  5.99999999999994648725e-01, 
+  L2  =  4.28571428578550184252e-01, 
+  L3  =  3.33333329818377432918e-01, 
+  L4  =  2.72728123808534006489e-01, 
+  L5  =  2.30660745775561754067e-01, 
+  L6  =  2.06975017800338417784e-01, 
+  P1   =  1.66666666666666019037e-01, 
+  P2   = -2.77777777770155933842e-03, 
+  P3   =  6.61375632143793436117e-05, 
+  P4   = -1.65339022054652515390e-06, 
+  P5   =  4.13813679705723846039e-08, 
+  lg2  =  6.93147180559945286227e-01, 
+  lg2_h  =  6.93147182464599609375e-01, 
+  lg2_l  = -1.90465429995776804525e-09, 
+  ovt =  8.0085662595372944372e-0017, 
+  cp    =  9.61796693925975554329e-01, 
+  cp_h  =  9.61796700954437255859e-01, 
+  cp_l  = -7.02846165095275826516e-09, 
+  ivln2    =  1.44269504088896338700e+00, 
+  ivln2_h  =  1.44269502162933349609e+00, 
+  ivln2_l  =  1.92596299112661746887e-08; 
+
+  #ifdef __STDC__
+  	double __ieee754_pow(double x, double y)
+  #else
+  	double __ieee754_pow(x,y)
+  	double x, y;
+  #endif
+  {
+  	fprintf(stderr, "\n");
+  	double z,ax,z_h,z_l,p_h,p_l;
+  	double y1,t1,t2,r,s,t,u,v,w;
+  	int i0,i1,i,j,k,yisint,n;
+  	int hx,hy,ix,iy;
+  	unsigned lx,ly;
+
+  	i0 = ((*(int*)&one)>>29)^1; i1=1-i0;
+  	hx = __HI(x); lx = __LO(x);
+  	hy = __HI(y); ly = __LO(y);
+  	ix = hx&0x7fffffff;  iy = hy&0x7fffffff;
+
+      
+  	if((iy|ly)==0) {
+  		return one;
+  	}
+
+      
+  	if(ix > 0x7ff00000 || ((ix==0x7ff00000)&&(lx!=0)) ||
+  	   iy > 0x7ff00000 || ((iy==0x7ff00000)&&(ly!=0))) {
+  		// Unexecuted code (line 77) removed. Its line cov: 0/1 (0%)
+  	}
+
+      
+  	yisint  = 0;
+  	if(hx<0) {	
+  	    if(iy>=0x43400000) yisint = 2; 
+  	    else if(iy>=0x3ff00000) {
+  		k = (iy>>20)-0x3ff;	   
+  		if(k>20) {
+  		    j = ly>>(52-k);
+  		    if((j<<(52-k))==ly) yisint = 2-(j&1);
+  		} else if(ly==0) {
+  		    j = iy>>(20-k);
+  		    if((j<<(20-k))==iy) yisint = 2-(j&1);
+  		}
+  	    }		
+  	} 
+
+      
+  	if(ly==0) { 	
+  	    if (iy==0x7ff00000) {	
+  	        if(((ix-0x3ff00000)|lx)==0) {
+  		    // Unexecuted code (line 100) removed. Its line cov: 0/1 (0%)
+  		}
+  	        else if (ix >= 0x3ff00000) {
+  		    // Unexecuted code (line 103) removed. Its line cov: 0/1 (0%)
+  		}
+  	        else {
+  		    // Unexecuted code (line 106) removed. Its line cov: 0/1 (0%)
+  		}
+  	    } 
+  	    if(iy==0x3ff00000) {	
+  		if(hy<0) {
+  		    // Unexecuted code (line 111) removed. Its line cov: 0/1 (0%)
+  		} else {
+  		    // Unexecuted code (line 113) removed. Its line cov: 0/1 (0%)
+  		}
+  	    }
+  	    if(hy==0x40000000) {
+  		// Unexecuted code (line 117) removed. Its line cov: 0/1 (0%)
+  	    }
+  	    if(hy==0x3fe00000) {	
+  		if(hx>=0) {
+  		    // Unexecuted code (line 121) removed. Its line cov: 0/1 (0%)
+  		}
+  	    }
+  	}
+
+  	ax   = fabs(x);
+      
+  	if(lx==0) {
+  	    if(ix==0x7ff00000||ix==0||ix==0x3ff00000){
+  		// Unexecuted code (lines 130-138) removed. Its line cov: 0/9 (0%)
+  	    }
+  	}
+      
+  	n = (hx>>31)+1;
+
+      
+  	if((n|yisint)==0) {
+  		// Unexecuted code (line 146) removed. Its line cov: 1/1 (100%)
+  	}
+
+  	s = one; 
+  	if((n|(yisint-1))==0) s = -one;
+
+      
+  	if(iy>0x41e00000) { 
+  	    if(iy>0x43f00000){	
+  		if(ix<=0x3fefffff) {
+  		    // Unexecuted code (line 156) removed. Its line cov: 0/1 (0%)
+  		}
+  		if(ix>=0x3ff00000) {
+  		    // Unexecuted code (line 159) removed. Its line cov: 1/1 (100%)
+  		}
+  	    }
+  	
+  	    if(ix<0x3fefffff) {
+  		// Unexecuted code (line 164) removed. Its line cov: 0/1 (0%)
+  	    }
+  	    if(ix>0x3ff00000) {
+  		// Unexecuted code (line 167) removed. Its line cov: 0/1 (0%)
+  	    }
+  	
+  	    // Unexecuted code (lines 170-176) removed. Its line cov: 0/7 (0%)
+  	} else {
+  	    // Unexecuted code (lines 178-224) removed. Its line cov: 38/38 (100%)
+  	}
+
+      
+  	// Unexecuted code (lines 228-275) removed. Its line cov: 44/47 (94%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      fprintf(stderr, "\n");
+      if (argc != 3) {
+          // Unexecuted code (lines 284-285) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = __ieee754_pow(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Chosen concrete inputs satisfying constraints:
+      # x = -1.23456789 (negative, finite, not special; fractional ensures lx != 0)
+      # y = 2.3 (finite, |y| << 2^30, non-integer; fractional ensures yisint == 0 and ly != 0)
+      cmd = "./temp_executable -1.23456789 2.3"
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          raise e
+src_execution_trace: |2
+
+  [e_pow.c] enter main 3
+
+  [e_pow.c] enter __ieee754_pow 14

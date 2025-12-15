@@ -1,0 +1,384 @@
+id: 2
+src_id: 0
+create_time: '2025-12-14 16:11:47.567'
+time_taken: 328
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $1.03486000
+    call_cnt: 3
+    latency: 132.24s
+    input_tokens: 13880
+    output_tokens: 12621
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.84744000
+      call_cnt: 2
+      latency: 110.66s
+      input_tokens: 11127
+      output_tokens: 10415
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10926000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.53352000
+      call_cnt: 1
+      latency: 78.93s
+      input_tokens: 5463
+      output_tokens: 7004
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.20466000
+      call_cnt: 1
+      latency: 31.74s
+      input_tokens: 5664
+      output_tokens: 3411
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.18742000
+      call_cnt: 1
+      latency: 21.58s
+      input_tokens: 2753
+      output_tokens: 2206
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05506000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.13236000
+      call_cnt: 1
+      latency: 21.58s
+      input_tokens: 2753
+      output_tokens: 2206
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: 'if (jx < 0) -> true in e_sinh.c: __ieee754_sinh'
+target_file_lines: e_sinh.c:39-39
+target_lines_content: "\t\th = -h;"
+justification: This branch (sign-handling path) has 0% historical coverage as indicated
+  by “Unexecuted code (line 39)”. It is an early, simple split that exercises the
+  negative-input handling logic distinct from the current run (which used a positive
+  input). Reaching it will improve coverage of the core function by exploring the
+  negative-value code path, and it is clearly reachable via the existing harness by
+  providing a negative numeric argument.
+target_path_constraint: |-
+  Program invocation and arguments:
+  1. The program must be invoked with exactly one whitespace-separated argument after the executable name (so that argc == 2 in main). No extra arguments or trailing tokens are allowed.
+  2. The single argument must be a text string that the standard C function atof parses as a finite negative IEEE-754 double-precision number. Examples of acceptable lexical forms include an optional leading minus sign followed by digits with an optional decimal point and/or exponent (e.g., “-<digits>[.<digits>][e[+|-]<digits>]”), but DO NOT provide a concrete example here.
+  3. The argument must NOT represent NaN or infinity in any spelling (e.g., not “nan”, “NaN”, “inf”, “+inf”, “-inf”, “infinity”, or values whose magnitude overflows to infinity when parsed). It must be within the finite representable range of a double.
+  4. The argument string must be ASCII/UTF-8 encodable and contain no embedded whitespace that would split it into multiple shell tokens.
+
+  Environmental conditions:
+  5. The working directory must allow executing the compiled binary, and the runtime environment must use a locale where atof recognizes the dot character (.) as the decimal separator. Avoid locale-dependent formats (do not rely on commas as decimal separators).
+
+  Semantic constraint to reach the branch jx < 0 in __ieee754_sinh:
+  6. After parsing via atof, the resulting double x must have the sign bit set (i.e., be negative, including the possibility of negative zero). Formally: x is finite and x ≤ -0.0. This ensures the high 32-bit word jx is negative, making (jx < 0) evaluate to true.
+
+  Ordering rationale:
+  - Constraints (1)-(4) ensure main receives exactly one valid numeric argument and passes it to __ieee754_sinh.
+  - Constraint (3) ensures we do not trigger the earlier NaN/Infinity check (ix >= 0x7ff00000).
+  - Constraint (6) directly satisfies the target branch condition jx < 0.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import os
+      import signal
+      import subprocess
+
+      # Concrete input satisfying all constraints:
+      # - Single argument, ASCII, no whitespace: "-1.0"
+      # - atof parses it as a finite negative double
+      # - Not NaN/Inf; within finite range
+      # - Locale forced to recognize '.' as decimal separator via LC_ALL=C
+      cmd = "./temp_executable -1.0"
+
+      # Prepare environment ensuring C/POSIX locale so '.' is the decimal separator
+      env = os.environ.copy()
+      env["LC_ALL"] = "C"
+      # LANG typically overridden by LC_ALL but set it as well for completeness
+      env.setdefault("LANG", "C")
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+              env=env,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // e_sinh.c (90 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double one = 1.0, shuge = 1.0e307;
+  #else
+  static double one = 1.0, shuge = 1.0e307;
+  #endif
+
+  #ifdef __STDC__
+  	double __ieee754_sinh(double x)
+  #else
+  	double __ieee754_sinh(x)
+  	double x;
+  #endif
+  {	
+  	fprintf(stderr, "\n");
+  	double t,w,h;
+  	int ix,jx;
+  	unsigned lx;
+
+      
+  	jx = __HI(x);
+  	ix = jx&0x7fffffff;
+
+      
+  	if(ix>=0x7ff00000) {
+  		// Unexecuted code (line 34) removed. Its line cov: 0/1 (0%)
+  	}
+
+  	h = 0.5;
+  	if (jx<0) {
+  		// Unexecuted code (line 39) removed. Its line cov: 0/1 (0%)
+  	}
+      
+  	if (ix < 0x40360000) {		
+  		fprintf(stderr, "\n");
+  	    if (ix<0x3e300000) {		
+  			if(shuge+x>one) {
+  				return x;
+  			}
+  		}
+  	    t = expm1(fabs(x));
+  	    if(ix<0x3ff00000) {
+  			// Unexecuted code (line 51) removed. Its line cov: 0/1 (0%)
+  		}
+  	    // Unexecuted code (line 53) removed. Its line cov: 0/1 (0%)
+  	}
+
+      
+  	if (ix < 0x40862E42) {
+  		// Unexecuted code (line 58) removed. Its line cov: 0/1 (0%)
+  	}
+
+      
+  	lx = *( (((*(unsigned*)&one)>>29)) + (unsigned*)&x);
+  	if (ix<0x408633CE || (ix==0x408633ce)&&(lx<=(unsigned)0x8fb9f87d)) {
+  	    // Unexecuted code (lines 64-66) removed. Its line cov: 0/3 (0%)
+  	}
+
+      
+  	// Unexecuted code (line 70) removed. Its line cov: 0/1 (0%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+
+      if (argc != 2) {
+          // Unexecuted code (lines 80-81) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = __ieee754_sinh(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [e_sinh.c] enter main 3
+
+
+  [e_sinh.c] enter __ieee754_sinh 5
+  [e_sinh.c] enter __ieee754_sinh 6
+execution_summary: |2+
+
+  ```c
+  // e_sinh.c (90 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double one = 1.0, shuge = 1.0e307;
+  #else
+  static double one = 1.0, shuge = 1.0e307;
+  #endif
+
+  #ifdef __STDC__
+  	double __ieee754_sinh(double x)
+  #else
+  	double __ieee754_sinh(x)
+  	double x;
+  #endif
+  {	
+  	fprintf(stderr, "\n");
+  	double t,w,h;
+  	int ix,jx;
+  	unsigned lx;
+
+      
+  	jx = __HI(x);
+  	ix = jx&0x7fffffff;
+
+      
+  	if(ix>=0x7ff00000) {
+  		// Unexecuted code (line 34) removed. Its line cov: 0/1 (0%)
+  	}
+
+  	h = 0.5;
+  	if (jx<0) {
+  		// Unexecuted code (line 39) removed. Its line cov: 0/1 (0%)
+  	}
+      
+  	if (ix < 0x40360000) {		
+  		fprintf(stderr, "\n");
+  	    if (ix<0x3e300000) {		
+  			if(shuge+x>one) {
+  				return x;
+  			}
+  		}
+  	    t = expm1(fabs(x));
+  	    if(ix<0x3ff00000) {
+  			// Unexecuted code (line 51) removed. Its line cov: 0/1 (0%)
+  		}
+  	    // Unexecuted code (line 53) removed. Its line cov: 0/1 (0%)
+  	}
+
+      
+  	if (ix < 0x40862E42) {
+  		// Unexecuted code (line 58) removed. Its line cov: 0/1 (0%)
+  	}
+
+      
+  	lx = *( (((*(unsigned*)&one)>>29)) + (unsigned*)&x);
+  	if (ix<0x408633CE || (ix==0x408633ce)&&(lx<=(unsigned)0x8fb9f87d)) {
+  	    // Unexecuted code (lines 64-66) removed. Its line cov: 0/3 (0%)
+  	}
+
+      
+  	// Unexecuted code (line 70) removed. Its line cov: 0/1 (0%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+
+      if (argc != 2) {
+          // Unexecuted code (lines 80-81) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = __ieee754_sinh(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [e_sinh.c] enter main 3
+
+
+  [e_sinh.c] enter __ieee754_sinh 5
+  [e_sinh.c] enter __ieee754_sinh 6

@@ -1,0 +1,351 @@
+id: 1
+src_id: 0
+create_time: '2025-12-14 20:21:09.436'
+time_taken: 191
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $1.03844000
+    call_cnt: 4
+    latency: 106.91s
+    input_tokens: 19738
+    output_tokens: 10728
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.89342000
+      call_cnt: 3
+      latency: 92.85s
+      input_tokens: 16939
+      output_tokens: 9244
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10492000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.33960000
+      call_cnt: 1
+      latency: 41.75s
+      input_tokens: 5246
+      output_tokens: 3750
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.41740000
+      call_cnt: 1
+      latency: 40.46s
+      input_tokens: 5730
+      output_tokens: 4969
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03150000
+      call_cnt: 1
+      latency: 10.64s
+      input_tokens: 5963
+      output_tokens: 525
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.14502000
+      call_cnt: 1
+      latency: 14.06s
+      input_tokens: 2799
+      output_tokens: 1484
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05598000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.08904000
+      call_cnt: 1
+      latency: 14.06s
+      input_tokens: 2799
+      output_tokens: 1484
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (ix >= 0x3ff00000) -> true inside tanh() in s_tanh.c (under the
+  outer condition if (ix < 0x40360000))
+target_file_lines: s_tanh.c:45-46
+target_lines_content: |-
+  		t = expm1(two*fabs(x));
+  		z = one - two/(t+two);
+justification: This mid-range magnitude branch (roughly |x| ≥ 1.0 and |x| < ~22.0)
+  has 0% historical coverage for its body (lines 45-46). It exercises a core computation
+  path of tanh and is reachable using the existing harness, which supplies a single
+  numeric argument. Selecting this branch will improve coverage in a key numerical
+  path without requiring changes to the harness.
+target_path_constraint: |-
+  Environment and invocation:
+  1) Program must be invoked with exactly one command-line argument (besides program name). The harness already does this by executing a shell command that passes one numeric string.
+
+  Argument format and numeric value constraints for reaching the target branch in tanh(x):
+  2) The single argument must parse as a valid double-precision floating-point number in C via atof(). The string must represent a finite real number (not NaN or Infinity). This ensures ix < 0x7ff00000 holds (i.e., not an IEEE-754 infinity/NaN), passing the first check.
+
+  3) Magnitude window to reach the specific mid-range branch body (lines 45-46):
+     - Require 1.0 ≤ |x| < ~22.0, more precisely: 1.0 ≤ |x| < 2^22 * 2^(−?); however the code uses bitwise exponent bounds:
+       • Outer guard requires ix < 0x40360000 (approximately |x| < 22.0). 
+       • Inner guard requires ix ≥ 0x3ff00000 (approximately |x| ≥ 1.0).
+     Therefore, enforce: 1.0 ≤ |x| < 22.0.
+
+  4) Avoid the tiny-number fast-path to ensure control flows into the selected inner branch, not the earlier return:
+     - Ensure |x| ≥ 2^(-56) (~1.38778e-17). This is already implied by step 3 since |x| ≥ 1.0, but we specify for completeness regarding ordering.
+
+  5) Sign independence: The selected branch body computes using fabs(x) and sets z before a final sign application. Either sign of x is acceptable. No further constraints are needed on the sign other than finiteness.
+
+  Input encoding/details:
+  6) The argument string must be ASCII or UTF-8 text representing the number, optionally with leading/trailing whitespace recognized by atof(). No extraneous characters after the numeric literal that would prevent atof() from parsing any number at all.
+
+  Summary (SMT-style):
+  - Let s be the command-line string; x = parse_double(s) via C atof rules.
+  - Constraints: isFinite(x) ∧ 1.0 ≤ |x| < 22.0.
+  - No other environmental dependencies.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Choose a numeric argument that satisfies: isFinite(x) and 1.0 <= |x| < 22.0
+      # "2.0" is finite and within the required magnitude window.
+      arg = "2.0"
+      cmd = f"./temp_executable {arg}"
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # Ensure to raise the error if run failed (e.g., file access or subprocess setup)
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // s_tanh.c (74 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double one=1.0, two=2.0, tiny = 1.0e-300;
+  #else
+  static double one=1.0, two=2.0, tiny = 1.0e-300;
+  #endif
+
+  #ifdef __STDC__
+  	double tanh(double x)
+  #else
+  	double tanh(x)
+  	double x;
+  #endif
+  {
+  	double t,z;
+  	int jx,ix;
+
+      
+  	jx = __HI(x);
+  	ix = jx&0x7fffffff;
+
+      
+  	if(ix>=0x7ff00000) { 
+  	    // Unexecuted code (lines 32-36) removed. Its line cov: 0/5 (0%)
+  	}
+
+      
+  	if (ix < 0x40360000) {		
+  	    if (ix<0x3c800000) {		
+  		return x*(one+x);
+  	    }
+  	    if (ix>=0x3ff00000) {	
+  		// Unexecuted code (lines 45-46) removed. Its line cov: 0/2 (0%)
+  	    } else {
+  	        // Unexecuted code (lines 48-49) removed. Its line cov: 0/2 (0%)
+  	    }
+      
+  	} else {
+  	    // Unexecuted code (line 53) removed. Its line cov: 0/1 (0%)
+  	}
+  	// Unexecuted code (line 55) removed. Its line cov: 0/1 (0%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 64-65) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = tanh(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [s_tanh.c] enter main 3
+  [s_tanh.c] enter tanh 1
+  [s_tanh.c] enter tanh 5
+  [s_tanh.c] enter tanh 6
+execution_summary: |2+
+
+  ```c
+  // s_tanh.c (74 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double one=1.0, two=2.0, tiny = 1.0e-300;
+  #else
+  static double one=1.0, two=2.0, tiny = 1.0e-300;
+  #endif
+
+  #ifdef __STDC__
+  	double tanh(double x)
+  #else
+  	double tanh(x)
+  	double x;
+  #endif
+  {
+  	double t,z;
+  	int jx,ix;
+
+      
+  	jx = __HI(x);
+  	ix = jx&0x7fffffff;
+
+      
+  	if(ix>=0x7ff00000) { 
+  	    // Unexecuted code (lines 32-36) removed. Its line cov: 0/5 (0%)
+  	}
+
+      
+  	if (ix < 0x40360000) {		
+  	    if (ix<0x3c800000) {		
+  		return x*(one+x);
+  	    }
+  	    if (ix>=0x3ff00000) {	
+  		// Unexecuted code (lines 45-46) removed. Its line cov: 0/2 (0%)
+  	    } else {
+  	        // Unexecuted code (lines 48-49) removed. Its line cov: 0/2 (0%)
+  	    }
+      
+  	} else {
+  	    // Unexecuted code (line 53) removed. Its line cov: 0/1 (0%)
+  	}
+  	// Unexecuted code (line 55) removed. Its line cov: 0/1 (0%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 64-65) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = tanh(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [s_tanh.c] enter main 3
+  [s_tanh.c] enter tanh 1
+  [s_tanh.c] enter tanh 5
+  [s_tanh.c] enter tanh 6

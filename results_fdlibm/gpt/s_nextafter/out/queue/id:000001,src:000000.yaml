@@ -1,0 +1,352 @@
+id: 1
+src_id: 0
+create_time: '2025-12-14 19:26:34.074'
+time_taken: 259
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 13
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $1.19872000
+    call_cnt: 4
+    latency: 150.58s
+    input_tokens: 21569
+    output_tokens: 12789
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $1.04662000
+      call_cnt: 3
+      latency: 133.32s
+      input_tokens: 18668
+      output_tokens: 11221
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10332000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.30022000
+      call_cnt: 1
+      latency: 34.52s
+      input_tokens: 5166
+      output_tokens: 2790
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.60468000
+      call_cnt: 1
+      latency: 89.46s
+      input_tokens: 6641
+      output_tokens: 7791
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03840000
+      call_cnt: 1
+      latency: 9.34s
+      input_tokens: 6861
+      output_tokens: 640
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.15210000
+      call_cnt: 1
+      latency: 17.26s
+      input_tokens: 2901
+      output_tokens: 1568
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05802000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.09408000
+      call_cnt: 1
+      latency: 17.26s
+      input_tokens: 2901
+      output_tokens: 1568
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if ((ix | lx) == 0) -> true in s_nextafter.c:nextafter
+target_file_lines: s_nextafter.c:40-42
+target_lines_content: |-
+  		__HI(x) = hy&0x80000000;	
+  		__LO(x) = 1;
+  		y = x*x;
+justification: This branch guards the specialized handling when the first input (x)
+  is exactly zero. It has zero historical coverage (lines 38-51 all uncovered) and,
+  when taken, executes a multi-statement block that sets up the minimal subnormal
+  step away from zero, exercising unique floating-point edge-case logic not covered
+  by the current run. Reaching it will significantly increase coverage inside nextafter’s
+  core path (bypassing the early x==y return). This branch is reachable by controlling
+  the command-line arguments (no harness changes required).
+target_path_constraint: |-
+  Environment and invocation:
+  1) Program must be invoked with exactly two command-line arguments (excluding argv[0]): argc == 3 in the C program. The harness already runs the executable with two arguments, so keep two whitespace-separated tokens after the program name.
+
+  Argument parsing and format:
+  2) Both arguments must be valid decimal representations of double-precision floating-point numbers, as parsed by the standard C function atof. They may be in fixed-point or scientific notation. No locale-dependent characters (e.g., commas) may appear.
+
+  Constraint to reach nextafter’s zero-x branch:
+  3) Let x be the double parsed from argv[1]. x must be exactly +0.0 or -0.0 in IEEE-754 double format so that its high 32 bits (ix) and low 32 bits (lx) satisfy (ix | lx) == 0 when masking off the sign bit: i.e., the value is numerically zero so both mantissa and exponent bits are zero. Practically, this means argv[1] must represent zero as parsed by atof (e.g., optional sign followed by 0 with optional fractional/exponent part that evaluates to zero). Avoid any representation that would parse to NaN or an underflowed subnormal nonzero; it must be exactly zero.
+
+  4) Let y be the double parsed from argv[2]. y must be any finite double distinct from x to avoid the early x == y return. To ensure we do not enter the NaN-handling branch, y must not be NaN and must not have NaN payload; similarly x must not be NaN (already ensured by constraint 3). No additional restriction is required other than finiteness is preferred but not strictly necessary as long as it’s not NaN, because the NaN-check rejects only NaNs.
+
+  Avoid short-circuiting earlier branches:
+  5) Ensure the NaN check in nextafter does not trigger: neither argv[1] nor argv[2] may be NaN (atof must not produce NaN). Infinity is allowed by that check, but keeping both finite is safer to ensure subsequent arithmetic executes deterministically within the zero-x path. Therefore, constrain argv[2] to a finite number and keep argv[1] as exactly zero.
+
+  6) Ensure x != y: since x is exactly zero per (3), constrain y to be any nonzero finite value so that the x==y equality branch is not taken, and execution proceeds into the ((ix|lx)==0) block.
+
+  Summary constraints in SMT-style (conceptual):
+  - Parse(argv[1]) = x, Parse(argv[2]) = y
+  - is_double(argv[1]) ∧ is_double(argv[2])
+  - x = +0.0 ∨ x = -0.0
+  - not isNaN(x) ∧ not isNaN(y)
+  - isFinite(y)
+  - y ≠ 0.0
+selected_cnt: 1
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Concrete inputs satisfying the constraints:
+      # argv[1] = "0"  -> exactly +0.0 when parsed by atof
+      # argv[2] = "1.0" -> finite, nonzero, not NaN, distinct from x
+      cmd = "./temp_executable 0 1.0"
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // s_nextafter.c (129 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double nextafter(double x, double y)
+  #else
+  	double nextafter(x,y)
+  	double x,y;
+  #endif
+  {
+  	int	hx,hy,ix,iy;
+  	unsigned lx,ly;
+
+  	hx = __HI(x);		
+  	lx = __LO(x);		
+  	hy = __HI(y);		
+  	ly = __LO(y);		
+  	ix = hx&0x7fffffff;		
+  	iy = hy&0x7fffffff;		
+
+  	if(((ix>=0x7ff00000)&&((ix-0x7ff00000)|lx)!=0) ||    
+  	   ((iy>=0x7ff00000)&&((iy-0x7ff00000)|ly)!=0))      
+  	{
+  		// Unexecuted code (line 30) removed. Its line cov: 0/1 (0%)
+  	}
+
+  	if(x==y) 
+  	{
+  		return x;
+  	}
+
+  	// Unexecuted code (lines 38-109) removed. Its line cov: 0/68 (0%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	if (argc != 3) 
+  	{
+  		// Unexecuted code (lines 118-119) removed. Its line cov: 0/2 (0%)
+  	}
+
+  	double a0 = atof(argv[1]);
+  	double a1 = atof(argv[2]);
+
+  	double r = nextafter(a0, a1);
+  	printf("%f\n", r);
+
+  	return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [s_nextafter.c] enter main 1
+  [s_nextafter.c] enter main 3
+  [s_nextafter.c] enter main 4
+  [s_nextafter.c] enter nextafter 1
+  [s_nextafter.c] enter nextafter 2
+  [s_nextafter.c] enter nextafter 4
+  [s_nextafter.c] enter nextafter 6
+  [s_nextafter.c] enter nextafter 7
+  [s_nextafter.c] enter nextafter 9
+  [s_nextafter.c] enter main 5
+execution_summary: |2+
+
+  ```c
+  // s_nextafter.c (129 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double nextafter(double x, double y)
+  #else
+  	double nextafter(x,y)
+  	double x,y;
+  #endif
+  {
+  	int	hx,hy,ix,iy;
+  	unsigned lx,ly;
+
+  	hx = __HI(x);		
+  	lx = __LO(x);		
+  	hy = __HI(y);		
+  	ly = __LO(y);		
+  	ix = hx&0x7fffffff;		
+  	iy = hy&0x7fffffff;		
+
+  	if(((ix>=0x7ff00000)&&((ix-0x7ff00000)|lx)!=0) ||    
+  	   ((iy>=0x7ff00000)&&((iy-0x7ff00000)|ly)!=0))      
+  	{
+  		// Unexecuted code (line 30) removed. Its line cov: 0/1 (0%)
+  	}
+
+  	if(x==y) 
+  	{
+  		// Unexecuted code (line 35) removed. Its line cov: 1/1 (100%)
+  	}
+
+  	if((ix|lx)==0) 
+  	{
+  		__HI(x) = hy&0x80000000;	
+  		__LO(x) = 1;
+  		y = x*x;
+  		if(y==x) 
+  		{
+  			// Unexecuted code (line 45) removed. Its line cov: 0/1 (0%)
+  		} 
+  		else 
+  		{
+  			return x;
+  		}
+  	}
+
+  	// Unexecuted code (lines 53-109) removed. Its line cov: 0/54 (0%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	if (argc != 3) 
+  	{
+  		// Unexecuted code (lines 118-119) removed. Its line cov: 0/2 (0%)
+  	}
+
+  	double a0 = atof(argv[1]);
+  	double a1 = atof(argv[2]);
+
+  	double r = nextafter(a0, a1);
+  	printf("%f\n", r);
+
+  	return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [s_nextafter.c] enter main 1
+  [s_nextafter.c] enter main 3
+  [s_nextafter.c] enter main 4
+  [s_nextafter.c] enter nextafter 1
+  [s_nextafter.c] enter nextafter 2
+  [s_nextafter.c] enter nextafter 4
+  [s_nextafter.c] enter nextafter 5
+  [s_nextafter.c] enter main 5

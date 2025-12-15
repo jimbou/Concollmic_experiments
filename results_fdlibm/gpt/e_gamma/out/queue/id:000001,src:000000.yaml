@@ -1,0 +1,255 @@
+id: 1
+src_id: 0
+create_time: '2025-12-14 14:12:12.391'
+time_taken: 90
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 2
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.59458000
+    call_cnt: 3
+    latency: 62.12s
+    input_tokens: 12770
+    output_tokens: 5653
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.46168000
+      call_cnt: 2
+      latency: 50.72s
+      input_tokens: 10115
+      output_tokens: 4323
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.09940000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.33756000
+      call_cnt: 1
+      latency: 43.38s
+      input_tokens: 4970
+      output_tokens: 3911
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.02472000
+      call_cnt: 1
+      latency: 7.34s
+      input_tokens: 5145
+      output_tokens: 412
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.13290000
+      call_cnt: 1
+      latency: 11.40s
+      input_tokens: 2655
+      output_tokens: 1330
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05310000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.07980000
+      call_cnt: 1
+      latency: 11.40s
+      input_tokens: 2655
+      output_tokens: 1330
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (argc != 2) -> true in e_gamma.c:main
+target_file_lines: e_gamma.c:21-22
+target_lines_content: |2-
+          printf("Usage: %s <arg>\n", argv[0]);
+          return 1;
+justification: This argument-validation branch has 0% historical coverage (lines 21-22)
+  and was not executed in the current run. Exercising it will cover the program’s
+  error-handling path and verify command-line interface robustness. It is reachable
+  by varying the number of command-line arguments at launch, which directly affects
+  program behavior and contributes new coverage beyond the normal successful-path
+  execution.
+target_path_constraint: |-
+  Goal: Take the branch in main where the program detects an incorrect number of command-line arguments (argc != 2).
+
+  Constraints in chronological order:
+
+  1) Program invocation format:
+     - The program must be launched from a shell/OS process with a command line that does NOT provide exactly one user argument (excluding argv[0], which is the executable path). This ensures argc != 2.
+
+  2) Compatible with the existing harness:
+     - The harness currently uses shell=True and passes a single command string. Modify only the argument portion of that string (not the executable name) to control argc.
+     - Two viable patterns to force argc != 2:
+       a) Provide zero user arguments: invoke only the executable name with no trailing tokens; in a shell command line, this means the command string contains just the executable path/name, with no additional whitespace-separated tokens after it. This yields argc == 1.
+       b) Provide two or more user arguments: append at least two whitespace-separated tokens after the executable name. This yields argc >= 3.
+
+  3) Argument tokenization rules (to avoid accidental single-argument cases):
+     - Shell parsing splits on unquoted whitespace. Quoting (single or double quotes) keeps spaces within a single token. Avoid quoting multiple items in a way that collapses them into a single token if you intend argc >= 3.
+     - Redirections or pipelines do not change argc but may alter execution; avoid them.
+
+  4) Environmental/file requirements:
+     - No files or environment variables are required to exist; the branch is evaluated before any file access.
+
+  5) No reliance on value constraints:
+     - Do not depend on parsing argv[1]; the path must avoid reaching atof() usage. Ensuring argc != 2 guarantees the function returns via the error-handling path before using argv[1].
+selected_cnt: 2
+successful_generation_cnt: 2
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          # Invoke the executable with ZERO user arguments to ensure argc == 1 (thus argc != 2)
+          # Keep the same harness structure: shell=True and a single command string element in the list
+          cmd = "./temp_executable"
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 1
+src_execution_summary: |2+
+
+  ```c
+  // e_gamma.c (31 lines total)
+  #include <stdio.h>
+  #include "fdlibm.h"
+
+  extern int signgam;
+
+  #ifdef __STDC__
+  	double __ieee754_gamma(double x)
+  #else
+  	double __ieee754_gamma(x)
+  	double x;
+  #endif
+  {
+  	return __ieee754_gamma_r(x,&signgam);
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      if (argc != 2) {
+          // Unexecuted code (lines 21-22) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = __ieee754_gamma(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [e_gamma.c] enter main 1
+  [e_gamma.c] enter main 2
+execution_summary: |2+
+
+  ```c
+  // e_gamma.c (31 lines total)
+  #include <stdio.h>
+  #include "fdlibm.h"
+
+  extern int signgam;
+
+  #ifdef __STDC__
+  	double __ieee754_gamma(double x)
+  #else
+  	double __ieee754_gamma(x)
+  	double x;
+  #endif
+  {
+  	// Unexecuted code (line 13) removed. Its line cov: 1/1 (100%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      if (argc != 2) {
+          printf("Usage: %s <arg>\n", argv[0]);
+          return 1;
+      }
+
+      // Unexecuted code (lines 25-30) removed. Its line cov: 4/4 (100%)
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [e_gamma.c] enter main 1
+  [e_gamma.c] enter main 3
+  [e_gamma.c] enter __ieee754_gamma 1

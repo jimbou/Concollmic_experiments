@@ -1,0 +1,356 @@
+id: 1
+src_id: 0
+create_time: '2025-12-14 19:19:35.671'
+time_taken: 169
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.85254000
+    call_cnt: 3
+    latency: 104.38s
+    input_tokens: 13914
+    output_tokens: 9571
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.67652000
+      call_cnt: 2
+      latency: 85.08s
+      input_tokens: 11050
+      output_tokens: 7592
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10756000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.53278000
+      call_cnt: 1
+      latency: 75.77s
+      input_tokens: 5378
+      output_tokens: 6989
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03618000
+      call_cnt: 1
+      latency: 9.31s
+      input_tokens: 5672
+      output_tokens: 603
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.17602000
+      call_cnt: 1
+      latency: 19.30s
+      input_tokens: 2864
+      output_tokens: 1979
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05728000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.11874000
+      call_cnt: 1
+      latency: 19.30s
+      input_tokens: 2864
+      output_tokens: 1979
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: In s_modf.c:modf, inside the j0 < 20 case, take the else-path (0 ≤
+  |x| < 2^20) and then the branch `if (((i0 & i) | i1) == 0)` -> true (the exact-integer
+  subcase).
+target_file_lines: s_modf.c:36-37
+target_lines_content: |-
+  		    *iptr = x;
+  		    __HI(x) &= 0x80000000;
+justification: 'This branch guards the exact-integer handling for inputs with magnitude
+  in [1, 2^20). It has zero historical coverage (the protected block shows "lines
+  36-39: 0/4 (0%)") and was not executed in the current run, which took the |x| <
+  1 path (j0 < 0). Exercising this branch covers core logic of modf for small-magnitude
+  integers, a fundamental behavior currently untested.'
+target_path_constraint: |-
+  Constraints to reach: In s_modf.c:modf, j0 < 20 with j0 ≥ 0 (so 1 ≤ |x| < 2^20), then satisfy the exact-integer sub-branch `((i0 & i) | i1) == 0` which corresponds to x being an exact integer with finite magnitude in that exponent range.
+
+  Chronological, externally observable constraints using current harness:
+
+  1) Program invocation via shell must provide exactly one command-line argument after the program name (argc == 2 at the C level). The harness already runs the executable with a single numeric token; do not add extra arguments or whitespace-separated tokens beyond one numeric literal accepted by C atof.
+
+  2) Argument format and parsing:
+  - The single argument must be a valid decimal floating-point string recognized by C's atof, in the default C locale, without trailing non-numeric tokens that would stop parsing.
+  - The string must represent a finite double (not NaN or Infinity) and must not include hexadecimal float notation, as typical atof accepts decimal; scientific notation with 'e'/'E' is acceptable.
+
+  3) Magnitude range to land in j0 ∈ [0,19]:
+  - Require 1 ≤ |x| < 2^20. This ensures the code takes the j0 < 20 branch but not the j0 < 0 sub-branch.
+
+  4) Exact-integer property for the sub-branch `((i0 & i) | i1) == 0` to be true under j0 ∈ [0,19]:
+  - The numeric value must be an exact integer in double precision with no fractional part, i.e., there exists an integer k such that x = k and |k| < 2^20.
+  - Additionally, x must be representable exactly as a IEEE-754 double with zero fractional bits given its exponent (which holds for all integers with magnitude below 2^53). This condition is implied by choosing an integer string.
+
+  5) Non-subnormal, non-zero, non-signaling corner cases:
+  - x must not be ±0; require |x| ≥ 1 from step 3.
+  - x must not be denormal/subnormal; enforced by step 3.
+
+  6) Summary as an SMT-style predicate over the single input token s (string parsed by atof to double x):
+  - Parse(s) = x ∈ R, finite.
+  - 1 ≤ |x| < 1,048,576 (i.e., 2^20).
+  - ∃k ∈ Z: x = k.
+
+  Environment assumptions:
+  - No environment variables or files influence behavior.
+  - Standard C locale for atof (decimal point is '.').
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Chosen concrete input:
+      # x = 1048575 (an exact integer, 1 <= |x| < 2^20)
+      # - Satisfies: finite, decimal atof-parsable, single token
+      # - Ensures j0 in [0,19] and integer sub-branch ((i0 & i) | i1) == 0
+      cmd = "./temp_executable 1048575 "
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // s_modf.c (84 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+  #ifdef __STDC__
+  static const double one = 1.0;
+  #else
+  static double one = 1.0;
+  #endif
+
+  #ifdef __STDC__
+  	double modf(double x, double *iptr)
+  #else
+  	double modf(x, iptr)
+  	double x,*iptr;
+  #endif
+  {
+  	int i0,i1,j0;
+  	unsigned i;
+  	i0 =  __HI(x);		
+  	i1 =  __LO(x);		
+  	j0 = ((i0>>20)&0x7ff)-0x3ff;	
+  	if(j0<20) {			
+  	    fprintf(stderr, "\n");
+  	    if(j0<0) {			
+  		__HIp(iptr) = i0&0x80000000;
+  		__LOp(iptr) = 0;		
+  		return x;
+  	    } else {
+  		// Unexecuted code (line 34) removed. Its line cov: 0/1 (0%)
+  		if(((i0&i)|i1)==0) {		
+  		    // Unexecuted code (lines 36-39) removed. Its line cov: 0/4 (0%)
+  		} else {
+  		    // Unexecuted code (lines 41-43) removed. Its line cov: 0/3 (0%)
+  		}
+  	    }
+  	} else if (j0>51) {		
+  	    // Unexecuted code (lines 47-50) removed. Its line cov: 0/4 (0%)
+  	} else {			
+  	    // Unexecuted code (line 52) removed. Its line cov: 0/1 (0%)
+  	    if((i1&i)==0) { 		
+  		// Unexecuted code (lines 54-57) removed. Its line cov: 0/4 (0%)
+  	    } else {
+  		// Unexecuted code (lines 59-61) removed. Its line cov: 0/3 (0%)
+  	    }
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char **argv) {
+      fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 72-73) removed. Its line cov: 0/2 (0%)
+      }
+
+      double x = atof(argv[1]);
+      double iptr;
+
+      double frac = modf(x, &iptr);
+
+      printf("fraction = %f\n", frac);
+      printf("integer  = %f\n", iptr);
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [s_modf.c] enter main 3
+  [s_modf.c] enter main 4
+  [s_modf.c] enter modf 1
+
+  [s_modf.c] enter modf 3
+  [s_modf.c] enter main 5
+execution_summary: |2+
+
+  ```c
+  // s_modf.c (84 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+  #ifdef __STDC__
+  static const double one = 1.0;
+  #else
+  static double one = 1.0;
+  #endif
+
+  #ifdef __STDC__
+  	double modf(double x, double *iptr)
+  #else
+  	double modf(x, iptr)
+  	double x,*iptr;
+  #endif
+  {
+  	int i0,i1,j0;
+  	unsigned i;
+  	i0 =  __HI(x);		
+  	i1 =  __LO(x);		
+  	j0 = ((i0>>20)&0x7ff)-0x3ff;	
+  	if(j0<20) {			
+  	    fprintf(stderr, "\n");
+  	    if(j0<0) {			
+  		__HIp(iptr) = i0&0x80000000;
+  		__LOp(iptr) = 0;		
+  		return x;
+  	    } else {
+  		// Unexecuted code (line 34) removed. Its line cov: 0/1 (0%)
+  		if(((i0&i)|i1)==0) {		
+  		    // Unexecuted code (lines 36-39) removed. Its line cov: 0/4 (0%)
+  		} else {
+  		    // Unexecuted code (lines 41-43) removed. Its line cov: 0/3 (0%)
+  		}
+  	    }
+  	} else if (j0>51) {		
+  	    // Unexecuted code (lines 47-50) removed. Its line cov: 0/4 (0%)
+  	} else {			
+  	    // Unexecuted code (line 52) removed. Its line cov: 0/1 (0%)
+  	    if((i1&i)==0) { 		
+  		// Unexecuted code (lines 54-57) removed. Its line cov: 0/4 (0%)
+  	    } else {
+  		// Unexecuted code (lines 59-61) removed. Its line cov: 0/3 (0%)
+  	    }
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char **argv) {
+      fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 72-73) removed. Its line cov: 0/2 (0%)
+      }
+
+      double x = atof(argv[1]);
+      double iptr;
+
+      double frac = modf(x, &iptr);
+
+      printf("fraction = %f\n", frac);
+      printf("integer  = %f\n", iptr);
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0 "],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [s_modf.c] enter main 3
+  [s_modf.c] enter main 4
+  [s_modf.c] enter modf 1
+
+  [s_modf.c] enter modf 3
+  [s_modf.c] enter main 5

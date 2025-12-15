@@ -1,0 +1,339 @@
+id: 2
+src_id: 1
+create_time: '2025-12-14 20:47:15.728'
+time_taken: 477
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $1.49706000
+    call_cnt: 5
+    latency: 197.12s
+    input_tokens: 25845
+    output_tokens: 16336
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $1.25356000
+      call_cnt: 4
+      latency: 155.34s
+      input_tokens: 22862
+      output_tokens: 13272
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10438000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.56168000
+      call_cnt: 2
+      latency: 53.19s
+      input_tokens: 10858
+      output_tokens: 5516
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.55060000
+      call_cnt: 1
+      latency: 92.60s
+      input_tokens: 5897
+      output_tokens: 7141
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03690000
+      call_cnt: 1
+      latency: 9.54s
+      input_tokens: 6107
+      output_tokens: 615
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.24350000
+      call_cnt: 1
+      latency: 41.78s
+      input_tokens: 2983
+      output_tokens: 3064
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05966000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.18384000
+      call_cnt: 1
+      latency: 41.78s
+      input_tokens: 2983
+      output_tokens: 3064
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (fabs(x) > 1.0) -> true in w_asin.c:asin
+target_file_lines: w_asin.c:28-28
+target_lines_content: "\t        return __kernel_standard(x,x,2); "
+justification: This branch (domain-error handling path) has zero historical coverage
+  (line 28 marked uncovered) and exercises the non-IEEE error path of the asin wrapper,
+  which is distinct from the already-covered normal-return path. Reaching it will
+  require flowing through main (argc == 2), invoking asin, bypassing the early return
+  on IEEE/NaN, and then taking the fabs(x) > 1.0 condition. This will add coverage
+  to a code path currently at 0%.
+target_path_constraint: |-
+  To reach the branch `if (fabs(x) > 1.0)` -> true inside the asin wrapper in w_asin.c, ensure the following input and environment constraints in chronological order:
+
+  1) Program invocation (command-line interface):
+  - The executable must be launched with exactly one additional argument besides the program name, so that the C program observes argc == 2.
+  - The single argument must be a valid C string representing a floating-point number in a format accepted by C's atof (e.g., optional sign, digits with optional decimal point, optional exponent). Do not include embedded NUL bytes; the string must be NUL-terminated by the OS.
+
+  2) Influence of the argument on asin input:
+  - Let S be the provided argument string and a0 = atof(S). The wrapper calls asin(a0). Therefore, constraints on S must be specified to shape a0.
+
+  3) Avoid IEEE short-circuit return path:
+  - The wrapper code checks `if (_LIB_VERSION == _IEEE_ || isnan(x)) { return z; }` before the fabs check. To ensure control reaches the `fabs(x) > 1.0` check, require both:
+    a) isnan(a0) is false; i.e., S must not parse to a NaN value. Avoid strings that atof interprets as NaN (e.g., case-insensitive "nan", "nan(...)" forms).
+    b) Runtime environment must not define the library mode as IEEE. Specifically, `_LIB_VERSION` must not be equal to `_IEEE_` at runtime. This is an environmental/library configuration constraint and must be satisfied by how the program is linked/executed (e.g., FDLIBM non-IEEE mode). No command-line input can change this; ensure the executable is built/linked so that `_LIB_VERSION != _IEEE_`.
+
+  4) Take the target branch (domain error path):
+  - Require fabs(a0) > 1.0. Since a0 = atof(S), constrain S so that it parses to a finite double whose absolute value strictly exceeds 1.0 (e.g., any finite magnitude greater than 1.0). Avoid overflow to infinity: ensure |a0| is finite.
+
+  5) Additional environmental assumptions for normal execution:
+  - The executable file exists and is executable by the OS (already handled by the harness). No files, environment variables, or I/O beyond argv are required.
+
+  Summary (SMT-style over the semantic value a0 = atof(S)):
+  - argc == 2
+  - ¬isnan(a0)
+  - isfinite(a0)
+  - |a0| > 1.0
+  - Library mode constraint: _LIB_VERSION != _IEEE_
+  - a0 = atof(S) where S is a valid decimal floating literal string
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import os
+      import stat
+      import signal
+      import subprocess
+      import shlex
+
+      # We must provide exactly one additional CLI argument so that C's argc == 2.
+      # Choose S such that a0 = atof(S) is finite, not NaN, and |a0| > 1.0.
+      # Concrete choice: S = "2.5" => a0 = 2.5, finite, not NaN, |a0| > 1.0.
+      exe_path = "./temp_executable"
+      arg = "2.5"
+
+      # Ensure the executable exists and is executable (environmental constraint)
+      if not os.path.exists(exe_path):
+          raise FileNotFoundError(f"Executable not found: {exe_path}")
+      try:
+          if not os.access(exe_path, os.X_OK):
+              current_mode = os.stat(exe_path).st_mode
+              os.chmod(exe_path, current_mode | stat.S_IXUSR)
+      except Exception:
+          # If chmod fails, we'll still try to run; subprocess will raise if not executable
+          pass
+
+      # Build the command line with exactly one argument; keep shell=True as in the original structure
+      cmdline = f"{shlex.quote(exe_path)} {shlex.quote(arg)}"
+
+      try:
+          result = subprocess.run(
+              cmdline,
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // w_asin.c (50 lines total)
+
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+
+  #ifdef __STDC__
+  	double asin(double x)		
+  #else
+  	double asin(x)			
+  	double x;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	// Unexecuted code (line 20) removed. Its line cov: 0/1 (0%)
+  #else
+  	// Unexecuted code (lines 22-23) removed. Its line cov: 2/2 (100%)
+  	if(_LIB_VERSION == _IEEE_ || isnan(x)) {
+  		// Unexecuted code (line 25) removed. Its line cov: 1/1 (100%)
+  	}
+  	if(fabs(x)>1.0) {
+  	        // Unexecuted code (line 28) removed. Its line cov: 0/1 (0%)
+  	} else {
+  	    // Unexecuted code (line 30) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      if (argc != 2) {
+          printf("Usage: %s <arg>\n", argv[0]);
+          return 1;
+      }
+
+      // Unexecuted code (lines 44-49) removed. Its line cov: 4/4 (100%)
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [w_asin.c] enter main 1
+  [w_asin.c] enter main 3
+  [w_asin.c] enter main 4
+  [w_asin.c] enter asin 2
+  [w_asin.c] enter asin 3
+  [w_asin.c] enter main 5
+execution_summary: |2+
+
+  ```c
+  // w_asin.c (50 lines total)
+
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+
+  #ifdef __STDC__
+  	double asin(double x)		
+  #else
+  	double asin(x)			
+  	double x;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	// Unexecuted code (line 20) removed. Its line cov: 0/1 (0%)
+  #else
+  	double z;
+  	z = __ieee754_asin(x);
+  	if(_LIB_VERSION == _IEEE_ || isnan(x)) {
+  		return z;
+  	}
+  	if(fabs(x)>1.0) {
+  	        // Unexecuted code (line 28) removed. Its line cov: 0/1 (0%)
+  	} else {
+  	    // Unexecuted code (line 30) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      if (argc != 2) {
+          // Unexecuted code (lines 40-41) removed. Its line cov: 2/2 (100%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = asin(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import os
+      import stat
+      import signal
+      import subprocess
+
+      # We force argc != 2 by providing NO additional CLI arguments.
+      # Command string: program path only -> argv = [program], so C's argc == 1.
+      cmd = "./temp_executable"
+
+      # Ensure the executable exists and is executable (environmental constraint)
+      if not os.path.exists(cmd):
+          raise FileNotFoundError(f"Executable not found: {cmd}")
+      try:
+          if not os.access(cmd, os.X_OK):
+              # Attempt to add user execute permission if possible
+              current_mode = os.stat(cmd).st_mode
+              os.chmod(cmd, current_mode | stat.S_IXUSR)
+      except Exception:
+          # If chmod fails, we'll still try to run; subprocess will raise if not executable
+          pass
+
+      try:
+          result = subprocess.run(
+              [cmd],  # single token; shell will run program with no arguments
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          raise e
+src_execution_trace: |
+  [w_asin.c] enter main 1
+  [w_asin.c] enter main 2

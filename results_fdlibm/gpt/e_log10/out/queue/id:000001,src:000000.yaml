@@ -1,0 +1,352 @@
+id: 1
+src_id: 0
+create_time: '2025-12-14 15:02:27.961'
+time_taken: 132
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 1
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.68076000
+    call_cnt: 3
+    latency: 74.97s
+    input_tokens: 13785
+    output_tokens: 6751
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.49860000
+      call_cnt: 2
+      latency: 51.08s
+      input_tokens: 10941
+      output_tokens: 4663
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10722000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.35514000
+      call_cnt: 1
+      latency: 42.98s
+      input_tokens: 5361
+      output_tokens: 4059
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03624000
+      call_cnt: 1
+      latency: 8.10s
+      input_tokens: 5580
+      output_tokens: 604
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.18216000
+      call_cnt: 1
+      latency: 23.88s
+      input_tokens: 2844
+      output_tokens: 2088
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05688000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.12528000
+      call_cnt: 1
+      latency: 23.88s
+      input_tokens: 2844
+      output_tokens: 2088
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (((hx & 0x7fffffff) | lx) == 0) -> true inside __ieee754_log10(x)
+  in e_log10.c (zero-input handling)
+target_file_lines: e_log10.c:40-40
+target_lines_content: '                return -two54/zero;             '
+justification: This branch handles the edge case log10(0), which currently has 0%
+  historical coverage (line 40). It represents critical special-case behavior in the
+  math library and will exercise code distinct from the normal path taken by positive
+  finite inputs like 1.0. Reaching this branch improves coverage of exceptional inputs
+  and tests correctness of zero handling.
+target_path_constraint: |-
+  Constraints to reach the branch handling log10(0):
+
+  1. Command invocation format:
+     - The program is executed via a shell command string. Ensure the single argument is provided as a textual representation of a floating-point number. The harness already uses: ./temp_executable 1.0. Modify only the numeric token while preserving the structure.
+
+  2. Argument count constraint:
+     - Exactly one command-line argument must be passed in addition to the program name (argv[1] exists). This satisfies the program’s check requiring argc == 2.
+
+  3. Argument parsing constraint:
+     - The program converts argv[1] using atof, which interprets standard C locale decimal formats and also special tokens. To reach the zero-input handling inside __ieee754_log10, argv[1] must be parsed as +0.0 by atof.
+     - Valid textual forms that parse to +0.0 include strings consisting solely of optional leading/trailing whitespace, an optional sign '+' or '-', followed by a numeric zero with optional fractional part consisting entirely of zeros. Examples of acceptable numeric formats (expressed symbolically, not concrete values):
+       a) [ws] '+'? '0' [ws]
+       b) [ws] '-'? '0' ('.' '0'* )? [ws]
+       c) [ws] '0'* (where at least one digit is present and all are '0'), optionally with leading '+' sign
+     - Exclude forms that parse to non-zero (e.g., any digit 1-9 present, non-zero exponent).
+
+  4. Floating-point bit-pattern constraint:
+     - After atof parsing, the resulting double must be +0.0 exactly, not -0.0 and not a subnormal near-zero.
+     - In IEEE-754, +0.0 has high 32 bits (hx) and low 32 bits (lx) both equal to 0, thus ((hx & 0x7fffffff) | lx) == 0 evaluates true.
+     - Avoid producing -0.0 (which has hx == 0x80000000 and lx == 0); although its magnitude is zero, the condition masks sign with 0x7fffffff, so -0.0 would also satisfy the condition. If downstream behavior distinguishes signs, prefer +0.0 to match typical zero handling.
+
+  5. Environment assumptions:
+     - No locale or environment variable modifications that change atof behavior (e.g., decimal separators). Standard "C" locale is assumed.
+
+  Chronological order summary:
+  - Provide exactly one argument string for the executable.
+  - Ensure that string, when parsed by atof under standard C locale, yields a double value exactly equal to +0.0 (IEEE-754).
+selected_cnt: 2
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          # Provide exactly one argument that atof parses as +0.0 under the C locale
+          # Using an explicit leading '+' to ensure positive zero
+          result = subprocess.run(
+              ["./temp_executable +0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // e_log10.c (79 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+  #include <stdlib.h>
+  #ifdef __STDC__
+  static const double
+  #else
+  static double
+  #endif
+  two54      =  1.80143985094819840000e+16, 
+  ivln10     =  4.34294481903251816668e-01, 
+  log10_2hi  =  3.01029995663611771306e-01, 
+  log10_2lo  =  3.69423907715893078616e-13; 
+
+  static double zero   =  0.0;
+
+  #ifdef __STDC__
+  	double __ieee754_log10(double x)
+  #else
+  	double __ieee754_log10(x)
+  	double x;
+  #endif
+  {
+  	double y,z;
+  	int i,k,hx;
+  	unsigned lx;
+
+  	hx = __HI(x);	
+  	lx = __LO(x);	
+
+          k=0;
+          if (hx < 0x00100000) {                  
+              if (((hx&0x7fffffff)|lx)==0)
+              {
+                  // Unexecuted code (line 40) removed. Its line cov: 0/1 (0%)
+              }
+              if (hx<0) 
+              {
+                  // Unexecuted code (line 44) removed. Its line cov: 0/1 (0%)
+              }
+              k -= 54; x *= two54; 
+              hx = __HI(x);                
+          }
+  	
+  	if (hx >= 0x7ff00000) 
+  	{
+  		// Unexecuted code (line 52) removed. Its line cov: 0/1 (0%)
+  	}
+  	
+  	k += (hx>>20)-1023;
+  	i  = ((unsigned)k&0x80000000)>>31;
+          hx = (hx&0x000fffff)|((0x3ff-i)<<20);
+          y  = (double)(k+i);
+          __HI(x) = hx;
+  	z  = y*log10_2lo + ivln10*__ieee754_log(x);
+  	return  z+y*log10_2hi;
+  }
+
+
+
+  int main(int argc, char** argv) {
+
+      if (argc != 2) {
+          // Unexecuted code (lines 69-70) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = __ieee754_log10(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [e_log10.c] enter main 1
+  [e_log10.c] enter main 3
+  [e_log10.c] enter __ieee754_log10 1
+  [e_log10.c] enter __ieee754_log10 2
+  [e_log10.c] enter __ieee754_log10 3
+execution_summary: |2+
+
+  ```c
+  // e_log10.c (79 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+  #include <stdlib.h>
+  #ifdef __STDC__
+  static const double
+  #else
+  static double
+  #endif
+  two54      =  1.80143985094819840000e+16, 
+  ivln10     =  4.34294481903251816668e-01, 
+  log10_2hi  =  3.01029995663611771306e-01, 
+  log10_2lo  =  3.69423907715893078616e-13; 
+
+  static double zero   =  0.0;
+
+  #ifdef __STDC__
+  	double __ieee754_log10(double x)
+  #else
+  	double __ieee754_log10(x)
+  	double x;
+  #endif
+  {
+  	double y,z;
+  	int i,k,hx;
+  	unsigned lx;
+
+  	hx = __HI(x);	
+  	lx = __LO(x);	
+
+          k=0;
+          if (hx < 0x00100000) {                  
+              if (((hx&0x7fffffff)|lx)==0)
+              {
+                  return -two54/zero;             
+              }
+              if (hx<0) 
+              {
+                  // Unexecuted code (line 44) removed. Its line cov: 0/1 (0%)
+              }
+              // Unexecuted code (lines 46-47) removed. Its line cov: 2/2 (100%)
+          }
+  	
+  	// Unexecuted code (lines 50-61) removed. Its line cov: 10/11 (91%)
+  }
+
+
+
+  int main(int argc, char** argv) {
+
+      if (argc != 2) {
+          // Unexecuted code (lines 69-70) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = __ieee754_log10(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |
+  [e_log10.c] enter main 1
+  [e_log10.c] enter main 3
+  [e_log10.c] enter __ieee754_log10 1
+  [e_log10.c] enter __ieee754_log10 2
+  [e_log10.c] enter __ieee754_log10 5
+  [e_log10.c] enter __ieee754_log10 6
+  [e_log10.c] enter __ieee754_log10 8

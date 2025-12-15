@@ -1,0 +1,322 @@
+id: 1
+src_id: 0
+create_time: '2025-12-14 20:12:35.897'
+time_taken: 160
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 8
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.72066000
+    call_cnt: 3
+    latency: 104.31s
+    input_tokens: 13116
+    output_tokens: 7639
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.55772000
+      call_cnt: 2
+      latency: 90.42s
+      input_tokens: 10396
+      output_tokens: 5830
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10158000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.42728000
+      call_cnt: 1
+      latency: 83.26s
+      input_tokens: 5079
+      output_tokens: 5349
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.02886000
+      call_cnt: 1
+      latency: 7.16s
+      input_tokens: 5317
+      output_tokens: 481
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.16294000
+      call_cnt: 1
+      latency: 13.89s
+      input_tokens: 2720
+      output_tokens: 1809
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05440000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.10854000
+      call_cnt: 1
+      latency: 13.89s
+      input_tokens: 2720
+      output_tokens: 1809
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: 'In s_sin.c:sin(double): take the final else branch (i.e., the condition
+  ix <= 0x3fe921fb is false and ix < 0x7ff00000), entering the argument-reduction
+  path'
+target_file_lines: s_sin.c:36-37
+target_lines_content: |-
+  	    n = __ieee754_rem_pio2(x,y);
+  	    switch(n&3) {
+justification: This branch (lines 36-46) has 0/11 (0%) historical coverage and protects
+  the main argument-reduction logic of fdlibm’s sin, which is both important and sizeable.
+  Executing it will exercise a distinct path from the currently taken small-argument
+  fast path and from the NaN/Inf path, substantially increasing coverage.
+target_path_constraint: |-
+  Constraints to reach the argument-reduction branch in sin(double):
+
+  1) Program invocation via shell must pass exactly one command-line argument (besides program name): argc == 2.
+     - The harness already invokes: "./temp_executable 1.0" under shell=True. Preserve the structure of a single numeric token after the executable name.
+
+  2) The single command-line argument must be a valid C double in decimal text form, accepted by atof, with no leading/trailing non-numeric characters that would prevent parsing. Whitespace is allowed per strtod/atof rules.
+
+  3) Finite but outside small-argument threshold:
+     - Let a0 be the parsed double value.
+     - Let ix = high 32-bit word of a0 with sign bit cleared (i.e., ix = (__HI(a0) & 0x7fffffff)).
+     - Require ix > 0x3fe921fb to bypass the small-argument fast path (|a0| strictly greater than approximately pi/4) AND ix < 0x7ff00000 to avoid Inf/NaN handling.
+     - In plain numeric terms: require a finite a0 whose magnitude strictly exceeds about 0.785398163 but is not infinite or NaN.
+
+  4) Avoid overflow into special ranges from decimal parsing: ensure the string represents a finite value within double range (|a0| < DBL_MAX) and not "inf", "infinity", or "nan" (any case) and not hexadecimal NaN/Inf forms.
+
+  5) No file I/O or environment conditions needed beyond normal execution. Standard output/stderr may be any values; they do not affect control flow.
+
+  Chronological summary:
+  - Provide exactly one argument string.
+  - The string must parse to a finite double a0.
+  - |a0| must be strictly greater than approximately pi/4 (~0.7854) so that ix > 0x3fe921fb.
+  - a0 must not be NaN or Inf (ix < 0x7ff00000).
+  - Program then reaches the final else branch (argument-reduction path) inside sin.
+selected_cnt: 1
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Use a single numeric argument strictly greater than ~pi/4 to trigger argument reduction in sin()
+      # 0.9 is finite, parses as a valid double, and |0.9| > 0.785398...
+      try:
+          result = subprocess.run(
+              ["./temp_executable 0.9"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // s_sin.c (67 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double sin(double x)
+  #else
+  	double sin(x)
+  	double x;
+  #endif
+  {
+  	double y[2],z=0.0;
+  	int n, ix;
+
+      
+  	ix = __HI(x);
+
+      
+  	ix &= 0x7fffffff;
+  	if(ix <= 0x3fe921fb) {
+  		return __kernel_sin(x,z,0);
+  	}
+
+      
+  	else if (ix>=0x7ff00000) {
+  		// Unexecuted code (line 31) removed. Its line cov: 0/1 (0%)
+  	}
+
+      
+  	else {
+  	    // Unexecuted code (lines 36-46) removed. Its line cov: 0/11 (0%)
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+
+      if (argc != 2) {
+          // Unexecuted code (lines 57-58) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = sin(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [s_sin.c] enter main 3
+  [s_sin.c] enter sin 1
+  [s_sin.c] enter sin 4
+  [s_sin.c] enter sin 5
+execution_summary: |2+
+
+  ```c
+  // s_sin.c (67 lines total)
+
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  	double sin(double x)
+  #else
+  	double sin(x)
+  	double x;
+  #endif
+  {
+  	double y[2],z=0.0;
+  	int n, ix;
+
+      
+  	ix = __HI(x);
+
+      
+  	ix &= 0x7fffffff;
+  	if(ix <= 0x3fe921fb) {
+  		// Unexecuted code (line 26) removed. Its line cov: 1/1 (100%)
+  	}
+
+      
+  	else if (ix>=0x7ff00000) {
+  		// Unexecuted code (line 31) removed. Its line cov: 0/1 (0%)
+  	}
+
+      
+  	else {
+  	    n = __ieee754_rem_pio2(x,y);
+  	    switch(n&3) {
+  		case 0: 
+  			return  __kernel_sin(y[0],y[1],1);
+  		case 1: 
+  			// Unexecuted code (line 41) removed. Its line cov: 0/1 (0%)
+  		case 2: 
+  			// Unexecuted code (line 43) removed. Its line cov: 0/1 (0%)
+  		default:
+  			// Unexecuted code (line 45) removed. Its line cov: 0/1 (0%)
+  	    }
+  	}
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+
+      if (argc != 2) {
+          // Unexecuted code (lines 57-58) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = sin(a0);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [s_sin.c] enter main 3
+  [s_sin.c] enter sin 1
+  [s_sin.c] enter sin 2

@@ -1,0 +1,666 @@
+id: 2
+src_id: 0
+create_time: '2025-12-14 15:25:39.240'
+time_taken: 507
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: true
+newly_covered_lines: 1
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.96720000
+    call_cnt: 3
+    latency: 103.76s
+    input_tokens: 18780
+    output_tokens: 9860
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.71944000
+      call_cnt: 2
+      latency: 71.62s
+      input_tokens: 15581
+      output_tokens: 6797
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.15372000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.50926000
+      call_cnt: 1
+      latency: 59.56s
+      input_tokens: 7686
+      output_tokens: 5856
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.05646000
+      call_cnt: 1
+      latency: 12.06s
+      input_tokens: 7895
+      output_tokens: 941
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.24776000
+      call_cnt: 1
+      latency: 32.14s
+      input_tokens: 3199
+      output_tokens: 3063
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.06398000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.18378000
+      call_cnt: 1
+      latency: 32.14s
+      input_tokens: 3199
+      output_tokens: 3063
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if ((n|yisint) == 0) -> true in e_pow.c:__ieee754_pow
+target_file_lines: e_pow.c:146-146
+target_lines_content: "\t\treturn (x-x)/(x-x);"
+justification: 'This branch handles the mathematically significant case of a negative
+  base raised to a non-integer exponent (expected to produce a domain error/NaN).
+  Its body has zero historical coverage (line cov: 0/1 (0%)), and reaching it exercises
+  an early-return special-case path distinct from the general polynomial/log-exp path.
+  It is reachable solely by controlling the two numeric command-line arguments (base
+  and exponent), fully compatible with the current harness.'
+target_path_constraint: |-
+  Program invocation and argument structure:
+  1) The program is executed with exactly three command-line tokens: the executable name and two additional arguments. This is already ensured by the harness using shell=True to pass "./temp_executable 1.0 1.0"; no change needed, but any alternative inputs must preserve exactly two numeric arguments after the program name so that argc == 3 holds and main proceeds.
+
+  Input domains and parsing:
+  2) Both argv[1] and argv[2] must be valid decimal strings that atof can parse into IEEE-754 double-precision values (base-10 or scientific notation acceptable). No locale-specific characters; plain ASCII digits with optional sign and decimal point/exponent.
+
+  High-level mathematical condition to drive the target branch (n|yisint)==0:
+  3) Base (x) must be strictly negative: x < 0.0. This sets n = (signbit(x))+1 = 0 in the internal logic (n equals 0 when x is negative).
+  4) Exponent (y) must NOT be an integer value in the IEEE-754 sense used by the routine’s integer-test logic. Concretely, y must be finite and not an exact integer (i.e., not equal to any k ∈ Z). Examples of non-integers include fractions like 0.5, -1.3, etc. Additionally, avoid magnitudes that would be classified as very large integers by bit-pattern checks: ensure |y| < 2^52 and y has a nonzero fractional part, so that the test does not treat it as an integer due to limited mantissa resolution.
+  5) Ensure y is not NaN or ±Inf: y must be finite so that earlier special-case branches (infinities/NaNs) do not intercept.
+  6) Ensure y’s low word ly is nonzero is optional here; the (n|yisint)==0 check depends only on yisint and n, but pick y with a fractional part that is exactly representable or at least not rounded to an integer when converted to double to keep yisint == 0.
+
+  Early-branch preconditions to avoid interception by earlier special cases:
+  7) Avoid triggering the ly==0 block that handles pure integer exponents via bitwise tests: choose y whose binary representation has a nonzero low 32-bit word (i.e., not a power-of-two-scaled integer representable exactly as double). Practically, choosing y with a fractional component ensures ly != 0.
+  8) Avoid exponent edge cases that map to iy >= 0x43400000 (|y| >= 2^53) during yisint detection or the later overflow/underflow shortcut region (iy > 0x41e00000). Keep |y| in a moderate finite range, e.g., |y| < 2^30, and not too close to those thresholds, to ensure we reach the (n|yisint)==0 test without diverting to those large-exponent early returns.
+  9) Avoid NaN/Inf or subnormal/zero traps for x: choose a finite negative x whose absolute value is neither zero nor infinity, and not exactly 1.0 or -1.0 with special ly==0 cases. Specifically, ensure the low 32-bit word of x (lx) is nonzero to skip the lx==0 block of special cases (ix in {0, 0x3ff00000, 0x7ff00000}). Any negative x with a fractional binary part suffices.
+
+  Summary constraints to reach the target branch:
+  - argv[1] parses to a finite double x such that x < 0 and x is not exactly -1.0, -0.0, or any value with an exact double representation having lx==0; prefer x with a fractional part so lx != 0.
+  - argv[2] parses to a finite double y with |y| < 2^30, and y is not an integer: y ∉ Z. Ensure y has a nonzero fractional component when represented as double, so yisint == 0 and ly != 0.
+  - With these, in the function the computed n == 0 (since x < 0) and yisint == 0, hence (n|yisint) == 0 holds, taking the target branch.
+selected_cnt: 2
+successful_generation_cnt: 2
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Chosen concrete inputs satisfying constraints:
+      # x = -1.23456789 (negative, finite, not special; fractional ensures lx != 0)
+      # y = 2.3 (finite, |y| << 2^30, non-integer; fractional ensures yisint == 0 and ly != 0)
+      cmd = "./temp_executable -1.23456789 2.3"
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // e_pow.c (295 lines total)
+
+  #ifndef lint
+  static  char sccsid[] = "@(#)e_pow.c 1.5 04/04/22 SMI"; 
+  #endif
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double 
+  #else
+  static double 
+  #endif
+  bp[] = {1.0, 1.5,},
+  dp_h[] = { 0.0, 5.84962487220764160156e-01,}, 
+  dp_l[] = { 0.0, 1.35003920212974897128e-08,}, 
+  zero    =  0.0,
+  one	=  1.0,
+  two	=  2.0,
+  two53	=  9007199254740992.0,	
+  huge	=  1.0e300,
+  tiny    =  1.0e-300,
+  	
+  L1  =  5.99999999999994648725e-01, 
+  L2  =  4.28571428578550184252e-01, 
+  L3  =  3.33333329818377432918e-01, 
+  L4  =  2.72728123808534006489e-01, 
+  L5  =  2.30660745775561754067e-01, 
+  L6  =  2.06975017800338417784e-01, 
+  P1   =  1.66666666666666019037e-01, 
+  P2   = -2.77777777770155933842e-03, 
+  P3   =  6.61375632143793436117e-05, 
+  P4   = -1.65339022054652515390e-06, 
+  P5   =  4.13813679705723846039e-08, 
+  lg2  =  6.93147180559945286227e-01, 
+  lg2_h  =  6.93147182464599609375e-01, 
+  lg2_l  = -1.90465429995776804525e-09, 
+  ovt =  8.0085662595372944372e-0017, 
+  cp    =  9.61796693925975554329e-01, 
+  cp_h  =  9.61796700954437255859e-01, 
+  cp_l  = -7.02846165095275826516e-09, 
+  ivln2    =  1.44269504088896338700e+00, 
+  ivln2_h  =  1.44269502162933349609e+00, 
+  ivln2_l  =  1.92596299112661746887e-08; 
+
+  #ifdef __STDC__
+  	double __ieee754_pow(double x, double y)
+  #else
+  	double __ieee754_pow(x,y)
+  	double x, y;
+  #endif
+  {
+  	fprintf(stderr, "\n");
+  	double z,ax,z_h,z_l,p_h,p_l;
+  	double y1,t1,t2,r,s,t,u,v,w;
+  	int i0,i1,i,j,k,yisint,n;
+  	int hx,hy,ix,iy;
+  	unsigned lx,ly;
+
+  	i0 = ((*(int*)&one)>>29)^1; i1=1-i0;
+  	hx = __HI(x); lx = __LO(x);
+  	hy = __HI(y); ly = __LO(y);
+  	ix = hx&0x7fffffff;  iy = hy&0x7fffffff;
+
+      
+  	if((iy|ly)==0) {
+  		// Unexecuted code (line 71) removed. Its line cov: 0/1 (0%)
+  	}
+
+      
+  	if(ix > 0x7ff00000 || ((ix==0x7ff00000)&&(lx!=0)) ||
+  	   iy > 0x7ff00000 || ((iy==0x7ff00000)&&(ly!=0))) {
+  		// Unexecuted code (line 77) removed. Its line cov: 0/1 (0%)
+  	}
+
+      
+  	yisint  = 0;
+  	if(hx<0) {	
+  	    if(iy>=0x43400000) yisint = 2; 
+  	    else if(iy>=0x3ff00000) {
+  		k = (iy>>20)-0x3ff;	   
+  		if(k>20) {
+  		    j = ly>>(52-k);
+  		    if((j<<(52-k))==ly) yisint = 2-(j&1);
+  		} else if(ly==0) {
+  		    j = iy>>(20-k);
+  		    if((j<<(20-k))==iy) yisint = 2-(j&1);
+  		}
+  	    }		
+  	} 
+
+      
+  	if(ly==0) { 	
+  	    if (iy==0x7ff00000) {	
+  	        if(((ix-0x3ff00000)|lx)==0) {
+  		    // Unexecuted code (line 100) removed. Its line cov: 0/1 (0%)
+  		}
+  	        else if (ix >= 0x3ff00000) {
+  		    // Unexecuted code (line 103) removed. Its line cov: 0/1 (0%)
+  		}
+  	        else {
+  		    // Unexecuted code (line 106) removed. Its line cov: 0/1 (0%)
+  		}
+  	    } 
+  	    if(iy==0x3ff00000) {	
+  		if(hy<0) {
+  		    // Unexecuted code (line 111) removed. Its line cov: 0/1 (0%)
+  		} else {
+  		    // Unexecuted code (line 113) removed. Its line cov: 0/1 (0%)
+  		}
+  	    }
+  	    if(hy==0x40000000) {
+  		// Unexecuted code (line 117) removed. Its line cov: 0/1 (0%)
+  	    }
+  	    if(hy==0x3fe00000) {	
+  		if(hx>=0) {
+  		    // Unexecuted code (line 121) removed. Its line cov: 0/1 (0%)
+  		}
+  	    }
+  	}
+
+  	ax   = fabs(x);
+      
+  	if(lx==0) {
+  	    if(ix==0x7ff00000||ix==0||ix==0x3ff00000){
+  		// Unexecuted code (lines 130-138) removed. Its line cov: 0/9 (0%)
+  	    }
+  	}
+      
+  	n = (hx>>31)+1;
+
+      
+  	if((n|yisint)==0) {
+  		// Unexecuted code (line 146) removed. Its line cov: 0/1 (0%)
+  	}
+
+  	s = one; 
+  	if((n|(yisint-1))==0) s = -one;
+
+      
+  	if(iy>0x41e00000) { 
+  	    if(iy>0x43f00000){	
+  		if(ix<=0x3fefffff) {
+  		    // Unexecuted code (line 156) removed. Its line cov: 0/1 (0%)
+  		}
+  		if(ix>=0x3ff00000) {
+  		    // Unexecuted code (line 159) removed. Its line cov: 0/1 (0%)
+  		}
+  	    }
+  	
+  	    if(ix<0x3fefffff) {
+  		// Unexecuted code (line 164) removed. Its line cov: 0/1 (0%)
+  	    }
+  	    if(ix>0x3ff00000) {
+  		// Unexecuted code (line 167) removed. Its line cov: 0/1 (0%)
+  	    }
+  	
+  	    // Unexecuted code (lines 170-176) removed. Its line cov: 0/7 (0%)
+  	} else {
+  	    double ss,s2,s_h,s_l,t_h,t_l;
+  	    n = 0;
+  	
+  	    if(ix<0x00100000)
+  		{ax *= two53; n -= 53; ix = __HI(ax); }
+  	    n  += ((ix)>>20)-0x3ff;
+  	    j  = ix&0x000fffff;
+  	
+  	    ix = j|0x3ff00000;		
+  	    if(j<=0x3988E) k=0;		
+  	    else if(j<0xBB67A) k=1;	
+  	    else {k=0;n+=1;ix -= 0x00100000;}
+  	    __HI(ax) = ix;
+
+  	
+  	    u = ax-bp[k];		
+  	    v = one/(ax+bp[k]);
+  	    ss = u*v;
+  	    s_h = ss;
+  	    __LO(s_h) = 0;
+  	
+  	    t_h = zero;
+  	    __HI(t_h)=((ix>>1)|0x20000000)+0x00080000+(k<<18); 
+  	    t_l = ax - (t_h-bp[k]);
+  	    s_l = v*((u-s_h*t_h)-s_h*t_l);
+  	
+  	    s2 = ss*ss;
+  	    r = s2*s2*(L1+s2*(L2+s2*(L3+s2*(L4+s2*(L5+s2*L6)))));
+  	    r += s_l*(s_h+ss);
+  	    s2  = s_h*s_h;
+  	    t_h = 3.0+s2+r;
+  	    __LO(t_h) = 0;
+  	    t_l = r-((t_h-3.0)-s2);
+  	
+  	    u = s_h*t_h;
+  	    v = s_l*t_h+t_l*ss;
+  	
+  	    p_h = u+v;
+  	    __LO(p_h) = 0;
+  	    p_l = v-(p_h-u);
+  	    z_h = cp_h*p_h;		
+  	    z_l = cp_l*p_h+p_l*cp+dp_l[k];
+  	
+  	    t = (double)n;
+  	    t1 = (((z_h+z_l)+dp_h[k])+t);
+  	    __LO(t1) = 0;
+  	    t2 = z_l-(((t1-t)-dp_h[k])-z_h);
+  	}
+
+      
+  	y1  = y;
+  	__LO(y1) = 0;
+  	p_l = (y-y1)*t1+y*t2;
+  	p_h = y1*t1;
+  	z = p_l+p_h;
+  	j = __HI(z);
+  	i = __LO(z);
+  	if (j>=0x40900000) {				
+  	    if(((j-0x40900000)|i)!=0) {
+  		// Unexecuted code (line 237) removed. Its line cov: 0/1 (0%)
+  	    } else {
+  		// Unexecuted code (line 239) removed. Its line cov: 0/1 (0%)
+  	    }
+  	} else if((j&0x7fffffff)>=0x4090cc00 ) {	
+  	    if(((j-0xc090cc00)|i)!=0) {
+  		// Unexecuted code (line 243) removed. Its line cov: 1/1 (100%)
+  	    } else {
+  		// Unexecuted code (line 245) removed. Its line cov: 0/1 (0%)
+  	    }
+  	}
+      
+  	i = j&0x7fffffff;
+  	k = (i>>20)-0x3ff;
+  	n = 0;
+  	if(i>0x3fe00000) {		
+  	    n = j+(0x00100000>>(k+1));
+  	    k = ((n&0x7fffffff)>>20)-0x3ff;	
+  	    t = zero;
+  	    __HI(t) = (n&~(0x000fffff>>k));
+  	    n = ((n&0x000fffff)|0x00100000)>>(20-k);
+  	    if(j<0) n = -n;
+  	    p_h -= t;
+  	} 
+  	t = p_l+p_h;
+  	__LO(t) = 0;
+  	u = t*lg2_h;
+  	v = (p_l-(t-p_h))*lg2+t*lg2_l;
+  	z = u+v;
+  	w = v-(z-u);
+  	t  = z*z;
+  	t1  = z - t*(P1+t*(P2+t*(P3+t*(P4+t*P5))));
+  	r  = (z*t1)/(t1-two)-(w+z*w);
+  	z  = one-(r-z);
+  	j  = __HI(z);
+  	j += (n<<20);
+  	if((j>>20)<=0) z = scalbn(z,n);	
+  	else __HI(z) += (n<<20);
+  	return s*z;
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      fprintf(stderr, "\n");
+      if (argc != 3) {
+          // Unexecuted code (lines 284-285) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = __ieee754_pow(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [e_pow.c] enter main 3
+
+  [e_pow.c] enter __ieee754_pow 14
+execution_summary: |2+
+
+  ```c
+  // e_pow.c (295 lines total)
+
+  #ifndef lint
+  static  char sccsid[] = "@(#)e_pow.c 1.5 04/04/22 SMI"; 
+  #endif
+
+
+
+
+
+  #include "fdlibm.h"
+  #include <stdio.h>
+
+  #ifdef __STDC__
+  static const double 
+  #else
+  static double 
+  #endif
+  bp[] = {1.0, 1.5,},
+  dp_h[] = { 0.0, 5.84962487220764160156e-01,}, 
+  dp_l[] = { 0.0, 1.35003920212974897128e-08,}, 
+  zero    =  0.0,
+  one	=  1.0,
+  two	=  2.0,
+  two53	=  9007199254740992.0,	
+  huge	=  1.0e300,
+  tiny    =  1.0e-300,
+  	
+  L1  =  5.99999999999994648725e-01, 
+  L2  =  4.28571428578550184252e-01, 
+  L3  =  3.33333329818377432918e-01, 
+  L4  =  2.72728123808534006489e-01, 
+  L5  =  2.30660745775561754067e-01, 
+  L6  =  2.06975017800338417784e-01, 
+  P1   =  1.66666666666666019037e-01, 
+  P2   = -2.77777777770155933842e-03, 
+  P3   =  6.61375632143793436117e-05, 
+  P4   = -1.65339022054652515390e-06, 
+  P5   =  4.13813679705723846039e-08, 
+  lg2  =  6.93147180559945286227e-01, 
+  lg2_h  =  6.93147182464599609375e-01, 
+  lg2_l  = -1.90465429995776804525e-09, 
+  ovt =  8.0085662595372944372e-0017, 
+  cp    =  9.61796693925975554329e-01, 
+  cp_h  =  9.61796700954437255859e-01, 
+  cp_l  = -7.02846165095275826516e-09, 
+  ivln2    =  1.44269504088896338700e+00, 
+  ivln2_h  =  1.44269502162933349609e+00, 
+  ivln2_l  =  1.92596299112661746887e-08; 
+
+  #ifdef __STDC__
+  	double __ieee754_pow(double x, double y)
+  #else
+  	double __ieee754_pow(x,y)
+  	double x, y;
+  #endif
+  {
+  	fprintf(stderr, "\n");
+  	double z,ax,z_h,z_l,p_h,p_l;
+  	double y1,t1,t2,r,s,t,u,v,w;
+  	int i0,i1,i,j,k,yisint,n;
+  	int hx,hy,ix,iy;
+  	unsigned lx,ly;
+
+  	i0 = ((*(int*)&one)>>29)^1; i1=1-i0;
+  	hx = __HI(x); lx = __LO(x);
+  	hy = __HI(y); ly = __LO(y);
+  	ix = hx&0x7fffffff;  iy = hy&0x7fffffff;
+
+      
+  	if((iy|ly)==0) {
+  		// Unexecuted code (line 71) removed. Its line cov: 0/1 (0%)
+  	}
+
+      
+  	if(ix > 0x7ff00000 || ((ix==0x7ff00000)&&(lx!=0)) ||
+  	   iy > 0x7ff00000 || ((iy==0x7ff00000)&&(ly!=0))) {
+  		// Unexecuted code (line 77) removed. Its line cov: 0/1 (0%)
+  	}
+
+      
+  	yisint  = 0;
+  	if(hx<0) {	
+  	    if(iy>=0x43400000) yisint = 2; 
+  	    else if(iy>=0x3ff00000) {
+  		k = (iy>>20)-0x3ff;	   
+  		if(k>20) {
+  		    j = ly>>(52-k);
+  		    if((j<<(52-k))==ly) yisint = 2-(j&1);
+  		} else if(ly==0) {
+  		    j = iy>>(20-k);
+  		    if((j<<(20-k))==iy) yisint = 2-(j&1);
+  		}
+  	    }		
+  	} 
+
+      
+  	if(ly==0) { 	
+  	    if (iy==0x7ff00000) {	
+  	        if(((ix-0x3ff00000)|lx)==0) {
+  		    // Unexecuted code (line 100) removed. Its line cov: 0/1 (0%)
+  		}
+  	        else if (ix >= 0x3ff00000) {
+  		    // Unexecuted code (line 103) removed. Its line cov: 0/1 (0%)
+  		}
+  	        else {
+  		    // Unexecuted code (line 106) removed. Its line cov: 0/1 (0%)
+  		}
+  	    } 
+  	    if(iy==0x3ff00000) {	
+  		if(hy<0) {
+  		    // Unexecuted code (line 111) removed. Its line cov: 0/1 (0%)
+  		} else {
+  		    // Unexecuted code (line 113) removed. Its line cov: 0/1 (0%)
+  		}
+  	    }
+  	    if(hy==0x40000000) {
+  		// Unexecuted code (line 117) removed. Its line cov: 0/1 (0%)
+  	    }
+  	    if(hy==0x3fe00000) {	
+  		if(hx>=0) {
+  		    // Unexecuted code (line 121) removed. Its line cov: 0/1 (0%)
+  		}
+  	    }
+  	}
+
+  	ax   = fabs(x);
+      
+  	if(lx==0) {
+  	    if(ix==0x7ff00000||ix==0||ix==0x3ff00000){
+  		// Unexecuted code (lines 130-138) removed. Its line cov: 0/9 (0%)
+  	    }
+  	}
+      
+  	n = (hx>>31)+1;
+
+      
+  	if((n|yisint)==0) {
+  		// Unexecuted code (line 146) removed. Its line cov: 0/1 (0%)
+  	}
+
+  	s = one; 
+  	if((n|(yisint-1))==0) s = -one;
+
+      
+  	if(iy>0x41e00000) { 
+  	    if(iy>0x43f00000){	
+  		if(ix<=0x3fefffff) {
+  		    // Unexecuted code (line 156) removed. Its line cov: 0/1 (0%)
+  		}
+  		if(ix>=0x3ff00000) {
+  		    return (hy>0)? huge*huge:tiny*tiny;
+  		}
+  	    }
+  	
+  	    if(ix<0x3fefffff) {
+  		// Unexecuted code (line 164) removed. Its line cov: 0/1 (0%)
+  	    }
+  	    if(ix>0x3ff00000) {
+  		// Unexecuted code (line 167) removed. Its line cov: 0/1 (0%)
+  	    }
+  	
+  	    // Unexecuted code (lines 170-176) removed. Its line cov: 0/7 (0%)
+  	} else {
+  	    // Unexecuted code (lines 178-224) removed. Its line cov: 38/38 (100%)
+  	}
+
+      
+  	// Unexecuted code (lines 228-275) removed. Its line cov: 44/47 (94%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      fprintf(stderr, "\n");
+      if (argc != 3) {
+          // Unexecuted code (lines 284-285) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = __ieee754_pow(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [e_pow.c] enter main 3
+
+  [e_pow.c] enter __ieee754_pow 18
+  [e_pow.c] enter __ieee754_pow 19

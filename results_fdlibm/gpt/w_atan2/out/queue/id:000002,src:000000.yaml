@@ -1,0 +1,312 @@
+id: 2
+src_id: 0
+create_time: '2025-12-14 20:57:30.719'
+time_taken: 305
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $1.21060000
+    call_cnt: 4
+    latency: 141.80s
+    input_tokens: 19982
+    output_tokens: 13516
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $1.03652000
+      call_cnt: 3
+      latency: 121.43s
+      input_tokens: 17179
+      output_tokens: 11549
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10350000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.42326000
+      call_cnt: 1
+      latency: 55.98s
+      input_tokens: 5175
+      output_tokens: 5106
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.47610000
+      call_cnt: 1
+      latency: 57.13s
+      input_tokens: 5845
+      output_tokens: 5882
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03366000
+      call_cnt: 1
+      latency: 8.32s
+      input_tokens: 6159
+      output_tokens: 561
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.17408000
+      call_cnt: 1
+      latency: 20.37s
+      input_tokens: 2803
+      output_tokens: 1967
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05606000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.11802000
+      call_cnt: 1
+      latency: 20.37s
+      input_tokens: 2803
+      output_tokens: 1967
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (_LIB_VERSION == _IEEE_ || isnan(x) || isnan(y)) -> true via isnan(x)
+  || isnan(y) in w_atan2.c:atan2
+target_file_lines: w_atan2.c:20-20
+target_lines_content: "\t\treturn z;"
+justification: The most obvious zero-coverage branches (x == 0.0 && y == 0.0 and its
+  corresponding else) are gated behind the library version check and were previously
+  selected but not reached, indicating they are likely unreachable under the current
+  build/runtime configuration. The argc != 3 branch in main is also unreachable due
+  to the fixed harness. To still exercise a distinct execution path and numeric edge-case
+  behavior that is reachable with input manipulation, we select the early-return condition
+  to be triggered specifically by isnan(x) || isnan(y). This path is achievable by
+  supplying arguments that parse to IEEE-754 NaN values, which explores error/edge
+  handling in the math routine even if line coverage gain is minimal. We avoid re-selecting
+  the 0/0 branch due to prior failure and likely configuration constraints.
+target_path_constraint: |-
+  1. Command-line invocation constraints:
+  - The program is executed via a shell with a single command string. The harness uses: "./temp_executable 1.0 1.0". This must be changed to provide two space-separated arguments where at least one converts to an IEEE-754 NaN when parsed by the C function atof.
+  - The final command must still present exactly two arguments to the program (argc == 3 inside main: argv[0] is the program name, argv[1] and argv[2] are the two user inputs), keeping the overall structure unchanged.
+
+  2. Argument parsing constraints (input format expected by the program):
+  - Both argv[1] and argv[2] are strings interpreted as decimal floating-point numbers by the standard C library function atof.
+  - At least one of these strings must be such that atof returns NaN (Not-a-Number) under the current C library and locale. Commonly, certain case-insensitive tokens are recognized to yield NaN. The exact token(s) must be ones that atof maps to NaN on the platform.
+  - The other argument may be any string that atof parses to a finite double (including zero) or also NaN; only one NaN is sufficient.
+
+  3. Mathematical/environmental constraints to hit the selected branch:
+  - Let x := atof(argv[2]) and y := atof(argv[1]) as per program order.
+  - The branch condition at runtime is: isnan(x) || isnan(y). Ensure that isnan(x) == true OR isnan(y) == true.
+  - No dependency on _LIB_VERSION needs to be satisfied for this path, because the disjunction uses isnan(x) || isnan(y) to force the condition true regardless of the library mode.
+
+  4. Output/side-condition constraints (to keep execution moving):
+  - The program must be able to print the result: the return from atan2 is assigned to a double and then printed. Returning early via the selected branch will simply print the value returned by __ieee754_atan2 and exit normally; no additional constraints are required.
+
+  Summary in SMT-style:
+  - Inputs: s1, s2 are strings provided as argv[1], argv[2].
+  - Parse: y = atof(s1), x = atof(s2).
+  - Require: isnan(y) OR isnan(x).
+  - Keep: argc == 3 (two user arguments present); program file is executable and runs under a typical C locale where the chosen token(s) map to NaN via atof.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+      import os
+
+      try:
+          # Ensure a standard C locale so that atof recognizes NaN tokens reliably
+          env = os.environ.copy()
+          env["LC_ALL"] = "C"
+          env["LANG"] = "C"
+
+          # Provide exactly two space-separated arguments; first one is NaN to satisfy isnan(y) || isnan(x)
+          # Maintain the same basic structure (single command string executed via the shell)
+          result = subprocess.run(
+              ["./temp_executable nan 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+              env=env,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // w_atan2.c (47 lines total)
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  #include "fdlibm.h"
+
+
+  #ifdef __STDC__
+  	double atan2(double y, double x)	
+  #else
+  	double atan2(y,x)			
+  	double y,x;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	// Unexecuted code (line 15) removed. Its line cov: 0/1 (0%)
+  #else
+  	double z;
+  	z = __ieee754_atan2(y,x);
+  	if(_LIB_VERSION == _IEEE_||isnan(x)||isnan(y)) {
+  		return z;
+  	}
+  	if(x==0.0&&y==0.0) {
+  	        // Unexecuted code (line 23) removed. Its line cov: 0/1 (0%)
+  	} else {
+  	    // Unexecuted code (line 25) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 3) {
+          // Unexecuted code (lines 36-37) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = atan2(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [w_atan2.c] enter main 3
+  [w_atan2.c] enter atan2 2
+  [w_atan2.c] enter atan2 3
+execution_summary: |2+
+
+  ```c
+  // w_atan2.c (47 lines total)
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  #include "fdlibm.h"
+
+
+  #ifdef __STDC__
+  	double atan2(double y, double x)	
+  #else
+  	double atan2(y,x)			
+  	double y,x;
+  #endif
+  {
+  #ifdef _IEEE_LIBM
+  	// Unexecuted code (line 15) removed. Its line cov: 0/1 (0%)
+  #else
+  	double z;
+  	z = __ieee754_atan2(y,x);
+  	if(_LIB_VERSION == _IEEE_||isnan(x)||isnan(y)) {
+  		return z;
+  	}
+  	if(x==0.0&&y==0.0) {
+  	        // Unexecuted code (line 23) removed. Its line cov: 0/1 (0%)
+  	} else {
+  	    // Unexecuted code (line 25) removed. Its line cov: 0/1 (0%)
+  	}
+  #endif
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+      if (argc != 3) {
+          // Unexecuted code (lines 36-37) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = atan2(a0, a1);
+      printf("%f\n", r);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [w_atan2.c] enter main 3
+  [w_atan2.c] enter atan2 2
+  [w_atan2.c] enter atan2 3

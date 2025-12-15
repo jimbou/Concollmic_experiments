@@ -12,7 +12,7 @@ BASE_DIR="/home/jim/ConcoLLMic/fdlibm/"
 LOG_DIR="logs_run_fdlibm"
 SUMMARY_JSON="run_summary_fdlibm.json"
 TIMEOUT_DURATION="15m"
-MODEL_NAME="claude"
+MODEL_NAME="gpt"
 RESULTS_DIR="/home/jim/ConcoLLMic/results_fdlibm/$MODEL_NAME"
 
 mkdir -p "$RESULTS_DIR" "$LOG_DIR"
