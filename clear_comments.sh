@@ -1,23 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BASE_DIR="/home/jim/ConcoLLMic/fdlibm"
+DIR1="$1"
+DIR2="$2"
 
-echo "🧹 Removing all C comments from every src/*.c file..."
-echo
+mkdir -p "$DIR2"
 
-find "$BASE_DIR" -type d -name src | while read -r srcdir; do
-  find "$srcdir" -type f -name "*.c" | while read -r cfile; do
-    echo "🧼 Cleaning: $cfile"
+find "$DIR1" -type f | while read -r f; do
+    name="$(basename "$f")"
 
-    perl -0777 -pe '
-      s{/\*.*?\*/}{}gs;   # remove block comments
-      s{//.*$}{}gm;       # remove line comments
-    ' "$cfile" > "$cfile.tmp"
-
-    mv "$cfile.tmp" "$cfile"
-  done
+    if ! find "$DIR2" -type f -name "$name" -print -quit | grep -q .; then
+        cp "$f" "$DIR2/$name"
+        echo "Copied: $name"
+    fi
 done
-
-echo
-echo "✅ All comments removed successfully."
