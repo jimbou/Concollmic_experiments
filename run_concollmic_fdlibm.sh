@@ -9,11 +9,11 @@ trap 'echo "❗ Manual interrupt. Exiting..."; kill 0' INT
 # =====================================================
 
 BASE_DIR="/home/jim/ConcoLLMic/fdlibm/"
-LOG_DIR="logs_run_fdlibm"
-SUMMARY_JSON="run_summary_fdlibm.json"
+LOG_DIR="logs_run_fdlibm_deepseek_temp"
+SUMMARY_JSON="run_summary_fdlibm_d_t.json"
 TIMEOUT_DURATION="15m"
-MODEL_NAME="gpt"
-RESULTS_DIR="/home/jim/ConcoLLMic/results_fdlibm/$MODEL_NAME"
+MODEL_NAME="deepseek-chat"
+RESULTS_DIR="/home/jim/ConcoLLMic/results_fdlibm_deepseek_temp/$MODEL_NAME"
 
 mkdir -p "$RESULTS_DIR" "$LOG_DIR"
 echo "[]" > "$SUMMARY_JSON"

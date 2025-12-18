@@ -174,8 +174,8 @@ def setup_model():
     # set_model("gemini-2.5-pro")
     # set_model("gemini-2.5-flash")
     # set_model("gpt-4o-mini")
-    set_model("gpt-5")
-    # set_model("deepseek-chat")
+    # set_model("gpt-5")
+    set_model("deepseek-chat")
     # set_model("deepseek-reasoner")
 
     # ✅ make it globally visible to threads
@@ -185,8 +185,8 @@ def setup_model():
     # model_common.GLOBAL_MODEL_NAME = "claude-sonnet-4-0"
     # model_common.GLOBAL_MODEL_NAME = "gemini-2.5-pro"
     # model_common.GLOBAL_MODEL_NAME = "gemini-2.5-flash"
-    model_common.GLOBAL_MODEL_NAME = "gpt-5"
-    # model_common.GLOBAL_MODEL_NAME = "deepseek-chat"
+    # model_common.GLOBAL_MODEL_NAME = "gpt-5"
+    model_common.GLOBAL_MODEL_NAME = "deepseek-chat"
     # model_common.GLOBAL_MODEL_NAME = "deepseek-reasoner"
     print("✅ Global model set to:", model_common.GLOBAL_MODEL_NAME)
 
