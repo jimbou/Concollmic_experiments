@@ -1,0 +1,308 @@
+id: 1
+src_id: 0
+create_time: '2025-12-24 15:38:25.956'
+time_taken: 127
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 1
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.69222000
+    call_cnt: 3
+    latency: 91.78s
+    input_tokens: 13215
+    output_tokens: 7132
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.52146000
+      call_cnt: 2
+      latency: 65.71s
+      input_tokens: 10371
+      output_tokens: 5234
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10174000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.38348000
+      call_cnt: 1
+      latency: 58.35s
+      input_tokens: 5087
+      output_tokens: 4630
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03624000
+      call_cnt: 1
+      latency: 7.36s
+      input_tokens: 5284
+      output_tokens: 604
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.17076000
+      call_cnt: 1
+      latency: 26.07s
+      input_tokens: 2844
+      output_tokens: 1898
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05688000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.11388000
+      call_cnt: 1
+      latency: 26.07s
+      input_tokens: 2844
+      output_tokens: 1898
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (x->arg1 != x->arg1) -> true in s_matherr.c:matherr
+target_file_lines: s_matherr.c:17-17
+target_lines_content: return 0;
+justification: This branch checks whether the input to matherr is NaN (IEEE 754),
+  which is central to the function’s behavior. It currently has 0% historical coverage
+  (line 17) and was not executed in the current run. Exercising this branch will explore
+  the error-handling path within matherr and likely produce distinct behavior in the
+  return value and diagnostics, contributing meaningful coverage beyond ordinary numeric
+  inputs.
+target_path_constraint: |-
+  Constraints are listed in the order they must be satisfied during program execution.
+
+  1. Command invocation format
+  - The test harness invokes the program via a shell with a single command-line string: "./temp_executable 1.0".
+  - The program expects exactly one additional command-line argument (besides argv[0]), i.e., argc must equal 2. Therefore, ensure the final shell command expands to two argv entries: argv[0] = path to the executable; argv[1] = a single token representing the numeric input.
+
+  2. Argument token must parse as a floating-point number
+  - The program uses the C library function strtod(argv[1], NULL) to convert argv[1] to a double.
+  - strtod must consume the entire token or at least produce a double value. To reach the target branch (NaN check), the resulting double must be a NaN per IEEE 754.
+  - Therefore, argv[1] must be a single token that strtod converts to a NaN. Standard C library behavior on many platforms accepts certain spellings (e.g., case-insensitive forms of "nan"). However, do not rely on unspecified variants; the input must be whatever the specific libc recognizes as a NaN literal. Symbolically: parsed_double = NaN.
+
+  3. Data flow into matherr
+  - The program constructs a struct exception with fields:
+    - ex.type = 0 (irrelevant to reaching the branch)
+    - ex.name = "matherr_test" (string literal; irrelevant)
+    - ex.arg1 = parsed_double
+    - ex.arg2 = 0.0
+    - ex.retval = 0.0
+  - The function matherr receives a pointer to this struct and evaluates the condition x->arg1 != x->arg1.
+  - In IEEE 754 semantics, any NaN is not equal to itself. Thus, to make the condition true, ensure parsed_double is NaN.
+
+  4. Environmental and encoding constraints
+  - No file I/O is performed; only the command-line argument matters.
+  - The process locale and encoding should not interfere with strtod recognizing the NaN literal. Avoid locale-dependent decimal separators; use a token that is locale-insensitive for NaN. Symbolically: strtod(token) yields NaN regardless of locale settings used at runtime.
+
+  Summary (SMT-style):
+  - Let token be the program’s argv[1] as a byte string in ASCII.
+  - Constraint C1: argc == 2.
+  - Constraint C2: strtod(token, NULL) returns a double value d.
+  - Constraint C3: isNaN(d) == true.
+  - Then at matherr: (d != d) evaluates to true, covering the target branch.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |-
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+      import os
+
+      # Use a NaN literal recognized by strtod: "nan"
+      # Ensure the shell expands to two argv entries: argv[0] = ./temp_executable, argv[1] = nan
+      # Set locale to C to be robust against any locale quirks, though "nan" is locale-insensitive
+      env = os.environ.copy()
+      env["LC_ALL"] = "C"
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable nan"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+              env=env,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // s_matherr.c (45 lines total)
+  #include <stdio.h>
+  #include <stdlib.h>
+  #include <errno.h>
+  #include <math.h>
+  #include "fdlibm.h"
+
+  #ifdef __STDC__ 
+      int matherr(struct exception *x)
+  #else 
+      int matherr(x) 
+      struct exception *x; 
+  #endif 
+  { 
+  fprintf(stderr, "\n");
+  int n=0; 
+  if(x->arg1!=x->arg1) {
+  // Unexecuted code (line 17) removed. Its line cov: 0/1 (0%)
+  }
+  return n; 
+  }
+
+  int main(int argc, char **argv) {
+  fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 25-26) removed. Its line cov: 0/2 (0%)
+      }
+
+      errno = 0;
+      double x = strtod(argv[1], NULL);
+
+      
+
+      struct exception ex;
+      ex.type = 0;
+      ex.name = "matherr_test";
+      ex.arg1 = x;
+      ex.arg2 = 0.0;
+      ex.retval = 0.0;
+
+      int r = matherr(&ex);
+
+      printf("matherr returned %d\n", r);
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [s_matherr.c] enter main 3
+  [s_matherr.c] enter main 4
+  [s_matherr.c] enter main 5
+
+  [s_matherr.c] enter matherr 2
+  [s_matherr.c] enter main 6
+execution_summary: |2+
+
+  ```c
+  // s_matherr.c (45 lines total)
+  #include <stdio.h>
+  #include <stdlib.h>
+  #include <errno.h>
+  #include <math.h>
+  #include "fdlibm.h"
+
+  #ifdef __STDC__ 
+      int matherr(struct exception *x)
+  #else 
+      int matherr(x) 
+      struct exception *x; 
+  #endif 
+  { 
+  fprintf(stderr, "\n");
+  int n=0; 
+  if(x->arg1!=x->arg1) {
+  return 0;
+  }
+  // Unexecuted code (line 19) removed. Its line cov: 1/1 (100%)
+  }
+
+  int main(int argc, char **argv) {
+  fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 25-26) removed. Its line cov: 0/2 (0%)
+      }
+
+      errno = 0;
+      double x = strtod(argv[1], NULL);
+
+      
+
+      struct exception ex;
+      ex.type = 0;
+      ex.name = "matherr_test";
+      ex.arg1 = x;
+      ex.arg2 = 0.0;
+      ex.retval = 0.0;
+
+      int r = matherr(&ex);
+
+      printf("matherr returned %d\n", r);
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [s_matherr.c] enter main 3
+  [s_matherr.c] enter main 4
+  [s_matherr.c] enter main 5
+
+  [s_matherr.c] enter matherr 3
+  [s_matherr.c] enter main 6

@@ -91,6 +91,24 @@ def extract_covered_lines(log: Path, coverable: set[int]) -> set[int]:
 
     return covered
 
+from pathlib import Path
+
+FDLIBM_NO_COMMENTS_DIR = Path("/home/jim/ConcoLLMic/fdlibm_no_comments")
+
+def resolve_no_comments_path(original: Path) -> Path:
+    # 1) direct hit
+    direct = FDLIBM_NO_COMMENTS_DIR / original.name
+    if direct.is_file():
+        return direct
+
+    # 2) search anywhere under the dir
+    hits = list(FDLIBM_NO_COMMENTS_DIR.rglob(original.name))
+    if not hits:
+        raise FileNotFoundError(f"Could not find {original.name} under {FDLIBM_NO_COMMENTS_DIR}")
+    if len(hits) > 1:
+        raise FileExistsError(f"Multiple matches for {original.name}: {hits[:5]} ...")
+    return hits[0]
+
 
 # -------------------------------------------------
 # Build line -> content map from C file
@@ -122,12 +140,11 @@ def process_bench(
         print(f"[SKIP] {bench}: missing instr/")
         return None
 
-    c_files = list(instr.glob("*.c"))
-    if not c_files:
-        print(f"[SKIP] {bench}: no .c file in instr/")
+    try:
+        c_file = pick_instr_c_file(instr, bench)
+    except FileNotFoundError as e:
+        print(f"[SKIP] {bench}: {e}")
         return None
-
-    c_file = c_files[0]
 
     log = find_bench_log(log_root, bench)
     if log is None:
@@ -151,8 +168,8 @@ def process_bench(
     ) if total_coverable > 0 else 0.0
 
     model = detect_model_name(log)
-
-    coverable_content = get_line_content(c_file, coverable_lines)
+    no_comments_file = resolve_no_comments_path(c_file)
+    coverable_content = get_line_content(no_comments_file, coverable_lines)
     covered_content = {ln: coverable_content.get(ln, "") for ln in covered_lines}
 
     result = {
@@ -184,7 +201,27 @@ def process_bench(
 # -------------------------------------------------
 # MAIN
 # -------------------------------------------------
+# -------------------------------------------------
+# MAIN
+# -------------------------------------------------
+def pick_instr_c_file(instr_dir: Path, bench: str) -> Path:
+    expected = instr_dir / f"{bench}.c"
+    if expected.is_file():
+        return expected
+
+    # fallback: try matching stem
+    candidates = list(instr_dir.glob("*.c"))
+    for p in candidates:
+        if p.stem == bench:
+            return p
+
+    raise FileNotFoundError(
+        f"Expected {expected} but not found. Found: {[p.name for p in candidates]}"
+    )
+
+
 def main():
+    print("Parsing args...")
     parser = argparse.ArgumentParser()
     parser.add_argument("--benches_root", type=Path)
     parser.add_argument("--logs_root", type=Path)
@@ -193,7 +230,7 @@ def main():
         type=Path,
         default=Path("/home/jim/ConcoLLMic/fdlibm_coverable_lines_no_comments_no_brace.json"),
     )
-
+    print("Parsing args...")
     args = parser.parse_args()
 
     coverable_map = load_coverable_map(args.coverable_json)
@@ -202,21 +239,44 @@ def main():
 
     all_results: dict[str, list[dict]] = {}
 
+    # NEW: track totals per model
+    totals: dict[str, dict[str, int]] = {}  # model -> {"covered": X, "coverable": Y}
+
     for bench_dir in benches:
         res = process_bench(bench_dir, args.logs_root, coverable_map)
         if res is None:
             continue
+
         model = detect_model_name(Path(res["log"]))
         all_results.setdefault(model, []).append(res)
 
+        totals.setdefault(model, {"covered": 0, "coverable": 0})
+        totals[model]["covered"] += int(res["total_covered_lines"])
+        totals[model]["coverable"] += int(res["total_coverable_lines"])
+
     # Write combined JSON per model
     for model, results in all_results.items():
+        total_covered = totals.get(model, {}).get("covered", 0)
+        total_coverable = totals.get(model, {}).get("coverable", 0)
+
+        total_coverage_percent = round(
+            (total_covered / total_coverable) * 100, 2
+        ) if total_coverable > 0 else 0.0
+
+        average_coverage_percent = round(
+            sum(r["coverage_percent"] for r in results) / len(results), 2
+        ) if results else 0.0
+
         combined = {
             "model": model,
             "total_benches": len(results),
-            "average_coverage_percent": round(
-                sum(r["coverage_percent"] for r in results) / len(results), 2
-            ) if results else 0.0,
+
+            # keep both, because they answer different questions
+            "average_coverage_percent": average_coverage_percent,
+            "total_covered_lines": total_covered,
+            "total_coverable_lines": total_coverable,
+            "total_coverage_percent": total_coverage_percent,
+
             "benches": results,
         }
 
@@ -224,7 +284,10 @@ def main():
         with open(out, "w", encoding="utf-8") as f:
             json.dump(combined, f, indent=2)
 
-        print(f"[ALL] Wrote {out}")
+        print(
+            f"[ALL] {model}: total {total_covered}/{total_coverable} "
+            f"({total_coverage_percent}%), avg {average_coverage_percent}% | Wrote {out}"
+        )
 
 
 if __name__ == "__main__":

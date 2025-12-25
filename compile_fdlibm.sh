@@ -35,7 +35,7 @@
 
 set -euo pipefail
 
-FDLIBM_ROOT="/home/jim/ConcoLLMic/fdlibm"
+FDLIBM_ROOT="/home/jim/ConcoLLMic/fdlibm/e_jn"
 INCLUDE_ROOT="/home/jim/ConcoLLMic/fdlibm_original"
 
 echo "Compiling all instr C files into temp_executable"

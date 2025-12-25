@@ -214,3 +214,6 @@ extern double __kernel_sin __P((double,double,int));
 extern double __kernel_cos __P((double,double));
 extern double __kernel_tan __P((double,double,int));
 extern int    __kernel_rem_pio2 __P((double*,double*,int,int,int,const int*));
+// Total cost: 0.003042
+// Total split cost: 0.000000, input tokens: 0, output tokens: 0, cache read tokens: 0, cache write tokens: 0, split chunks: [(0, 216)]
+// Total instrumented cost: 0.003042, input tokens: 3943, output tokens: 1798, cache read tokens: 0, cache write tokens: 0

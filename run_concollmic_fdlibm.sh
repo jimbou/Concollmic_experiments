@@ -8,12 +8,12 @@ trap 'echo "❗ Manual interrupt. Exiting..."; kill 0' INT
 # Batch ACE run execution script with timeout + JSON report (FDLIBM)
 # =====================================================
 
-BASE_DIR="/home/jim/ConcoLLMic/fdlibm/"
-LOG_DIR="logs_run_fdlibm_deepseek_temp"
+BASE_DIR="/home/jim/ConcoLLMic/fdlibm/reruns/"
+LOG_DIR="logs_run_fdlibm_deepseek_temp2"
 SUMMARY_JSON="run_summary_fdlibm_d_t.json"
 TIMEOUT_DURATION="15m"
-MODEL_NAME="deepseek-chat"
-RESULTS_DIR="/home/jim/ConcoLLMic/results_fdlibm_deepseek_temp/$MODEL_NAME"
+MODEL_NAME="claude-3-7-sonnet-latest"
+RESULTS_DIR="/home/jim/ConcoLLMic/results_fdlibm_new_temp/$MODEL_NAME"
 
 mkdir -p "$RESULTS_DIR" "$LOG_DIR"
 echo "[]" > "$SUMMARY_JSON"

@@ -1,0 +1,444 @@
+id: 1
+src_id: 0
+create_time: '2025-12-24 15:15:17.408'
+time_taken: 162
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 19
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.89936000
+    call_cnt: 3
+    latency: 107.18s
+    input_tokens: 14716
+    output_tokens: 10084
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.74886000
+      call_cnt: 2
+      latency: 92.98s
+      input_tokens: 11646
+      output_tokens: 8599
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.11432000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.58558000
+      call_cnt: 1
+      latency: 82.13s
+      input_tokens: 5716
+      output_tokens: 7783
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.04896000
+      call_cnt: 1
+      latency: 10.85s
+      input_tokens: 5930
+      output_tokens: 816
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.15050000
+      call_cnt: 1
+      latency: 14.20s
+      input_tokens: 3070
+      output_tokens: 1485
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.06140000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.08910000
+      call_cnt: 1
+      latency: 14.20s
+      input_tokens: 3070
+      output_tokens: 1485
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: else if ((double)n <= x) -> true in e_jn.c:__ieee754_jn
+target_file_lines: e_jn.c:44-45
+target_lines_content: |-
+  		if(ix>=0x52D00000) { 
+  			switch(n&3) {
+justification: This branch guards a large computation path of the Bessel J_n implementation
+  and currently has 0% historical coverage (“Unexecuted code (lines 44-64) removed”).
+  The current run with n=1 returned early and skipped all core logic in __ieee754_jn.
+  Driving execution into the (double)n <= x path (for n>=2 and finite x with |x| >=
+  n) will exercise many previously unseen behaviors and significantly increase coverage
+  in a core numeric routine.
+target_path_constraint: |-
+  Chronological, input-level constraints to reach the target branch (else if ((double)n <= x) -> true in __ieee754_jn):
+
+  1) Command invocation and argument count:
+  - The program is launched exactly as the harness does (using a single shell command string), but must provide exactly three arguments to the executable at runtime: the program name plus two user-supplied arguments. This ensures argc == 3 inside main.
+  - Constraint: The shell command must be adjusted to include two space-separated arguments after the executable name.
+
+  2) First argument (integer n for Bessel functions):
+  - Must parse successfully as a base-10 integer via atoi.
+  - Must satisfy: n >= 2. This prevents the early returns for n == 0 and n == 1 in __ieee754_jn.
+  - Must satisfy: n >= 0 to avoid the separate negative-n branch. (Negative n would steer into a different, currently unexecuted path and is not the target.)
+
+  3) Second argument (floating-point x for Bessel functions):
+  - Must parse successfully as a decimal floating number via atof (C locale, period as decimal separator).
+  - Must be a finite number (not NaN or ±Inf). This avoids the special-case early return paths guarded by IEEE checks.
+  - Must be nonnegative or any sign? For __ieee754_jn, the code sets sgn = (n&1)&(hx>>31) then x = fabs(x). Therefore, sign of x does not affect the branch condition after absolute value. No restriction on sign is needed specifically for branch entry, but avoid extremely large magnitudes that could trigger ix>=0x7ff00000 (Inf) path.
+  - Must satisfy: fabs(x) >= (double)n. This ensures the condition (double)n <= x is true after x is replaced by fabs(x).
+
+  4) Additional low-level representation constraints (ensuring parsing and IEEE checks behave as expected):
+  - The string for n contains only optional leading whitespace, optional leading sign '+', followed by one or more digits (0–9). No trailing non-digit characters.
+  - The string for x contains only optional leading whitespace, optional sign, digits, optional decimal point with digits, and optional exponent part using 'e' or 'E' with an integer exponent. No trailing text.
+  - Both arguments must fit within typical C ranges: n within 32-bit signed int range; x within double-precision finite range, and not producing overflow or underflow to ±Inf or NaN.
+
+  5) Interactions with __ieee754_yn (called later):
+  - __ieee754_yn also processes n and x; to avoid its own early invalid-input branches that might change overall behavior, ensure x > 0 (strictly positive) so that the hx<0 (negative x) path returning zero/zero is not taken. And ensure x is not zero to avoid -one/zero path.
+
+  6) Combined numeric constraints summarizing all requirements:
+  - n ∈ Z, 2 ≤ n ≤ INT_MAX.
+  - x ∈ R, is finite, x > 0, and x ≥ n.
+
+  These constraints guarantee the following execution:
+  - main parses two arguments and calls __ieee754_jn(n, x).
+  - In __ieee754_jn: n ≥ 2 avoids n==0/1 early returns; finite x avoids IEEE NaN/Inf checks; fabs(x) = x (since x > 0); (double)n ≤ x selects the targeted branch.
+  - Subsequent call to __ieee754_yn(n, x) will also proceed along its normal large-x path for positive finite x, improving coverage further without interfering with the targeted branch.
+selected_cnt: 2
+successful_generation_cnt: 1
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      # Use concrete inputs that satisfy all constraints:
+      # n = 2 (integer, >= 2)
+      # x = 2.0 (finite double, > 0, and x >= n)
+      # Command uses exactly two user-supplied arguments so argc == 3 inside main
+      try:
+          result = subprocess.run(
+              ["./temp_executable 2 2.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // e_jn.c (201 lines total)
+  #include <stdio.h>
+  #include "fdlibm.h"
+
+  #ifdef __STDC__
+  static const double
+  #else
+  static double
+  #endif
+  invsqrtpi=  5.64189583547756279280e-01, 
+  two   =  2.00000000000000000000e+00, 
+  one   =  1.00000000000000000000e+00; 
+
+  static double zero  =  0.00000000000000000000e+00;
+
+  #ifdef __STDC__
+  	double __ieee754_jn(int n, double x)
+  #else
+  	double __ieee754_jn(n,x)
+  	int n; double x;
+  #endif
+  {
+  	int i,hx,ix,lx, sgn;
+  	double a, b, temp, di;
+  	double z, w;
+
+      
+  	hx = __HI(x);
+  	ix = 0x7fffffff&hx;
+  	lx = __LO(x);
+      
+  	if((ix|((unsigned)(lx|-lx))>>31)>0x7ff00000) return x+x;
+  	if(n<0){		
+  		// Unexecuted code (lines 33-35) removed. Its line cov: 0/3 (0%)
+  	}
+  	if(n==0) return(__ieee754_j0(x));
+  	if(n==1) return(__ieee754_j1(x));
+  	sgn = (n&1)&(hx>>31);	
+  	x = fabs(x);
+  	if((ix|lx)==0||ix>=0x7ff00000) 	
+  	    b = zero;
+  	else if((double)n<=x) {   
+  		// Unexecuted code (lines 44-64) removed. Its line cov: 0/21 (0%)
+  	} else {
+  	    // Unexecuted code (lines 66-125) removed. Its line cov: 0/55 (0%)
+  	}
+  	// Unexecuted code (line 127) removed. Its line cov: 0/1 (0%)
+  }
+
+  #ifdef __STDC__
+  	double __ieee754_yn(int n, double x) 
+  #else
+  	double __ieee754_yn(n,x) 
+  	int n; double x;
+  #endif
+  {
+  	int i,hx,ix,lx;
+  	int sign;
+  	double a, b, temp;
+
+  	hx = __HI(x);
+  	ix = 0x7fffffff&hx;
+  	lx = __LO(x);
+      
+  	if((ix|((unsigned)(lx|-lx))>>31)>0x7ff00000) return x+x;
+  	if((ix|lx)==0) return -one/zero;
+  	if(hx<0) return zero/zero;
+  	sign = 1;
+  	if(n<0){
+  		// Unexecuted code (lines 150-151) removed. Its line cov: 0/2 (0%)
+  	}
+  	if(n==0) return(__ieee754_y0(x));
+  	if(n==1) return(sign*__ieee754_y1(x));
+  	if(ix==0x7ff00000) return zero;
+  	if(ix>=0x52D00000) { 
+  		// Unexecuted code (lines 157-167) removed. Its line cov: 0/11 (0%)
+  	} else {
+  	    // Unexecuted code (lines 169-176) removed. Its line cov: 0/7 (0%)
+  	}
+  	// Unexecuted code (line 178) removed. Its line cov: 0/1 (0%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+
+      if (argc != 3) {
+          // Unexecuted code (lines 188-189) removed. Its line cov: 0/2 (0%)
+      }
+
+      int a0 = atoi(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = __ieee754_jn(a0, a1);
+      double r1 = __ieee754_yn(a0, a1);
+      printf("%f\n", r);
+      printf("%f\n", r1);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [e_jn.c] enter main 3
+  [e_jn.c] enter __ieee754_jn 1
+  [e_jn.c] enter __ieee754_jn 3
+  [e_jn.c] enter __ieee754_jn 4
+  [e_jn.c] enter __ieee754_jn 10
+  [e_jn.c] enter __ieee754_jn 11
+  [e_jn.c] enter __ieee754_jn 24
+  [e_jn.c] enter __ieee754_yn 1
+  [e_jn.c] enter __ieee754_yn 3
+  [e_jn.c] enter __ieee754_yn 9
+  [e_jn.c] enter __ieee754_yn 10
+  [e_jn.c] enter __ieee754_yn 11
+execution_summary: |2+
+
+  ```c
+  // e_jn.c (201 lines total)
+  #include <stdio.h>
+  #include "fdlibm.h"
+
+  #ifdef __STDC__
+  static const double
+  #else
+  static double
+  #endif
+  invsqrtpi=  5.64189583547756279280e-01, 
+  two   =  2.00000000000000000000e+00, 
+  one   =  1.00000000000000000000e+00; 
+
+  static double zero  =  0.00000000000000000000e+00;
+
+  #ifdef __STDC__
+  	double __ieee754_jn(int n, double x)
+  #else
+  	double __ieee754_jn(n,x)
+  	int n; double x;
+  #endif
+  {
+  	int i,hx,ix,lx, sgn;
+  	double a, b, temp, di;
+  	double z, w;
+
+      
+  	hx = __HI(x);
+  	ix = 0x7fffffff&hx;
+  	lx = __LO(x);
+      
+  	if((ix|((unsigned)(lx|-lx))>>31)>0x7ff00000) return x+x;
+  	if(n<0){		
+  		// Unexecuted code (lines 33-35) removed. Its line cov: 0/3 (0%)
+  	}
+  	if(n==0) return(__ieee754_j0(x));
+  	if(n==1) return(__ieee754_j1(x));
+  	sgn = (n&1)&(hx>>31);	
+  	x = fabs(x);
+  	if((ix|lx)==0||ix>=0x7ff00000) 	
+  	    b = zero;
+  	else if((double)n<=x) {   
+  		if(ix>=0x52D00000) { 
+  			// Unexecuted code (lines 45-55) removed. Its line cov: 0/11 (0%)
+  		} else {	
+  		        a = __ieee754_j0(x);
+  		        b = __ieee754_j1(x);
+  		        for(i=1;i<n;i++){
+  			    temp = b;
+  			    b = b*((double)(i+i)/x) - a; 
+  			    a = temp;
+  		        }
+  		}
+  	} else {
+  	    // Unexecuted code (lines 66-125) removed. Its line cov: 0/55 (0%)
+  	}
+  	if(sgn==1) return -b; else return b;
+  }
+
+  #ifdef __STDC__
+  	double __ieee754_yn(int n, double x) 
+  #else
+  	double __ieee754_yn(n,x) 
+  	int n; double x;
+  #endif
+  {
+  	int i,hx,ix,lx;
+  	int sign;
+  	double a, b, temp;
+
+  	hx = __HI(x);
+  	ix = 0x7fffffff&hx;
+  	lx = __LO(x);
+      
+  	if((ix|((unsigned)(lx|-lx))>>31)>0x7ff00000) return x+x;
+  	if((ix|lx)==0) return -one/zero;
+  	if(hx<0) return zero/zero;
+  	sign = 1;
+  	if(n<0){
+  		// Unexecuted code (lines 150-151) removed. Its line cov: 0/2 (0%)
+  	}
+  	if(n==0) return(__ieee754_y0(x));
+  	if(n==1) return(sign*__ieee754_y1(x));
+  	if(ix==0x7ff00000) return zero;
+  	if(ix>=0x52D00000) { 
+  		// Unexecuted code (lines 157-167) removed. Its line cov: 0/11 (0%)
+  	} else {
+  	    a = __ieee754_y0(x);
+  	    b = __ieee754_y1(x);
+  	
+  	    for(i=1;i<n&&(__HI(b) != 0xfff00000);i++){ 
+  		temp = b;
+  		b = ((double)(i+i)/x)*b - a;
+  		a = temp;
+  	    }
+  	}
+  	if(sign>0) return b; else return -b;
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+  	fprintf(stderr, "\n");
+
+      if (argc != 3) {
+          // Unexecuted code (lines 188-189) removed. Its line cov: 0/2 (0%)
+      }
+
+      int a0 = atoi(argv[1]);
+      double a1 = atof(argv[2]);
+
+      double r = __ieee754_jn(a0, a1);
+      double r1 = __ieee754_yn(a0, a1);
+      printf("%f\n", r);
+      printf("%f\n", r1);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import signal
+      import subprocess
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable 1 1.0"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+          )
+          # Return stderr and the return code
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Timeout occurred, also ensure to return stderr captured before timeout and return code -signal.SIGKILL
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          # ensure to raise the error if run failed
+          raise e
+src_execution_trace: |2
+
+  [e_jn.c] enter main 3
+  [e_jn.c] enter __ieee754_jn 1
+  [e_jn.c] enter __ieee754_jn 3
+  [e_jn.c] enter __ieee754_yn 1
+  [e_jn.c] enter __ieee754_yn 3

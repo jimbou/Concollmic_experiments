@@ -1,0 +1,953 @@
+id: 3
+src_id: 2
+create_time: '2025-12-24 15:08:28.433'
+time_taken: 405
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.90540000
+    call_cnt: 3
+    latency: 98.67s
+    input_tokens: 19368
+    output_tokens: 8634
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.73330000
+      call_cnt: 2
+      latency: 77.52s
+      input_tokens: 16568
+      output_tokens: 6699
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.16342000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.53928000
+      call_cnt: 1
+      latency: 70.15s
+      input_tokens: 8171
+      output_tokens: 6189
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03060000
+      call_cnt: 1
+      latency: 7.37s
+      input_tokens: 8397
+      output_tokens: 510
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.17210000
+      call_cnt: 1
+      latency: 21.15s
+      input_tokens: 2800
+      output_tokens: 1935
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05600000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.11610000
+      call_cnt: 1
+      latency: 21.15s
+      input_tokens: 2800
+      output_tokens: 1935
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: 'if (ix >= 0x40000000) -> true in e_j1.c: __ieee754_j1(double x)'
+target_file_lines: e_j1.c:49-50
+target_lines_content: |-
+  		s = sin(y);
+  		c = cos(y);
+justification: This is the large-|x| path of the Bessel J1 implementation. The block
+  protecting it (lines 49-72) currently has 0/23 (0%) coverage, meaning no tests have
+  exercised this core asymptotic logic. It is reachable via the single numeric command-line
+  argument parsed by atof, without modifying the harness. Exercising this branch is
+  likely to invoke additional approximation routines (e.g., polynomial/rational helpers),
+  expanding coverage substantially compared to tiny/zero inputs.
+target_path_constraint: |-
+  Chronological constraints to reach the target branch (ix >= 0x40000000) -> true in __ieee754_j1:
+
+  1. Command-line invocation format:
+     - The program must be executed with exactly one positional argument beyond the program name, so the process argument count equals 2 when observed by main.
+     - This single argument must be a textual representation of a finite, non-NaN, non-infinite double-precision floating-point value, using a C locale (decimal point is '.').
+
+  2. Locale/environment requirements for parsing:
+     - Ensure the C locale is active so that atof interprets the argument using '.' as the decimal separator and standard exponent syntax. Concretely: LC_ALL=C (or LANG=C) must be effective for the process.
+
+  3. Numeric magnitude requirement to select the large-|x| path in J1:
+     - Let x be the double parsed from the argument by atof.
+     - Constraint: |x| >= 2.0. Rationale: The branch computes hx=__HI(x), ix=hx & 0x7fffffff, and tests ix >= 0x40000000, which corresponds to |x| >= 2.0 in IEEE-754 double (exponent threshold for 2.0).
+     - Additional exclusions to avoid earlier special-case branches:
+       a) x must be finite: not NaN and not ±Inf.
+       b) x must not be subnormal or tiny enough to trigger the "ix<0x3e400000" small-x path (automatically avoided by |x| >= 2.0).
+
+  4. Argument text canonicality to avoid misparsing:
+     - The argument string must contain no leading/trailing non-numeric characters (aside from optional leading whitespace, optional leading '+' or '-', digits, optional decimal point and fractional digits, and optional exponent part like 'e±dd').
+     - No thousands separators or locale-specific symbols.
+
+  5. Side-effect neutrality for subsequent computations:
+     - No additional I/O or files are required. Standard streams are sufficient.
+
+  These constraints ensure atof parses a finite double x with |x| >= 2.0 under the C locale, causing __ieee754_j1 to take the ix >= 0x40000000 branch.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import os
+      import signal
+      import subprocess
+
+      # Provide exactly one numeric argument with |x| >= 2.0 to select the large-|x| path
+      # Canonical C-locale float text without extra characters
+      cmd = "./temp_executable 2.0"
+
+      # Ensure C locale so atof parses using '.' and standard exponent semantics
+      env = os.environ.copy()
+      env["LC_ALL"] = "C"
+      env["LANG"] = "C"
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+              env=env,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return (e.stderr if e.stderr is not None else ""), -signal.SIGKILL
+      except Exception as e:
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // e_j1.c (442 lines total)
+  #include <stdio.h>
+  #include "fdlibm.h"
+
+  #ifdef __STDC__
+  static double pone(double), qone(double);
+  #else
+  static double pone(), qone();
+  #endif
+
+  #ifdef __STDC__
+  static const double 
+  #else
+  static double 
+  #endif
+  huge    = 1e300,
+  one	= 1.0,
+  invsqrtpi=  5.64189583547756279280e-01, 
+  tpi      =  6.36619772367581382433e-01, 
+  	
+  r00  = -6.25000000000000000000e-02, 
+  r01  =  1.40705666955189706048e-03, 
+  r02  = -1.59955631084035597520e-05, 
+  r03  =  4.96727999609584448412e-08, 
+  s01  =  1.91537599538363460805e-02, 
+  s02  =  1.85946785588630915560e-04, 
+  s03  =  1.17718464042623683263e-06, 
+  s04  =  5.04636257076217042715e-09, 
+  s05  =  1.23542274426137913908e-11; 
+
+  static double zero    = 0.0;
+
+  #ifdef __STDC__
+  	double __ieee754_j1(double x) 
+  #else
+  	double __ieee754_j1(x) 
+  	double x;
+  #endif
+  {
+  	double z, s,c,ss,cc,r,u,v,y;
+  	int hx,ix;
+
+  	hx = __HI(x);
+  	ix = hx&0x7fffffff;
+  	if(ix>=0x7ff00000) {
+  		// Unexecuted code (line 45) removed. Its line cov: 0/1 (0%)
+  	}
+  	y = fabs(x);
+  	if(ix >= 0x40000000) {	
+  		// Unexecuted code (lines 49-72) removed. Its line cov: 0/23 (0%)
+  	}
+  	if(ix<0x3e400000) {	
+  	    if(huge+x>one) {
+  			return 0.5*x;
+  		}
+  	}
+  	// Unexecuted code (lines 79-83) removed. Its line cov: 0/5 (0%)
+  }
+
+  #ifdef __STDC__
+  static const double U0[5] = {
+  #else
+  static double U0[5] = {
+  #endif
+   -1.96057090646238940668e-01, 
+    5.04438716639811282616e-02, 
+   -1.91256895875763547298e-03, 
+    2.35252600561610495928e-05, 
+   -9.19099158039878874504e-08, 
+  };
+  #ifdef __STDC__
+  static const double V0[5] = {
+  #else
+  static double V0[5] = {
+  #endif
+    1.99167318236649903973e-02, 
+    2.02552581025135171496e-04, 
+    1.35608801097516229404e-06, 
+    6.22741452364621501295e-09, 
+    1.66559246207992079114e-11, 
+  };
+
+  #ifdef __STDC__
+  	double __ieee754_y1(double x) 
+  #else
+  	double __ieee754_y1(x) 
+  	double x;
+  #endif
+  {
+  	double z, s,c,ss,cc,u,v;
+  	int hx,ix,lx;
+
+          hx = __HI(x);
+          ix = 0x7fffffff&hx;
+          lx = __LO(x);
+      
+  	if(ix>=0x7ff00000) {
+  		// Unexecuted code (line 124) removed. Its line cov: 0/1 (0%)
+  	}
+          if((ix|lx)==0) {
+  		return -one/zero;
+  	}
+          if(hx<0) {
+  		// Unexecuted code (line 130) removed. Its line cov: 0/1 (0%)
+  	}
+          if(ix >= 0x40000000) {  
+  		fprintf(stderr, "\n");
+                  s = sin(x);
+                  c = cos(x);
+                  ss = -s-c;
+                  cc = s-c;
+                  if(ix<0x7fe00000) {  
+                      // Unexecuted code (lines 139-144) removed. Its line cov: 0/6 (0%)
+                  }
+          
+                  if(ix>0x48000000) {
+  			// Unexecuted code (line 148) removed. Its line cov: 0/1 (0%)
+  		} else {
+                      // Unexecuted code (lines 150-151) removed. Its line cov: 0/2 (0%)
+                  }
+                  // Unexecuted code (line 153) removed. Its line cov: 0/1 (0%)
+          } 
+          if(ix<=0x3c900000) {    
+              // Unexecuted code (line 156) removed. Its line cov: 1/1 (100%)
+          } 
+          // Unexecuted code (lines 158-161) removed. Its line cov: 0/4 (0%)
+  }
+
+
+
+  #ifdef __STDC__
+  static const double pr8[6] = { 
+  #else
+  static double pr8[6] = { 
+  #endif
+    0.00000000000000000000e+00, 
+    1.17187499999988647970e-01, 
+    1.32394806593073575129e+01, 
+    4.12051854307378562225e+02, 
+    3.87474538913960532227e+03, 
+    7.91447954031891731574e+03, 
+  };
+  #ifdef __STDC__
+  static const double ps8[5] = {
+  #else
+  static double ps8[5] = {
+  #endif
+    1.14207370375678408436e+02, 
+    3.65093083420853463394e+03, 
+    3.69562060269033463555e+04, 
+    9.76027935934950801311e+04, 
+    3.08042720627888811578e+04, 
+  };
+
+  #ifdef __STDC__
+  static const double pr5[6] = { 
+  #else
+  static double pr5[6] = { 
+  #endif
+    1.31990519556243522749e-11, 
+    1.17187493190614097638e-01, 
+    6.80275127868432871736e+00, 
+    1.08308182990189109773e+02, 
+    5.17636139533199752805e+02, 
+    5.28715201363337541807e+02, 
+  };
+  #ifdef __STDC__
+  static const double ps5[5] = {
+  #else
+  static double ps5[5] = {
+  #endif
+    5.92805987221131331921e+01, 
+    9.91401418733614377743e+02, 
+    5.35326695291487976647e+03, 
+    7.84469031749551231769e+03, 
+    1.50404688810361062679e+03, 
+  };
+
+  #ifdef __STDC__
+  static const double pr3[6] = {
+  #else
+  static double pr3[6] = {
+  #endif
+    3.02503916137373618024e-09, 
+    1.17186865567253592491e-01, 
+    3.93297750033315640650e+00, 
+    3.51194035591636932736e+01, 
+    9.10550110750781271918e+01, 
+    4.85590685197364919645e+01, 
+  };
+  #ifdef __STDC__
+  static const double ps3[5] = {
+  #else
+  static double ps3[5] = {
+  #endif
+    3.47913095001251519989e+01, 
+    3.36762458747825746741e+02, 
+    1.04687139975775130551e+03, 
+    8.90811346398256432622e+02, 
+    1.03787932439639277504e+02, 
+  };
+
+  #ifdef __STDC__
+  static const double pr2[6] = {
+  #else
+  static double pr2[6] = {
+  #endif
+    1.07710830106873743082e-07, 
+    1.17176219462683348094e-01, 
+    2.36851496667608785174e+00, 
+    1.22426109148261232917e+01, 
+    1.76939711271687727390e+01, 
+    5.07352312588818499250e+00, 
+  };
+  #ifdef __STDC__
+  static const double ps2[5] = {
+  #else
+  static double ps2[5] = {
+  #endif
+    2.14364859363821409488e+01, 
+    1.25290227168402751090e+02, 
+    2.32276469057162813669e+02, 
+    1.17679373287147100768e+02, 
+    8.36463893371618283368e+00, 
+  };
+
+  #ifdef __STDC__
+  	static double pone(double x)
+  #else
+  	static double pone(x)
+  	double x;
+  #endif
+  {
+  // Unexecuted code (lines 269-289) removed. Its line cov: 0/21 (0%)
+  }
+  		
+
+
+
+  #ifdef __STDC__
+  static const double qr8[6] = { 
+  #else
+  static double qr8[6] = { 
+  #endif
+    0.00000000000000000000e+00, 
+   -1.02539062499992714161e-01, 
+   -1.62717534544589987888e+01, 
+   -7.59601722513950107896e+02, 
+   -1.18498066702429587167e+04, 
+   -4.84385124285750353010e+04, 
+  };
+  #ifdef __STDC__
+  static const double qs8[6] = {
+  #else
+  static double qs8[6] = {
+  #endif
+    1.61395369700722909556e+02, 
+    7.82538599923348465381e+03, 
+    1.33875336287249578163e+05, 
+    7.19657723683240939863e+05, 
+    6.66601232617776375264e+05, 
+   -2.94490264303834643215e+05, 
+  };
+
+  #ifdef __STDC__
+  static const double qr5[6] = { 
+  #else
+  static double qr5[6] = { 
+  #endif
+   -2.08979931141764104297e-11, 
+   -1.02539050241375426231e-01, 
+   -8.05644828123936029840e+00, 
+   -1.83669607474888380239e+02, 
+   -1.37319376065508163265e+03, 
+   -2.61244440453215656817e+03, 
+  };
+  #ifdef __STDC__
+  static const double qs5[6] = {
+  #else
+  static double qs5[6] = {
+  #endif
+    8.12765501384335777857e+01, 
+    1.99179873460485964642e+03, 
+    1.74684851924908907677e+04, 
+    4.98514270910352279316e+04, 
+    2.79480751638918118260e+04, 
+   -4.71918354795128470869e+03, 
+  };
+
+  #ifdef __STDC__
+  static const double qr3[6] = {
+  #else
+  static double qr3[6] = {
+  #endif
+   -5.07831226461766561369e-09, 
+   -1.02537829820837089745e-01, 
+   -4.61011581139473403113e+00, 
+   -5.78472216562783643212e+01, 
+   -2.28244540737631695038e+02, 
+   -2.19210128478909325622e+02, 
+  };
+  #ifdef __STDC__
+  static const double qs3[6] = {
+  #else
+  static double qs3[6] = {
+  #endif
+    4.76651550323729509273e+01, 
+    6.73865112676699709482e+02, 
+    3.38015286679526343505e+03, 
+    5.54772909720722782367e+03, 
+    1.90311919338810798763e+03, 
+   -1.35201191444307340817e+02, 
+  };
+
+  #ifdef __STDC__
+  static const double qr2[6] = {
+  #else
+  static double qr2[6] = {
+  #endif
+   -1.78381727510958865572e-07, 
+   -1.02517042607985553460e-01, 
+   -2.75220568278187460720e+00, 
+   -1.96636162643703720221e+01, 
+   -4.23253133372830490089e+01, 
+   -2.13719211703704061733e+01, 
+  };
+  #ifdef __STDC__
+  static const double qs2[6] = {
+  #else
+  static double qs2[6] = {
+  #endif
+    2.95333629060523854548e+01, 
+    2.52981549982190529136e+02, 
+    7.57502834868645436472e+02, 
+    7.39393205320467245656e+02, 
+    1.55949003336666123687e+02, 
+   -4.95949898822628210127e+00, 
+  };
+
+  #ifdef __STDC__
+  	static double qone(double x)
+  #else
+  	static double qone(x)
+  	double x;
+  #endif
+  {
+  // Unexecuted code (lines 402-422) removed. Its line cov: 0/21 (0%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      if (argc != 2) {
+          // Unexecuted code (lines 430-431) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = __ieee754_j1(a0);
+      double r1 = __ieee754_y1(a0);
+      printf("%f\n", r);
+      printf("%f\n", r1);
+
+      return 0;
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [e_j1.c] enter main 1
+  [e_j1.c] enter main 3
+  [e_j1.c] enter __ieee754_j1 1
+  [e_j1.c] enter __ieee754_j1 11
+  [e_j1.c] enter __ieee754_j1 12
+  [e_j1.c] enter __ieee754_y1 1
+  [e_j1.c] enter __ieee754_y1 12
+execution_summary: |2+
+
+  ```c
+  // e_j1.c (442 lines total)
+  #include <stdio.h>
+  #include "fdlibm.h"
+
+  #ifdef __STDC__
+  static double pone(double), qone(double);
+  #else
+  static double pone(), qone();
+  #endif
+
+  #ifdef __STDC__
+  static const double 
+  #else
+  static double 
+  #endif
+  huge    = 1e300,
+  one	= 1.0,
+  invsqrtpi=  5.64189583547756279280e-01, 
+  tpi      =  6.36619772367581382433e-01, 
+  	
+  r00  = -6.25000000000000000000e-02, 
+  r01  =  1.40705666955189706048e-03, 
+  r02  = -1.59955631084035597520e-05, 
+  r03  =  4.96727999609584448412e-08, 
+  s01  =  1.91537599538363460805e-02, 
+  s02  =  1.85946785588630915560e-04, 
+  s03  =  1.17718464042623683263e-06, 
+  s04  =  5.04636257076217042715e-09, 
+  s05  =  1.23542274426137913908e-11; 
+
+  static double zero    = 0.0;
+
+  #ifdef __STDC__
+  	double __ieee754_j1(double x) 
+  #else
+  	double __ieee754_j1(x) 
+  	double x;
+  #endif
+  {
+  	double z, s,c,ss,cc,r,u,v,y;
+  	int hx,ix;
+
+  	hx = __HI(x);
+  	ix = hx&0x7fffffff;
+  	if(ix>=0x7ff00000) {
+  		// Unexecuted code (line 45) removed. Its line cov: 0/1 (0%)
+  	}
+  	y = fabs(x);
+  	if(ix >= 0x40000000) {	
+  		// Unexecuted code (lines 49-72) removed. Its line cov: 0/23 (0%)
+  	}
+  	if(ix<0x3e400000) {	
+  	    if(huge+x>one) {
+  			return 0.5*x;
+  		}
+  	}
+  	// Unexecuted code (lines 79-83) removed. Its line cov: 0/5 (0%)
+  }
+
+  #ifdef __STDC__
+  static const double U0[5] = {
+  #else
+  static double U0[5] = {
+  #endif
+   -1.96057090646238940668e-01, 
+    5.04438716639811282616e-02, 
+   -1.91256895875763547298e-03, 
+    2.35252600561610495928e-05, 
+   -9.19099158039878874504e-08, 
+  };
+  #ifdef __STDC__
+  static const double V0[5] = {
+  #else
+  static double V0[5] = {
+  #endif
+    1.99167318236649903973e-02, 
+    2.02552581025135171496e-04, 
+    1.35608801097516229404e-06, 
+    6.22741452364621501295e-09, 
+    1.66559246207992079114e-11, 
+  };
+
+  #ifdef __STDC__
+  	double __ieee754_y1(double x) 
+  #else
+  	double __ieee754_y1(x) 
+  	double x;
+  #endif
+  {
+  	double z, s,c,ss,cc,u,v;
+  	int hx,ix,lx;
+
+          hx = __HI(x);
+          ix = 0x7fffffff&hx;
+          lx = __LO(x);
+      
+  	if(ix>=0x7ff00000) {
+  		// Unexecuted code (line 124) removed. Its line cov: 0/1 (0%)
+  	}
+          if((ix|lx)==0) {
+  		// Unexecuted code (line 127) removed. Its line cov: 1/1 (100%)
+  	}
+          if(hx<0) {
+  		// Unexecuted code (line 130) removed. Its line cov: 0/1 (0%)
+  	}
+          if(ix >= 0x40000000) {  
+  		fprintf(stderr, "\n");
+                  s = sin(x);
+                  c = cos(x);
+                  ss = -s-c;
+                  cc = s-c;
+                  if(ix<0x7fe00000) {  
+                      // Unexecuted code (lines 139-144) removed. Its line cov: 0/6 (0%)
+                  }
+          
+                  if(ix>0x48000000) {
+  			// Unexecuted code (line 148) removed. Its line cov: 0/1 (0%)
+  		} else {
+                      // Unexecuted code (lines 150-151) removed. Its line cov: 0/2 (0%)
+                  }
+                  // Unexecuted code (line 153) removed. Its line cov: 0/1 (0%)
+          } 
+          if(ix<=0x3c900000) {    
+              return(-tpi/x);
+          } 
+          // Unexecuted code (lines 158-161) removed. Its line cov: 0/4 (0%)
+  }
+
+
+
+  #ifdef __STDC__
+  static const double pr8[6] = { 
+  #else
+  static double pr8[6] = { 
+  #endif
+    0.00000000000000000000e+00, 
+    1.17187499999988647970e-01, 
+    1.32394806593073575129e+01, 
+    4.12051854307378562225e+02, 
+    3.87474538913960532227e+03, 
+    7.91447954031891731574e+03, 
+  };
+  #ifdef __STDC__
+  static const double ps8[5] = {
+  #else
+  static double ps8[5] = {
+  #endif
+    1.14207370375678408436e+02, 
+    3.65093083420853463394e+03, 
+    3.69562060269033463555e+04, 
+    9.76027935934950801311e+04, 
+    3.08042720627888811578e+04, 
+  };
+
+  #ifdef __STDC__
+  static const double pr5[6] = { 
+  #else
+  static double pr5[6] = { 
+  #endif
+    1.31990519556243522749e-11, 
+    1.17187493190614097638e-01, 
+    6.80275127868432871736e+00, 
+    1.08308182990189109773e+02, 
+    5.17636139533199752805e+02, 
+    5.28715201363337541807e+02, 
+  };
+  #ifdef __STDC__
+  static const double ps5[5] = {
+  #else
+  static double ps5[5] = {
+  #endif
+    5.92805987221131331921e+01, 
+    9.91401418733614377743e+02, 
+    5.35326695291487976647e+03, 
+    7.84469031749551231769e+03, 
+    1.50404688810361062679e+03, 
+  };
+
+  #ifdef __STDC__
+  static const double pr3[6] = {
+  #else
+  static double pr3[6] = {
+  #endif
+    3.02503916137373618024e-09, 
+    1.17186865567253592491e-01, 
+    3.93297750033315640650e+00, 
+    3.51194035591636932736e+01, 
+    9.10550110750781271918e+01, 
+    4.85590685197364919645e+01, 
+  };
+  #ifdef __STDC__
+  static const double ps3[5] = {
+  #else
+  static double ps3[5] = {
+  #endif
+    3.47913095001251519989e+01, 
+    3.36762458747825746741e+02, 
+    1.04687139975775130551e+03, 
+    8.90811346398256432622e+02, 
+    1.03787932439639277504e+02, 
+  };
+
+  #ifdef __STDC__
+  static const double pr2[6] = {
+  #else
+  static double pr2[6] = {
+  #endif
+    1.07710830106873743082e-07, 
+    1.17176219462683348094e-01, 
+    2.36851496667608785174e+00, 
+    1.22426109148261232917e+01, 
+    1.76939711271687727390e+01, 
+    5.07352312588818499250e+00, 
+  };
+  #ifdef __STDC__
+  static const double ps2[5] = {
+  #else
+  static double ps2[5] = {
+  #endif
+    2.14364859363821409488e+01, 
+    1.25290227168402751090e+02, 
+    2.32276469057162813669e+02, 
+    1.17679373287147100768e+02, 
+    8.36463893371618283368e+00, 
+  };
+
+  #ifdef __STDC__
+  	static double pone(double x)
+  #else
+  	static double pone(x)
+  	double x;
+  #endif
+  {
+  // Unexecuted code (lines 269-289) removed. Its line cov: 0/21 (0%)
+  }
+  		
+
+
+
+  #ifdef __STDC__
+  static const double qr8[6] = { 
+  #else
+  static double qr8[6] = { 
+  #endif
+    0.00000000000000000000e+00, 
+   -1.02539062499992714161e-01, 
+   -1.62717534544589987888e+01, 
+   -7.59601722513950107896e+02, 
+   -1.18498066702429587167e+04, 
+   -4.84385124285750353010e+04, 
+  };
+  #ifdef __STDC__
+  static const double qs8[6] = {
+  #else
+  static double qs8[6] = {
+  #endif
+    1.61395369700722909556e+02, 
+    7.82538599923348465381e+03, 
+    1.33875336287249578163e+05, 
+    7.19657723683240939863e+05, 
+    6.66601232617776375264e+05, 
+   -2.94490264303834643215e+05, 
+  };
+
+  #ifdef __STDC__
+  static const double qr5[6] = { 
+  #else
+  static double qr5[6] = { 
+  #endif
+   -2.08979931141764104297e-11, 
+   -1.02539050241375426231e-01, 
+   -8.05644828123936029840e+00, 
+   -1.83669607474888380239e+02, 
+   -1.37319376065508163265e+03, 
+   -2.61244440453215656817e+03, 
+  };
+  #ifdef __STDC__
+  static const double qs5[6] = {
+  #else
+  static double qs5[6] = {
+  #endif
+    8.12765501384335777857e+01, 
+    1.99179873460485964642e+03, 
+    1.74684851924908907677e+04, 
+    4.98514270910352279316e+04, 
+    2.79480751638918118260e+04, 
+   -4.71918354795128470869e+03, 
+  };
+
+  #ifdef __STDC__
+  static const double qr3[6] = {
+  #else
+  static double qr3[6] = {
+  #endif
+   -5.07831226461766561369e-09, 
+   -1.02537829820837089745e-01, 
+   -4.61011581139473403113e+00, 
+   -5.78472216562783643212e+01, 
+   -2.28244540737631695038e+02, 
+   -2.19210128478909325622e+02, 
+  };
+  #ifdef __STDC__
+  static const double qs3[6] = {
+  #else
+  static double qs3[6] = {
+  #endif
+    4.76651550323729509273e+01, 
+    6.73865112676699709482e+02, 
+    3.38015286679526343505e+03, 
+    5.54772909720722782367e+03, 
+    1.90311919338810798763e+03, 
+   -1.35201191444307340817e+02, 
+  };
+
+  #ifdef __STDC__
+  static const double qr2[6] = {
+  #else
+  static double qr2[6] = {
+  #endif
+   -1.78381727510958865572e-07, 
+   -1.02517042607985553460e-01, 
+   -2.75220568278187460720e+00, 
+   -1.96636162643703720221e+01, 
+   -4.23253133372830490089e+01, 
+   -2.13719211703704061733e+01, 
+  };
+  #ifdef __STDC__
+  static const double qs2[6] = {
+  #else
+  static double qs2[6] = {
+  #endif
+    2.95333629060523854548e+01, 
+    2.52981549982190529136e+02, 
+    7.57502834868645436472e+02, 
+    7.39393205320467245656e+02, 
+    1.55949003336666123687e+02, 
+   -4.95949898822628210127e+00, 
+  };
+
+  #ifdef __STDC__
+  	static double qone(double x)
+  #else
+  	static double qone(x)
+  	double x;
+  #endif
+  {
+  // Unexecuted code (lines 402-422) removed. Its line cov: 0/21 (0%)
+  }
+
+  #include <stdio.h>
+  #include <stdlib.h>
+
+  int main(int argc, char** argv) {
+      if (argc != 2) {
+          // Unexecuted code (lines 430-431) removed. Its line cov: 0/2 (0%)
+      }
+
+      double a0 = atof(argv[1]);
+
+      double r = __ieee754_j1(a0);
+      double r1 = __ieee754_y1(a0);
+      printf("%f\n", r);
+      printf("%f\n", r1);
+
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import os
+      import signal
+      import subprocess
+
+      # Use a single numeric argument that atof parses to +0.0
+      # Ensures argc == 2 and triggers __ieee754_y1 zero-input branch
+      cmd = "./temp_executable 0"
+
+      # Ensure standard C locale so atof parses using '.' and consistent numeric semantics
+      env = os.environ.copy()
+      env["LC_ALL"] = "C"
+      env["LANG"] = "C"
+
+      try:
+          result = subprocess.run(
+              [cmd],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+              env=env,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          raise e
+src_execution_trace: |
+  [e_j1.c] enter main 1
+  [e_j1.c] enter main 3
+  [e_j1.c] enter __ieee754_j1 1
+  [e_j1.c] enter __ieee754_j1 11
+  [e_j1.c] enter __ieee754_j1 12
+  [e_j1.c] enter __ieee754_y1 1
+  [e_j1.c] enter __ieee754_y1 3

@@ -1,0 +1,304 @@
+id: 4
+src_id: 3
+create_time: '2025-12-24 15:45:32.968'
+time_taken: 555
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.84336000
+    call_cnt: 4
+    latency: 87.40s
+    input_tokens: 19239
+    output_tokens: 7643
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.65684000
+      call_cnt: 3
+      latency: 60.83s
+      input_tokens: 16528
+      output_tokens: 5438
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.10126000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.16462000
+      call_cnt: 1
+      latency: 10.04s
+      input_tokens: 5063
+      output_tokens: 870
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.36588000
+      call_cnt: 1
+      latency: 43.21s
+      input_tokens: 5621
+      output_tokens: 4150
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.02508000
+      call_cnt: 1
+      latency: 7.57s
+      input_tokens: 5844
+      output_tokens: 418
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.18652000
+      call_cnt: 1
+      latency: 26.57s
+      input_tokens: 2711
+      output_tokens: 2205
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05422000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.13230000
+      call_cnt: 1
+      latency: 26.57s
+      input_tokens: 2711
+      output_tokens: 2205
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (argc != 2) -> false in s_matherr.c:main
+target_file_lines: s_matherr.c:41-43
+target_lines_content: |2-
+      int r = matherr(&ex);
+
+      printf("matherr returned %d\n", r);
+justification: All branches in this file have 100% historical coverage, but the current
+  execution only exercised the usage path (argc != 2 -> true). Driving argc == 2 will
+  execute the main computation path that parses a double, constructs an exception
+  object, calls matherr(), and prints the result. This path introduces different behaviors
+  (command-line parsing, locale-sensitive floating-point conversion, and matherr invocation)
+  and ensures a distinct execution path compared to the current run. There are no
+  zero/low-coverage branches available in the provided file; this branch is the most
+  impactful alternative path reachable via external inputs.
+target_path_constraint: |
+  Chronological, self-contained constraints to reach the branch `if (argc != 2)` -> false in s_matherr.c:main:
+
+  1. Command-line argument count:
+     - The program must be invoked with exactly one argument after the program name (total argc = 2). The first argv entry is the program path; the second argv entry must exist.
+     - No additional arguments are permitted.
+
+  2. Argument content and encoding:
+     - The single command-line argument must be a text string encoded in ASCII or UTF-8 that represents a floating-point number in the C locale (decimal point is '.'). This argument will be parsed with strtod using a NULL end-pointer, meaning only the numeric prefix affects the parsed value.
+     - Acceptable forms include optional leading whitespace, optional sign ('+' or '-'), digits, optional decimal point with fractional digits, and optional exponent part ('e' or 'E' followed by optional sign and digits). Examples of structure (not concrete values):
+       • [space]* ['+'|'-']? DIGITS ('.' DIGITS)? ('e'|'E' ['+'|'-']? DIGITS)?
+     - The argument must not be an empty string.
+
+  3. Locale assumptions:
+     - The execution environment must use the "C" numeric locale so that the decimal separator is '.', not ','. Ensure LC_ALL/LC_NUMERIC/LANG are set to "C" or otherwise ensure that strtod recognizes '.' as the decimal point.
+
+  4. Memory and environment viability:
+     - Sufficient process resources are available to run and print output. Standard output and standard error must be writable.
+
+  5. Post-parsing behavior relevant to matherr:
+     - The parsed double value will be assigned to a structure field and passed to matherr. No additional constraints are required to reach matherr once argc == 2 is satisfied.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import os
+      import signal
+      import subprocess
+
+      # Ensure C locale so '.' is the decimal separator for strtod
+      env = os.environ.copy()
+      env["LC_ALL"] = "C"
+      env["LC_NUMERIC"] = "C"
+      env["LANG"] = "C"
+
+      # Concrete input to satisfy argc == 2 and a valid numeric string for strtod
+      # We keep shell=True and provide the entire command (program + one argument)
+      # as a single command string element in the list to preserve the original structure.
+      command_with_arg = "./temp_executable 1.0"  # exactly one argument; ASCII; valid C-locale float
+
+      try:
+          result = subprocess.run(
+              [command_with_arg],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+              env=env,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          # Return SIGKILL (-9) on timeout to mirror original behavior
+          return (e.stderr if hasattr(e, 'stderr') and e.stderr is not None else "", -signal.SIGKILL)
+      except Exception as e:
+          # Propagate unexpected execution issues
+          raise e
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // s_matherr.c (45 lines total)
+  #include <stdio.h>
+  #include <stdlib.h>
+  #include <errno.h>
+  #include <math.h>
+  #include "fdlibm.h"
+
+  #ifdef __STDC__ 
+      int matherr(struct exception *x)
+  #else 
+      int matherr(x) 
+      struct exception *x; 
+  #endif 
+  { 
+  fprintf(stderr, "\n");
+  int n=0; 
+  if(x->arg1!=x->arg1) {
+  // Unexecuted code (line 17) removed. Its line cov: 1/1 (100%)
+  }
+  // Unexecuted code (line 19) removed. Its line cov: 1/1 (100%)
+  }
+
+  int main(int argc, char **argv) {
+  fprintf(stderr, "\n");
+      if (argc != 2) {
+          fprintf(stderr, "Usage: %s <double>\n", argv[0]);
+          return 1;
+      }
+
+      // Unexecuted code (lines 29-44) removed. Its line cov: 11/11 (100%)
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [s_matherr.c] enter main 3
+  [s_matherr.c] enter main 4
+  [s_matherr.c] enter main 5
+
+  [s_matherr.c] enter matherr 3
+  [s_matherr.c] enter main 6
+execution_summary: |2+
+
+  ```c
+  // s_matherr.c (45 lines total)
+  #include <stdio.h>
+  #include <stdlib.h>
+  #include <errno.h>
+  #include <math.h>
+  #include "fdlibm.h"
+
+  #ifdef __STDC__ 
+      int matherr(struct exception *x)
+  #else 
+      int matherr(x) 
+      struct exception *x; 
+  #endif 
+  { 
+  fprintf(stderr, "\n");
+  int n=0; 
+  if(x->arg1!=x->arg1) {
+  // Unexecuted code (line 17) removed. Its line cov: 1/1 (100%)
+  }
+  return n; 
+  }
+
+  int main(int argc, char **argv) {
+  fprintf(stderr, "\n");
+      if (argc != 2) {
+          // Unexecuted code (lines 25-26) removed. Its line cov: 2/2 (100%)
+      }
+
+      errno = 0;
+      double x = strtod(argv[1], NULL);
+
+      
+
+      struct exception ex;
+      ex.type = 0;
+      ex.name = "matherr_test";
+      ex.arg1 = x;
+      ex.arg2 = 0.0;
+      ex.retval = 0.0;
+
+      int r = matherr(&ex);
+
+      printf("matherr returned %d\n", r);
+      return 0;
+  }
+  ```
+
+src_exec_code: |
+  def execute_program(timeout: int) -> tuple[str, int]:
+      import os
+      import signal
+      import subprocess
+
+      # Keep locale environment (not required for this branch, but harmless)
+      env = os.environ.copy()
+      env["LC_ALL"] = "C"
+      env["LC_NUMERIC"] = "C"
+      env["LANG"] = "C"
+
+      try:
+          # Invoke with zero command-line parameters after the program name to make argc = 1
+          # This satisfies the target branch condition (argc != 2)
+          result = subprocess.run(
+              ["./temp_executable"],
+              capture_output=True,
+              encoding="utf-8",
+              errors="replace",
+              shell=True,
+              timeout=timeout,
+              env=env,
+          )
+          return result.stderr, result.returncode
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+      except Exception as e:
+          raise e
+src_execution_trace: |2
+
+  [s_matherr.c] enter main 2
+  Usage: ./temp_executable <double>
