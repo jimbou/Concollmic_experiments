@@ -1,0 +1,500 @@
+id: 2
+src_id: 0
+create_time: '2026-01-03 19:09:06.238'
+time_taken: 276
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: true
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.79868000
+    call_cnt: 3
+    latency: 72.31s
+    input_tokens: 15775
+    output_tokens: 8053
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.64876000
+      call_cnt: 2
+      latency: 61.03s
+      input_tokens: 12587
+      output_tokens: 6617
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.12408000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.46594000
+      call_cnt: 1
+      latency: 49.46s
+      input_tokens: 6204
+      output_tokens: 5638
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.05874000
+      call_cnt: 1
+      latency: 11.57s
+      input_tokens: 6383
+      output_tokens: 979
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.14992000
+      call_cnt: 1
+      latency: 11.27s
+      input_tokens: 3188
+      output_tokens: 1436
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.06376000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.08616000
+      call_cnt: 1
+      latency: 11.27s
+      input_tokens: 3188
+      output_tokens: 1436
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (i == UNKNOWN_ENC) -> true in xmltok_ns.c:NS(XmlInitEncoding)
+target_file_lines: xmltok_ns.c:87-87
+target_lines_content: '    return 0;'
+justification: This branch has 0% historical coverage and was not executed in the
+  current run. It guards the error-handling path for unknown/unsupported character
+  encodings declared in the XML prolog. Exercising it expands coverage of input validation
+  and error paths central to the tokenizer’s initialization and is reachable via stdin
+  content alone (no harness changes).
+target_path_constraint: |-
+  Goal: Take the error branch for an unknown/unsupported encoding name during XML tokenizer initialization.
+
+  Chronological, self-contained constraints at the program-input/environment level:
+
+  1) Process invocation and I/O channel
+  - The executable is invoked as a standalone process with no additional command-line arguments that influence parsing behavior.
+  - Standard input (stdin) is used as the only input source. The program must read the entire XML document from stdin without requiring filenames or environment variables.
+
+  2) Document well-formedness up to the XML declaration (so that initialization reaches encoding selection)
+  - The input starts with an XML declaration of the form: '<?xml ...?>' at the beginning of the stream (no leading BOM or whitespace is required, unless the implementation accepts it; to avoid ambiguity, provide zero leading bytes before '<').
+  - The declaration must include an encoding pseudo-attribute with a value that is syntactically valid per XML 1.0: encoding=[quote]EncName[quote], where:
+    * [quote] is either a single quote (') or a double quote (").
+    * EncName is an XML encoding name token that matches the lexical pattern: [A-Za-z][A-Za-z0-9._\-]* (starts with a letter; subsequent characters may be letters, digits, dot, underscore, or hyphen).
+  - Other pseudo-attributes (version, standalone) may be absent or present; if present they must be syntactically valid. The declaration must be properly terminated by '?>'.
+
+  3) Encoding name must be unknown to the tokenizer’s registry
+  - The value provided for the encoding pseudo-attribute must NOT match any encoding recognized by the library’s getEncodingIndex(name). Common recognized names typically include (non-exhaustive):
+    * 'UTF-8', 'UTF8', 'US-ASCII', 'ASCII', 'ISO-8859-1', 'ISO-8859-2', ..., some UTF-16 related names ('UTF-16', 'UTF-16LE', 'UTF-16BE'), and possibly 'UTF-32' variants depending on build.
+  - To guarantee the unknown path, choose an encoding token that is syntactically valid (per step 2) but not in the built-in table. Constraint (symbolic): Name ∈ ValidEncToken ∧ Name ∉ RecognizedEncodings.
+
+  4) Content encoding consistency (to avoid short-circuiting before reaching the branch)
+  - The byte stream on stdin must be encoded in a form that the parser can initially consume to read the XML declaration and the encoding attribute. Two safe options:
+    a) Provide the entire stdin in ASCII-compatible bytes (subset of UTF-8), using only characters below 0x80, so the initial bootstrap parser can read tokens regardless of the declared (unknown) encoding name; or
+    b) If a BOM is provided, it must correspond to a recognized initial autodetectable encoding. To keep constraints minimal and robust, prefer option (a): use ASCII subset bytes only until after '?>'.
+
+  5) Post-declaration content (optional)
+  - Any subsequent content after the XML declaration is optional and, if present, must remain within ASCII subset to avoid early decoding errors unrelated to encoding name lookup.
+
+  6) Newlines and whitespace
+  - Whitespace between pseudo-attributes in the XML declaration is allowed. Ensure spaces separate attributes if more than one is present. No leading whitespace before '<?xml' to avoid ambiguity with potential BOM handling.
+
+  7) End-of-input handling
+  - The input can end immediately after '?>' or include a minimal well-formed element (e.g., '<root/>') in ASCII subset. This prevents early parse termination due to truncated declaration.
+
+  Sufficient condition summary (SMT-style):
+  - Let S be the stdin byte sequence.
+  - S begins with the ASCII bytes of '<?xml', contains token 'encoding', an equals sign '=', matching quotes q ∈ {'"','\''}, and a token E satisfying: E matches [A-Za-z][A-Za-z0-9._\-]* ∧ E ∉ RecognizedEncodings.
+  - All bytes in S up to and including '?>' are in [0x09, 0x0A, 0x0D, 0x20..0x7E].
+  - The declaration is syntactically closed by '?>'.
+
+  These constraints ensure the parser reaches XmlInitEncoding, computes i = UNKNOWN_ENC for the provided encoding name, and takes the target branch i == UNKNOWN_ENC.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  import subprocess
+  import signal
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      # XML declaration with syntactically valid but intentionally unknown encoding name.
+      # ASCII-only bytes up to and including '?>', followed by a minimal root element.
+      xml_input = "<?xml version='1.0' encoding='X-FOOBAR-42'?>\n<root/>\n"
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable"],
+              input=xml_input,
+              text=True,
+              capture_output=True,
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+
+      except Exception as e:
+          raise e
+returncode: 2
+src_execution_summary: |2+
+
+  ```c
+  // xmltok_ns.c (140 lines total)
+  #include <stdio.h>
+
+  /* This file is included!
+                              __  __            _
+                           ___\ \/ /_ __   __ _| |_
+                          / _ \\  /| '_ \ / _` | __|
+                         |  __//  \| |_) | (_| | |_
+                          \___/_/\_\ .__/ \__,_|\__|
+                                   |_| XML parser
+
+     Copyright (c) 1997-2000 Thai Open Source Software Center Ltd
+     Copyright (c) 2000      Clark Cooper <coopercc@users.sourceforge.net>
+     Copyright (c) 2002      Greg Stein <gstein@users.sourceforge.net>
+     Copyright (c) 2002      Fred L. Drake, Jr. <fdrake@users.sourceforge.net>
+     Copyright (c) 2002-2006 Karl Waclawek <karl@waclawek.net>
+     Copyright (c) 2017-2021 Sebastian Pipping <sebastian@pipping.org>
+     Licensed under the MIT license:
+
+     Permission is  hereby granted,  free of charge,  to any  person obtaining
+     a  copy  of  this  software   and  associated  documentation  files  (the
+     "Software"),  to  deal in  the  Software  without restriction,  including
+     without  limitation the  rights  to use,  copy,  modify, merge,  publish,
+     distribute, sublicense, and/or sell copies of the Software, and to permit
+     persons  to whom  the Software  is  furnished to  do so,  subject to  the
+     following conditions:
+
+     The above copyright  notice and this permission notice  shall be included
+     in all copies or substantial portions of the Software.
+
+     THE  SOFTWARE  IS  PROVIDED  "AS  IS",  WITHOUT  WARRANTY  OF  ANY  KIND,
+     EXPRESS  OR IMPLIED,  INCLUDING  BUT  NOT LIMITED  TO  THE WARRANTIES  OF
+     MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+     NO EVENT SHALL THE AUTHORS OR  COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+     DAMAGES OR  OTHER LIABILITY, WHETHER  IN AN  ACTION OF CONTRACT,  TORT OR
+     OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+     USE OR OTHER DEALINGS IN THE SOFTWARE.
+  */
+
+  #ifdef XML_TOK_NS_C
+
+  const ENCODING *
+  NS(XmlGetUtf8InternalEncoding)(void) {
+    return &ns(internal_utf8_encoding).enc;
+  }
+
+  const ENCODING *
+  NS(XmlGetUtf16InternalEncoding)(void) {
+  #  if BYTEORDER == 1234
+    // Unexecuted code (line 49) removed. Its line cov: 0/1 (0%)
+  #  elif BYTEORDER == 4321
+    // Unexecuted code (line 51) removed. Its line cov: 0/1 (0%)
+  #  else
+    // Unexecuted code (lines 53-55) removed. Its line cov: 0/3 (0%)
+  #  endif
+  }
+
+  static const ENCODING *const NS(encodings)[] = {
+      &ns(latin1_encoding).enc, &ns(ascii_encoding).enc,
+      &ns(utf8_encoding).enc,   &ns(big2_encoding).enc,
+      &ns(big2_encoding).enc,   &ns(little2_encoding).enc,
+      &ns(utf8_encoding).enc /* NO_ENC */
+  };
+
+  static int PTRCALL
+  NS(initScanProlog)(const ENCODING *enc, const char *ptr, const char *end,
+                     const char **nextTokPtr) {
+    return initScan(NS(encodings), (const INIT_ENCODING *)enc, XML_PROLOG_STATE,
+                    ptr, end, nextTokPtr);
+  }
+
+  static int PTRCALL
+  NS(initScanContent)(const ENCODING *enc, const char *ptr, const char *end,
+                      const char **nextTokPtr) {
+    // Unexecuted code (lines 76-77) removed. Its line cov: 0/2 (0%)
+  }
+
+  int
+  NS(XmlInitEncoding)(INIT_ENCODING *p, const ENCODING **encPtr,
+                      const char *name) {
+    int i = getEncodingIndex(name);
+    
+    if (i == UNKNOWN_ENC)
+    {
+      // Unexecuted code (line 87) removed. Its line cov: 0/1 (0%)
+    }
+    
+    SET_INIT_ENC_INDEX(p, i);
+    p->initEnc.scanners[XML_PROLOG_STATE] = NS(initScanProlog);
+    p->initEnc.scanners[XML_CONTENT_STATE] = NS(initScanContent);
+    p->initEnc.updatePosition = initUpdatePosition;
+    p->encPtr = encPtr;
+    *encPtr = &(p->initEnc);
+    return 1;
+  }
+
+  static const ENCODING *
+  NS(findEncoding)(const ENCODING *enc, const char *ptr, const char *end) {
+  // Unexecuted code (lines 101-105) removed. Its line cov: 5/5 (100%)
+    
+    if (ptr != end)
+    {
+      // Unexecuted code (line 109) removed. Its line cov: 0/1 (0%)
+    }
+    
+    // Unexecuted code (line 112) removed. Its line cov: 1/1 (100%)
+    
+    if (streqci(buf, KW_UTF_16) && enc->minBytesPerChar == 2)
+    {
+      // Unexecuted code (line 116) removed. Its line cov: 0/1 (0%)
+    }
+    
+    // Unexecuted code (line 119) removed. Its line cov: 1/1 (100%)
+    
+    if (i == UNKNOWN_ENC)
+    {
+      // Unexecuted code (line 123) removed. Its line cov: 1/1 (100%)
+    }
+    
+    // Unexecuted code (line 126) removed. Its line cov: 0/1 (0%)
+  }
+
+  int
+  NS(XmlParseXmlDecl)(int isGeneralTextEntity, const ENCODING *enc,
+                      const char *ptr, const char *end, const char **badPtr,
+                      const char **versionPtr, const char **versionEndPtr,
+                      const char **encodingName, const ENCODING **encoding,
+                      int *standalone) {
+    // Unexecuted code (lines 135-137) removed. Its line cov: 3/3 (100%)
+  }
+
+  #endif /* XML_TOK_NS_C */
+  ```
+
+crash_info: |
+  Crash reason: Segmentation fault
+  Stderr:
+execution_trace: |
+  [xmltok_ns.c] enter XmlInitEncoding 1
+  [xmltok_ns.c] enter XmlInitEncoding 3
+  [xmltok_ns.c] enter XmlGetUtf8InternalEncoding 1
+  [xmltok_ns.c] enter XmlInitEncoding 1
+  [xmltok_ns.c] enter XmlInitEncoding 3
+  [xmltok_ns.c] enter initScanProlog 1
+  [xmltok_ns.c] enter XmlParseXmlDecl 1
+  [xmltok_ns.c] enter findEncoding 1
+  [xmltok_ns.c] enter findEncoding 3
+  [xmltok_ns.c] enter findEncoding 5
+  [xmltok_ns.c] enter findEncoding 6
+execution_summary: |2+
+
+  ```c
+  // xmltok_ns.c (140 lines total)
+  #include <stdio.h>
+
+  /* This file is included!
+                              __  __            _
+                           ___\ \/ /_ __   __ _| |_
+                          / _ \\  /| '_ \ / _` | __|
+                         |  __//  \| |_) | (_| | |_
+                          \___/_/\_\ .__/ \__,_|\__|
+                                   |_| XML parser
+
+     Copyright (c) 1997-2000 Thai Open Source Software Center Ltd
+     Copyright (c) 2000      Clark Cooper <coopercc@users.sourceforge.net>
+     Copyright (c) 2002      Greg Stein <gstein@users.sourceforge.net>
+     Copyright (c) 2002      Fred L. Drake, Jr. <fdrake@users.sourceforge.net>
+     Copyright (c) 2002-2006 Karl Waclawek <karl@waclawek.net>
+     Copyright (c) 2017-2021 Sebastian Pipping <sebastian@pipping.org>
+     Licensed under the MIT license:
+
+     Permission is  hereby granted,  free of charge,  to any  person obtaining
+     a  copy  of  this  software   and  associated  documentation  files  (the
+     "Software"),  to  deal in  the  Software  without restriction,  including
+     without  limitation the  rights  to use,  copy,  modify, merge,  publish,
+     distribute, sublicense, and/or sell copies of the Software, and to permit
+     persons  to whom  the Software  is  furnished to  do so,  subject to  the
+     following conditions:
+
+     The above copyright  notice and this permission notice  shall be included
+     in all copies or substantial portions of the Software.
+
+     THE  SOFTWARE  IS  PROVIDED  "AS  IS",  WITHOUT  WARRANTY  OF  ANY  KIND,
+     EXPRESS  OR IMPLIED,  INCLUDING  BUT  NOT LIMITED  TO  THE WARRANTIES  OF
+     MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+     NO EVENT SHALL THE AUTHORS OR  COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+     DAMAGES OR  OTHER LIABILITY, WHETHER  IN AN  ACTION OF CONTRACT,  TORT OR
+     OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+     USE OR OTHER DEALINGS IN THE SOFTWARE.
+  */
+
+  #ifdef XML_TOK_NS_C
+
+  const ENCODING *
+  NS(XmlGetUtf8InternalEncoding)(void) {
+    return &ns(internal_utf8_encoding).enc;
+  }
+
+  const ENCODING *
+  NS(XmlGetUtf16InternalEncoding)(void) {
+  #  if BYTEORDER == 1234
+    // Unexecuted code (line 49) removed. Its line cov: 0/1 (0%)
+  #  elif BYTEORDER == 4321
+    // Unexecuted code (line 51) removed. Its line cov: 0/1 (0%)
+  #  else
+    // Unexecuted code (lines 53-55) removed. Its line cov: 0/3 (0%)
+  #  endif
+  }
+
+  static const ENCODING *const NS(encodings)[] = {
+      &ns(latin1_encoding).enc, &ns(ascii_encoding).enc,
+      &ns(utf8_encoding).enc,   &ns(big2_encoding).enc,
+      &ns(big2_encoding).enc,   &ns(little2_encoding).enc,
+      &ns(utf8_encoding).enc /* NO_ENC */
+  };
+
+  static int PTRCALL
+  NS(initScanProlog)(const ENCODING *enc, const char *ptr, const char *end,
+                     const char **nextTokPtr) {
+    return initScan(NS(encodings), (const INIT_ENCODING *)enc, XML_PROLOG_STATE,
+                    ptr, end, nextTokPtr);
+  }
+
+  static int PTRCALL
+  NS(initScanContent)(const ENCODING *enc, const char *ptr, const char *end,
+                      const char **nextTokPtr) {
+    // Unexecuted code (lines 76-77) removed. Its line cov: 0/2 (0%)
+  }
+
+  int
+  NS(XmlInitEncoding)(INIT_ENCODING *p, const ENCODING **encPtr,
+                      const char *name) {
+    int i = getEncodingIndex(name);
+    
+    if (i == UNKNOWN_ENC)
+    {
+      // Unexecuted code (line 87) removed. Its line cov: 0/1 (0%)
+    }
+    
+    SET_INIT_ENC_INDEX(p, i);
+    p->initEnc.scanners[XML_PROLOG_STATE] = NS(initScanProlog);
+    p->initEnc.scanners[XML_CONTENT_STATE] = NS(initScanContent);
+    p->initEnc.updatePosition = initUpdatePosition;
+    p->encPtr = encPtr;
+    *encPtr = &(p->initEnc);
+    return 1;
+  }
+
+  static const ENCODING *
+  NS(findEncoding)(const ENCODING *enc, const char *ptr, const char *end) {
+  #  define ENCODING_MAX 128
+    char buf[ENCODING_MAX] = "";
+    char *p = buf;
+    int i;
+    XmlUtf8Convert(enc, &ptr, end, &p, p + ENCODING_MAX - 1);
+    
+    if (ptr != end)
+    {
+      // Unexecuted code (line 109) removed. Its line cov: 0/1 (0%)
+    }
+    
+    *p = 0;
+    
+    if (streqci(buf, KW_UTF_16) && enc->minBytesPerChar == 2)
+    {
+      // Unexecuted code (line 116) removed. Its line cov: 0/1 (0%)
+    }
+    
+    i = getEncodingIndex(buf);
+    
+    if (i == UNKNOWN_ENC)
+    {
+      return NULL;
+    }
+    
+    // Unexecuted code (line 126) removed. Its line cov: 0/1 (0%)
+  }
+
+  int
+  NS(XmlParseXmlDecl)(int isGeneralTextEntity, const ENCODING *enc,
+                      const char *ptr, const char *end, const char **badPtr,
+                      const char **versionPtr, const char **versionEndPtr,
+                      const char **encodingName, const ENCODING **encoding,
+                      int *standalone) {
+    return doParseXmlDecl(NS(findEncoding), isGeneralTextEntity, enc, ptr, end,
+                          badPtr, versionPtr, versionEndPtr, encodingName,
+                          encoding, standalone);
+  }
+
+  #endif /* XML_TOK_NS_C */
+  ```
+
+src_exec_code: |
+  import subprocess
+  import sys
+  import signal
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      
+      xml_input = "<root></root>\n"
+
+      try:
+          result = subprocess.run(
+              ["./temp_executable"],     # xmlwf binary
+              input=xml_input,           # sent to stdin
+              text=True,
+              capture_output=True,
+              timeout=timeout,
+          )
+
+          return result.stderr, result.returncode
+
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+
+      except Exception as e:
+          raise e
+src_execution_trace: |
+  [xmltok_ns.c] enter XmlInitEncoding 1
+  [xmltok_ns.c] enter XmlInitEncoding 3
+  [xmltok_ns.c] enter XmlGetUtf8InternalEncoding 1
+  [xmltok_ns.c] enter XmlInitEncoding 1
+  [xmltok_ns.c] enter XmlInitEncoding 3
+  [xmltok_ns.c] enter initScanProlog 1
