@@ -598,12 +598,12 @@ def _instrument_file(file_path, rel_path, chunk_size):
 
     # set_model("gpt-4o")
     # set_model("claude-3-7-sonnet-latest")
-    set_model("deepseek-chat")
+    # set_model("deepseek-chat")
     # set_model("deepseek-reasoner")
     # set_model("claude-sonnet-4-0")
     # set_model("gemini-2.5-pro")
     # set_model("gemini-2.5-flash")
-    # set_model("gpt-5")
+    set_model("gpt-5")
     logger.info(f"[DEBUG] Worker started for {file_path}")
     logger.info(f"[DEBUG] PID={os.getpid()} THREAD={threading.get_ident()}")
 
@@ -993,6 +993,6 @@ def setup_instrument_parser(subparsers):
         type=int,
         help="chunk size for instrumentation",
         required=False,
-        default=800,
+        default=200,
     )
     return instrument_parser

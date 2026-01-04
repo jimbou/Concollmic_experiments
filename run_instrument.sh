@@ -6,7 +6,7 @@ set -euo pipefail
 # =====================================================
 
 # Output summary JSON file
-SUMMARY_JSON="instrumentation_summary_fdlibm.json"
+SUMMARY_JSON="instrumentation_summary_xml.json"
 TMP_JSON=$(mktemp)
 
 # Initialize empty JSON array
@@ -119,9 +119,13 @@ run_instrument() {
 # run_instrument "/home/jim/ConcoLLMic/logic_bombs/copies/jmp_sj_l1_klee/src" "/home/jim/ConcoLLMic/logic_bombs/copies/jmp_sj_l1_klee/instr"
 # run_instrument "/home/jim/ConcoLLMic/logic_bombs/copies/pow_ef_l2_klee/src" "/home/jim/ConcoLLMic/logic_bombs/copies/pow_ef_l2_klee/instr"
 # run_instrument "/home/jim/ConcoLLMic/logic_bombs/copies/ln_ef_l2_klee/src" "/home/jim/ConcoLLMic/logic_bombs/copies/ln_ef_l2_klee/instr"
-run_instrument "/home/jim/ConcoLLMic/fdlibm/e_j0/src" "/home/jim/ConcoLLMic/fdlibm/e_j0/instr"
-run_instrument "/home/jim/ConcoLLMic/fdlibm/e_jn/src" "/home/jim/ConcoLLMic/fdlibm/e_jn/instr"
-run_instrument "/home/jim/ConcoLLMic/fdlibm/e_j1/src" "/home/jim/ConcoLLMic/fdlibm/e_j1/instr"
+run_instrument "/home/jim/ConcoLLMic/libexpat/xmlparse/src" "/home/jim/ConcoLLMic/libexpat/xmlparse/instr"
+run_instrument "/home/jim/ConcoLLMic/libexpat/xmlrole/src" "/home/jim/ConcoLLMic/libexpat/xmlrole/instr"
+# run_instrument "/home/jim/ConcoLLMic/libexpat/xmltok/src" "/home/jim/ConcoLLMic/libexpat/xmltok/instr"
+# run_instrument "/home/jim/ConcoLLMic/libexpat/xmltok_impl/src" "/home/jim/ConcoLLMic/libexpat/xmltok_impl/instr"
+# run_instrument "/home/jim/ConcoLLMic/libexpat/xmltok_ns/src" "/home/jim/ConcoLLMic/libexpat/xmltok_ns/instr"
+
+
 
 # run_instrument "/home/jim/ConcoLLMic/fdlibm/e_acos/src" "/home/jim/ConcoLLMic/fdlibm/e_acos/instr"
 # run_instrument "/home/jim/ConcoLLMic/fdlibm/e_acosh/src" "/home/jim/ConcoLLMic/fdlibm/e_acosh/instr"
