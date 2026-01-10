@@ -6,7 +6,7 @@ set -euo pipefail
 # =====================================================
 
 # Output summary JSON file
-SUMMARY_JSON="instrumentation_summary_xml.json"
+SUMMARY_JSON="instrumentation_summary_bc.json"
 TMP_JSON=$(mktemp)
 
 # Initialize empty JSON array
@@ -120,7 +120,25 @@ run_instrument() {
 # run_instrument "/home/jim/ConcoLLMic/logic_bombs/copies/pow_ef_l2_klee/src" "/home/jim/ConcoLLMic/logic_bombs/copies/pow_ef_l2_klee/instr"
 # run_instrument "/home/jim/ConcoLLMic/logic_bombs/copies/ln_ef_l2_klee/src" "/home/jim/ConcoLLMic/logic_bombs/copies/ln_ef_l2_klee/instr"
 run_instrument "/home/jim/ConcoLLMic/libexpat/xmlparse/src" "/home/jim/ConcoLLMic/libexpat/xmlparse/instr"
-run_instrument "/home/jim/ConcoLLMic/libexpat/xmlrole/src" "/home/jim/ConcoLLMic/libexpat/xmlrole/instr"
+# run_instrument "/home/jim/ConcoLLMic/libexpat/xmlrole/src" "/home/jim/ConcoLLMic/libexpat/xmlrole/instr"
+
+# run_instrument "/home/jim/ConcoLLMic/bc/ConcoLLMic_bench/bc_parse/src"  "/home/jim/ConcoLLMic/bc/ConcoLLMic_bench/bc_parse/instr"
+# run_instrument "/home/jim/ConcoLLMic/bc/ConcoLLMic_bench/lex/src"  "/home/jim/ConcoLLMic/bc/ConcoLLMic_bench/lex/instr"
+# run_instrument "/home/jim/ConcoLLMic/bc/ConcoLLMic_bench/num/src"  "/home/jim/ConcoLLMic/bc/ConcoLLMic_bench/num/instr"
+run_instrument "/home/jim/ConcoLLMic/bc/ConcoLLMic_bench/parse/src"  "/home/jim/ConcoLLMic/bc/ConcoLLMic_bench/parse/instr"
+run_instrument "/home/jim/ConcoLLMic/bc/ConcoLLMic_bench/program/src"  "/home/jim/ConcoLLMic/bc/ConcoLLMic_bench/program/instr"
+# run_instrument "/home/jim/ConcoLLMic/bc/ConcoLLMic_bench/read/src"  "/home/jim/ConcoLLMic/bc/ConcoLLMic_bench/read/instr"
+run_instrument "/home/jim/ConcoLLMic/bc/ConcoLLMic_bench/vm/src"  "/home/jim/ConcoLLMic/bc/ConcoLLMic_bench/vm/instr"
+
+run_instrument "/home/jim/ConcoLLMic/jq/ConcoLLMic_bench/jv/src" "/home/jim/ConcoLLMic/jq/ConcoLLMic_bench/jv/instr"
+run_instrument "/home/jim/ConcoLLMic/jq/ConcoLLMic_bench/jv_alloc/src" "/home/jim/ConcoLLMic/jq/ConcoLLMic_bench/jv_alloc/instr"
+run_instrument "/home/jim/ConcoLLMic/jq/ConcoLLMic_bench/jv_aux/src" "/home/jim/ConcoLLMic/jq/ConcoLLMic_bench/jv_aux/instr"
+run_instrument "/home/jim/ConcoLLMic/jq/ConcoLLMic_bench/jv_parse/src" "/home/jim/ConcoLLMic/jq/ConcoLLMic_bench/jv/instr"
+run_instrument "/home/jim/ConcoLLMic/jq/ConcoLLMic_bench/jv_unicode/src" "/home/jim/ConcoLLMic/jq/ConcoLLMic_bench/jv_unicode/instr"
+
+
+
+
 # run_instrument "/home/jim/ConcoLLMic/libexpat/xmltok/src" "/home/jim/ConcoLLMic/libexpat/xmltok/instr"
 # run_instrument "/home/jim/ConcoLLMic/libexpat/xmltok_impl/src" "/home/jim/ConcoLLMic/libexpat/xmltok_impl/instr"
 # run_instrument "/home/jim/ConcoLLMic/libexpat/xmltok_ns/src" "/home/jim/ConcoLLMic/libexpat/xmltok_ns/instr"

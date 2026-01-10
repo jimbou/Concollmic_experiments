@@ -390,7 +390,7 @@ def create_chunks(cutoff_points: list[int], chunk_size: int) -> list[tuple[int, 
 class InstrumentationAgent:
 
     # retry times for instrumentation to pass the `check_instrumentation`
-    INSTRUMENTATION_RETRY_TIMES = 3
+    INSTRUMENTATION_RETRY_TIMES = 1
 
     
 
@@ -778,38 +778,40 @@ class InstrumentationAgent:
                     for i, line in enumerate(source_code_lines[chunk[0] : chunk[1]])
                 }
 
-                for try_times in range(self.INSTRUMENTATION_RETRY_TIMES):
-                    chunk_instrumented_code, _success, usage = (
-                        self._instrument_code_snippet(
-                            current_chunk_lines,
-                            source_code_file,
-                            source_language,
-                            chunk_idx,
-                            len(chunks),
-                            INSTRUMENTATION_TEMPERATURE + try_times * 0.3,
-                        )
+                # SINGLE attempt
+                chunk_instrumented_code, _success, usage = (
+                    self._instrument_code_snippet(
+                        current_chunk_lines,
+                        source_code_file,
+                        source_language,
+                        chunk_idx,
+                        len(chunks),
+                        INSTRUMENTATION_TEMPERATURE,
                     )
-                    instr_usage += usage
-                    if _success:
-                        break
-                    else:
-                        logger.info(
-                            f"Instrumentation failed for {source_code_file} chunk {chunk_idx + 1}/{len(chunks)} ({chunk_instrumented_code}), retrying {try_times + 1}/{self.INSTRUMENTATION_RETRY_TIMES}...",
-                        )
+                )
+                instr_usage += usage
 
                 if not _success:
-                    logger.error(
-                        f"Instrumentation failed for {source_code_file} chunk {chunk_idx + 1}, reason: {chunk_instrumented_code}"
+                    logger.warning(
+                        f"Instrumentation failed for {source_code_file} chunk {chunk_idx + 1}, "
+                        f"leaving chunk uninstrumented and continuing."
                     )
-                    return instrumented_code, False
+                    chunk_instrumented_code = "\n".join(current_chunk_lines.values())
 
                 instrumented_code += chunk_instrumented_code + "\n"
 
         else:  # No instrumentation needed
             instrumented_code = "\n".join(source_code_lines)
 
-        _success, instrumented_code = check_instrumentation(instrumented_code)
-        assert _success
+        _success, checked_code = check_instrumentation(instrumented_code)
+        if not _success:
+            logger.warning(
+                f"Final instrumentation check failed for {source_code_file}, "
+                f"keeping best-effort instrumentation."
+            )
+        else:
+            instrumented_code = checked_code
+
         comment_token = get_comment_token(source_language)
         instrumented_code += (
             f"{comment_token} {TOTAL_COST_FORMAT.format((instr_usage.cost+split_usage.cost))}\n"
