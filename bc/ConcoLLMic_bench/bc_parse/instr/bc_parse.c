@@ -2555,24 +2555,24 @@ bc_parse_expr_err(BcParse* p, uint8_t flags, BcParseNext next)
 	fprintf(stderr, "[bc_parse.c] enter bc_parse_expr_err 6\n");
 	for (; !done && BC_PARSE_EXPR(t); t = p->l.t)
 	{
-		fprintf(stderr, "[bc_parse.c] enter bc_parse_expr_err 7\n");
+		// fprintf(stderr, "[bc_parse.c] enter bc_parse_expr_err 7\n");
 		// Make sure an array expression is not mixed with any others. However,
 		// a right parenthesis may end the expression, so we will need to take
 		// care of that right there.
 		if (BC_ERR(array_last && t != BC_LEX_RPAREN))
 		{
-			fprintf(stderr, "[bc_parse.c] enter bc_parse_expr_err 8\n");
+			// fprintf(stderr, "[bc_parse.c] enter bc_parse_expr_err 8\n");
 			bc_parse_err(p, BC_ERR_PARSE_EXPR);
 			// fprintf(stderr, "[bc_parse.c] exit bc_parse_expr_err 8\n");
 		}
 
-		fprintf(stderr, "[bc_parse.c] enter bc_parse_expr_err 9\n");
+		// fprintf(stderr, "[bc_parse.c] enter bc_parse_expr_err 9\n");
 		switch (t)
 		{
 			case BC_LEX_OP_INC:
 			case BC_LEX_OP_DEC:
 			{
-				fprintf(stderr, "[bc_parse.c] enter bc_parse_expr_err 10\n");
+				// fprintf(stderr, "[bc_parse.c] enter bc_parse_expr_err 10\n");
 				// These operators can only be used with items that can be
 				// assigned to.
 				if (BC_ERR(incdec)) bc_parse_err(p, BC_ERR_PARSE_ASSIGN);
@@ -2592,7 +2592,7 @@ bc_parse_expr_err(BcParse* p, uint8_t flags, BcParseNext next)
 		}
 		// fprintf(stderr, "[bc_parse.c] exit bc_parse_expr_err 9\n");
 
-		fprintf(stderr, "[bc_parse.c] enter bc_parse_expr_err 45\n");
+		// fprintf(stderr, "[bc_parse.c] enter bc_parse_expr_err 45\n");
 		if (get_token) bc_lex_next(&p->l);
 		// fprintf(stderr, "[bc_parse.c] exit bc_parse_expr_err 45\n");
 		// fprintf(stderr, "[bc_parse.c] exit bc_parse_expr_err 7\n");
@@ -2601,17 +2601,17 @@ bc_parse_expr_err(BcParse* p, uint8_t flags, BcParseNext next)
 
 	// Now that we have parsed the expression, we need to empty the operator
 	// stack.
-	fprintf(stderr, "[bc_parse.c] enter bc_parse_expr_err 46\n");
+	// fprintf(stderr, "[bc_parse.c] enter bc_parse_expr_err 46\n");
 	while (p->ops.len > ops_bgn)
 	{
-		fprintf(stderr, "[bc_parse.c] enter bc_parse_expr_err 47\n");
+		// fprintf(stderr, "[bc_parse.c] enter bc_parse_expr_err 47\n");
 		top = BC_PARSE_TOP_OP(p);
 		assign = top >= BC_LEX_OP_ASSIGN_POWER && top <= BC_LEX_OP_ASSIGN;
 
 		// There should not be *any* parens on the stack anymore.
 		if (BC_ERR(top == BC_LEX_LPAREN || top == BC_LEX_RPAREN))
 		{
-			fprintf(stderr, "[bc_parse.c] enter bc_parse_expr_err 48\n");
+			// fprintf(stderr, "[bc_parse.c] enter bc_parse_expr_err 48\n");
 			bc_parse_err(p, BC_ERR_PARSE_EXPR);
 			// fprintf(stderr, "[bc_parse.c] exit bc_parse_expr_err 48\n");
 		}
@@ -2627,20 +2627,20 @@ bc_parse_expr_err(BcParse* p, uint8_t flags, BcParseNext next)
 	}
 	// fprintf(stderr, "[bc_parse.c] exit bc_parse_expr_err 46\n");
 
-	fprintf(stderr, "[bc_parse.c] enter bc_parse_expr_err 68\n");
+	// fprintf(stderr, "[bc_parse.c] enter bc_parse_expr_err 68\n");
 	return BC_PARSE_STATUS_SUCCESS;
 	// fprintf(stderr, "[bc_parse.c] exit bc_parse_expr_err 68\n");
 }
 static void
 bc_parse_expr_status(BcParse* p, uint8_t flags, BcParseNext next)
 {
-	fprintf(stderr, "[bc_parse.c] enter bc_parse_expr_status 1\n");
+	// fprintf(stderr, "[bc_parse.c] enter bc_parse_expr_status 1\n");
 	BcParseStatus s = bc_parse_expr_err(p, flags, next);
 	// fprintf(stderr, "[bc_parse.c] exit bc_parse_expr_status 1\n");
 
 	if (BC_ERR(s == BC_PARSE_STATUS_EMPTY_EXPR))
 	{
-		fprintf(stderr, "[bc_parse.c] enter bc_parse_expr_status 2\n");
+		// fprintf(stderr, "[bc_parse.c] enter bc_parse_expr_status 2\n");
 		bc_parse_err(p, BC_ERR_PARSE_EMPTY_EXPR);
 		// fprintf(stderr, "[bc_parse.c] exit bc_parse_expr_status 2\n");
 	}

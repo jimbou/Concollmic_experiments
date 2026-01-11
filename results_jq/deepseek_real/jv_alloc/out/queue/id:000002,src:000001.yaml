@@ -1,0 +1,394 @@
+id: 2
+src_id: 1
+create_time: '2026-01-11 01:56:13.978'
+time_taken: 487
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: false
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: deepseek-chat
+    cost: $0.03155648
+    call_cnt: 6
+    latency: 115.60s
+    input_tokens: 32427
+    output_tokens: 1884
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: deepseek-chat
+      cost: $0.02027633
+      call_cnt: 3
+      latency: 62.83s
+      input_tokens: 21981
+      output_tokens: 840
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: deepseek-chat
+      cost: $0.00576015
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: deepseek-chat
+      cost: $0.00706358
+      call_cnt: 1
+      latency: 20.85s
+      input_tokens: 6982
+      output_tokens: 384
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: deepseek-chat
+      cost: $0.00678960
+      call_cnt: 1
+      latency: 15.15s
+      input_tokens: 7375
+      output_tokens: 196
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: deepseek-chat
+      cost: $0.00066300
+      call_cnt: 1
+      latency: 26.84s
+      input_tokens: 7624
+      output_tokens: 260
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: deepseek-chat
+      cost: $0.01128015
+      call_cnt: 3
+      latency: 52.77s
+      input_tokens: 10446
+      output_tokens: 1044
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: deepseek-chat
+      cost: $0.00255833
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    think:
+      model: deepseek-chat
+      cost: $0.00794408
+      call_cnt: 2
+      latency: 34.66s
+      input_tokens: 6588
+      output_tokens: 739
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: deepseek-chat
+      cost: $0.00077775
+      call_cnt: 1
+      latency: 18.10s
+      input_tokens: 3858
+      output_tokens: 305
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+target_branch: if (pthread_key_create(&nomem_handler_key, tsd_fini_thread) != 0) ->
+  true in function tsd_init()
+target_file_lines: jv_alloc.c:72-73
+target_lines_content: |2-
+      fprintf(stderr, "jq: error: cannot create thread specific key");
+      abort();
+justification: This branch has 0% historical coverage and represents a critical error
+  condition where pthread_key_create fails. Since the test harness uses LD_PRELOAD
+  to simulate memory allocation failures, this error path is particularly relevant.
+  Testing pthread_key_create failure would exercise error handling that's rarely tested
+  but important for robustness. This branch is reachable through the current test
+  harness as it involves memory allocation failure scenarios.
+target_path_constraint: |-
+  1. Environment Setup: The program must be executed with LD_PRELOAD set to a shared library that overrides malloc, calloc, and realloc to always return NULL, simulating memory allocation failure.
+
+  2. Thread Initialization: The program must reach the point where pthread_once() is called for the first time, triggering tsd_init() to execute. This requires that the program uses thread-local storage functionality.
+
+  3. pthread_key_create Failure: The pthread_key_create() function must fail (return non-zero) when called. This can be caused by:
+     - Insufficient system resources to create a new thread-specific data key
+     - The maximum number of thread-specific data keys (PTHREAD_KEYS_MAX) has been reached
+     - System-level constraints preventing key creation
+
+  4. Execution Flow: The program must follow this sequence:
+     - A memory allocation request fails (due to LD_PRELOAD override)
+     - memory_exhausted() is called
+     - pthread_once() triggers tsd_init() for thread-local storage initialization
+     - pthread_key_create() fails during this initialization
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code:
+returncode:
+src_execution_summary: |2+
+
+  ```c
+  // jv_alloc.c (189 lines total)
+  #include <assert.h>
+  #include <stdio.h>
+  #include <stdlib.h>
+  #include <string.h>
+  #include "jv.h"
+
+  struct nomem_handler {
+      jv_nomem_handler_f handler;
+      void *data;
+  };
+
+  #if !defined(HAVE_PTHREAD_KEY_CREATE) || \
+      !defined(HAVE_PTHREAD_ONCE) || \
+      !defined(HAVE_ATEXIT)
+
+  /* Try thread-local storage? */
+
+  #ifdef _MSC_VER
+  /* Visual C++: yes */
+  static __declspec(thread) struct nomem_handler nomem_handler;
+  #define USE_TLS
+  #else
+  #ifdef HAVE___THREAD
+  /* GCC and friends: yes */
+  static __thread struct nomem_handler nomem_handler;
+  #define USE_TLS
+  #endif /* HAVE___THREAD */
+  #endif /* _MSC_VER */
+
+  #endif /* !HAVE_PTHREAD_KEY_CREATE */
+
+  #ifdef USE_TLS
+  void jv_nomem_handler(jv_nomem_handler_f handler, void *data) {
+    // Unexecuted code (line 34) removed. Its line cov: 0/1 (0%)
+  }
+
+  static void memory_exhausted(void) {
+    // Unexecuted code (lines 38-42) removed. Its line cov: 0/5 (0%)
+  }
+  #else /* USE_TLS */
+
+  #ifdef HAVE_PTHREAD_KEY_CREATE
+  #include <pthread.h>
+
+  static pthread_key_t nomem_handler_key;
+  static pthread_once_t mem_once = PTHREAD_ONCE_INIT;
+
+  /* tsd_fini is called on application exit */
+  /* it clears the nomem_handler allocated in the main thread */
+  static void tsd_fini(void) {
+    // Unexecuted code (lines 55-60) removed. Its line cov: 0/6 (0%)
+  }
+
+  /* The tsd_fini_thread is a destructor set by calling */
+  /* pthread_key_create(&nomem_handler_key, tsd_fini_thread) */
+  /* It is called when thread ends */
+  static void tsd_fini_thread(void *nomem_handler) {
+    // Unexecuted code (line 67) removed. Its line cov: 0/1 (0%)
+  }
+
+  static void tsd_init(void) {
+    if (pthread_key_create(&nomem_handler_key, tsd_fini_thread) != 0) {
+      // Unexecuted code (lines 72-73) removed. Its line cov: 0/2 (0%)
+    }
+    if (atexit(tsd_fini) != 0) {
+      // Unexecuted code (lines 76-77) removed. Its line cov: 0/2 (0%)
+    }
+  }
+
+  static void tsd_init_nomem_handler(void)
+  {
+    if (pthread_getspecific(nomem_handler_key) == NULL) {
+      struct nomem_handler *nomem_handler = calloc(1, sizeof(struct nomem_handler));
+      if (pthread_setspecific(nomem_handler_key, nomem_handler) != 0) {
+        // Unexecuted code (lines 86-87) removed. Its line cov: 0/2 (0%)
+      }
+    }
+  }
+
+  void jv_nomem_handler(jv_nomem_handler_f handler, void *data) {
+    // Unexecuted code (lines 93-105) removed. Its line cov: 8/11 (73%)
+  }
+
+  static void memory_exhausted(void) {
+    struct nomem_handler *nomem_handler;
+
+    pthread_once(&mem_once, tsd_init);
+    tsd_init_nomem_handler();
+
+    nomem_handler = pthread_getspecific(nomem_handler_key);
+    if (nomem_handler && nomem_handler->handler)
+      nomem_handler->handler(nomem_handler->data); // Maybe handler() will longjmp() to safety
+    // Or not
+    fprintf(stderr, "jq: error: cannot allocate memory\n");
+    abort();
+  }
+
+  #else
+
+  /* No thread-local storage of any kind that we know how to handle */
+
+  static struct nomem_handler nomem_handler;
+  void jv_nomem_handler(jv_nomem_handler_f handler, void *data) {
+    // Unexecuted code (lines 128-129) removed. Its line cov: 0/2 (0%)
+  }
+
+  static void memory_exhausted(void) {
+    // Unexecuted code (lines 133-134) removed. Its line cov: 0/2 (0%)
+  }
+
+  #endif /* HAVE_PTHREAD_KEY_CREATE */
+  #endif /* USE_TLS */
+
+
+  void* jv_mem_alloc(size_t sz) {
+    void* p = malloc(sz);
+    if (!p) {
+      memory_exhausted();
+    }
+    return p;
+  }
+
+  void* jv_mem_alloc_unguarded(size_t sz) {
+    // Unexecuted code (line 150) removed. Its line cov: 1/1 (100%)
+  }
+
+  void* jv_mem_calloc(size_t nemb, size_t sz) {
+    // Unexecuted code (lines 154-158) removed. Its line cov: 4/5 (80%)
+    return p;
+  }
+
+  void* jv_mem_calloc_unguarded(size_t nemb, size_t sz) {
+    // Unexecuted code (lines 163-164) removed. Its line cov: 0/2 (0%)
+  }
+
+  char* jv_mem_strdup(const char *s) {
+    // Unexecuted code (lines 168-171) removed. Its line cov: 0/4 (0%)
+    return p;
+  }
+
+  char* jv_mem_strdup_unguarded(const char *s) {
+    // Unexecuted code (line 176) removed. Its line cov: 0/1 (0%)
+  }
+
+  void jv_mem_free(void* p) {
+    // Unexecuted code (line 180) removed. Its line cov: 1/1 (100%)
+  }
+
+  void* jv_mem_realloc(void* p, size_t sz) {
+    // Unexecuted code (lines 184-187) removed. Its line cov: 3/4 (75%)
+    return p;
+  }
+  ```
+
+crash_info:
+execution_trace:
+execution_summary:
+src_exec_code: |-
+  import subprocess
+  import signal
+  from pathlib import Path
+  import tempfile
+  import os
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      # Create a temporary C file that overrides malloc to always fail
+      c_code = """
+  #include <stdlib.h>
+  #include <stdio.h>
+
+  void* malloc(size_t size) {
+      return NULL;
+  }
+
+  void* calloc(size_t nmemb, size_t size) {
+      return NULL;
+  }
+
+  void* realloc(void* ptr, size_t size) {
+      return NULL;
+  }
+  """
+      
+      # Write the C code to a temporary file
+      with tempfile.NamedTemporaryFile(mode='w', suffix='.c', delete=False) as f:
+          f.write(c_code)
+          c_file = f.name
+      
+      # Compile the shared library
+      so_file = c_file.replace('.c', '.so')
+      compile_cmd = f"gcc -shared -fPIC -o {so_file} {c_file}"
+      
+      try:
+          result = subprocess.run(compile_cmd, shell=True, capture_output=True, text=True)
+          if result.returncode != 0:
+              raise RuntimeError(f"Failed to compile malloc override library: {result.stderr}")
+      except Exception as e:
+          # Clean up temporary files
+          if os.path.exists(c_file):
+              os.unlink(c_file)
+          raise RuntimeError(f"Error compiling malloc override: {e}")
+      
+      # Clean up the C file
+      os.unlink(c_file)
+      
+      # Set up the environment with LD_PRELOAD
+      env = os.environ.copy()
+      env['LD_PRELOAD'] = so_file
+      
+      # Execute the program with the original test harness
+      exe = "./temp_executable"
+      json_input = "{}"
+      
+      try:
+          result = subprocess.run(
+              [str(exe), "."],  # Exactly 2 arguments: program name and JSON filter
+              input=json_input,  # Valid JSON input via stdin
+              text=True,
+              capture_output=True,
+              timeout=timeout,
+              env=env  # Use environment with LD_PRELOAD
+          )
+          
+          # Clean up the shared library
+          if os.path.exists(so_file):
+              os.unlink(so_file)
+              
+          return result.stderr, result.returncode
+          
+      except subprocess.TimeoutExpired as e:
+          # Clean up the shared library
+          if os.path.exists(so_file):
+              os.unlink(so_file)
+          return e.stderr or "", -signal.SIGKILL
+      
+      except Exception as e:
+          # Clean up the shared library on any other exception
+          if os.path.exists(so_file):
+              os.unlink(so_file)
+          raise
+src_execution_trace: |
+  [jv_alloc.c] enter jv_mem_alloc 1
+  [jv_alloc.c] enter jv_mem_alloc 2
+  [jv_alloc.c] enter memory_exhausted 2998
+  [jv_alloc.c] enter tsd_init 1
+  [jv_alloc.c] enter tsd_init 3
+  [jv_alloc.c] enter tsd_init_nomem_handler 1
+  [jv_alloc.c] enter tsd_init_nomem_handler 2
+  jq: error: cannot allocate memory

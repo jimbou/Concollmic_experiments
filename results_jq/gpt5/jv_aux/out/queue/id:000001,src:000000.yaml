@@ -1,0 +1,1296 @@
+id: 1
+src_id: 0
+create_time: '2026-01-11 00:24:56.680'
+time_taken: 103
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: false
+new_coverage: false
+newly_covered_lines: 0
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.77464000
+    call_cnt: 3
+    latency: 70.39s
+    input_tokens: 20834
+    output_tokens: 5966
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.58360000
+      call_cnt: 2
+      latency: 40.75s
+      input_tokens: 18098
+      output_tokens: 3694
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.17868000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.37840000
+      call_cnt: 1
+      latency: 32.97s
+      input_tokens: 8934
+      output_tokens: 3252
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.02652000
+      call_cnt: 1
+      latency: 7.78s
+      input_tokens: 9164
+      output_tokens: 442
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.19104000
+      call_cnt: 1
+      latency: 29.64s
+      input_tokens: 2736
+      output_tokens: 2272
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05472000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.13632000
+      call_cnt: 1
+      latency: 29.64s
+      input_tokens: 2736
+      output_tokens: 2272
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (jv_get_kind(x) != JV_KIND_OBJECT) -> true in jv_aux.c:jv_keys_unsorted
+target_file_lines: jv_aux.c:599-599
+target_lines_content: '    return jv_keys(x);'
+justification: 'This branch has zero historical coverage (line cov: 0/1, 0%). It guards
+  the behavior of jv_keys_unsorted when given a non-object input, which is a fundamental
+  alternative path for the library since inputs can be arrays, strings, numbers, booleans,
+  or null. Reaching this branch will exercise error/alternate handling code and diversify
+  execution beyond the current run that processed an object ({}). It is reachable
+  using the existing harness by changing only the JSON input type while keeping the
+  filter "." unchanged.'
+target_path_constraint: |-
+  Chronological, program-input constraints to reach jv_aux.c:jv_keys_unsorted with condition (jv_get_kind(x) != JV_KIND_OBJECT) evaluating to true:
+
+  1. Process invocation (command-line):
+     - The executable path must be valid and runnable.
+     - The program must be started with exactly two arguments: the executable name and a jq filter string consisting of a single dot character: argv = ["./temp_executable", "."]. The filter is a single period with no whitespace.
+
+  2. Standard input stream properties:
+     - Provide well-formed JSON text encoded as UTF-8 on stdin. No leading/trailing non-JSON data.
+     - The JSON value must NOT be an object. Specifically, it must be one of: array, string, number, boolean (true/false), or null. This ensures jv_get_kind(x) != JV_KIND_OBJECT.
+     - The JSON must contain no extraneous characters before or after the value. Whitespace is allowed around but not required.
+
+  3. Parsing and evaluation flow requirements:
+     - The filter "." must evaluate to the input value unchanged (identity), so whatever JSON is provided becomes the value x passed into the library routine for listing keys. Supplying a non-object guarantees the non-object branch in jv_keys_unsorted is taken.
+
+  4. Environment and runtime conditions:
+     - The process must have permission to read from stdin and write to stderr.
+     - No timeouts should interrupt execution before JSON parsing and filter evaluation completes.
+
+  5. Semantic constraint to force branch outcome:
+     - Let JSON_Type denote the top-level type of the provided JSON value. Enforce: JSON_Type ∈ {Array, String, Number, Boolean, Null}. Equivalently, enforce: JSON_Type ≠ Object.
+
+  This set of constraints ensures the program reaches jv_aux.c:jv_keys_unsorted and that the condition (jv_get_kind(x) != JV_KIND_OBJECT) evaluates to true.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  import subprocess
+  import signal
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      exe = "./temp_executable"  # jq binary path
+
+      # Provide non-object JSON to satisfy jv_get_kind(x) != JV_KIND_OBJECT
+      # Using an empty array ensures the top-level JSON type is Array, not Object
+      json_input = "[]"
+
+      try:
+          result = subprocess.run(
+              [str(exe), "."],       # Keep filter as a single dot
+              input=json_input,        # UTF-8 JSON on stdin
+              text=True,
+              encoding="utf-8",
+              capture_output=True,
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+
+      except subprocess.TimeoutExpired as e:
+          return e.stderr or "", -signal.SIGKILL
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // jv_aux.c (825 lines total)
+  #include <stdio.h>
+  #include <assert.h>
+  #include <limits.h>
+  #include <math.h>
+  #include <string.h>
+  #include <stdlib.h>
+  #include "jv.h"
+  #include "jv_alloc.h"
+  #include "jv_private.h"
+
+  // making this static verbose function here
+  // until we introduce a less confusing naming scheme
+  // of jv_* API with regards to the memory management
+  static double jv_number_get_value_and_consume(jv number) {
+    // Unexecuted code (lines 15-17) removed. Its line cov: 0/3 (0%)
+  }
+
+  static jv parse_slice(jv j, jv slice, int* pstart, int* pend) {
+    // Unexecuted code (lines 21-23) removed. Its line cov: 0/3 (0%)
+    if (jv_get_kind(start_jv) == JV_KIND_NULL) {
+      // Unexecuted code (lines 25-26) removed. Its line cov: 0/2 (0%)
+    }
+    // Unexecuted code (line 28) removed. Its line cov: 0/1 (0%)
+    if (jv_get_kind(j) == JV_KIND_ARRAY) {
+      // Unexecuted code (line 30) removed. Its line cov: 0/1 (0%)
+    } else if (jv_get_kind(j) == JV_KIND_STRING) {
+      // Unexecuted code (line 32) removed. Its line cov: 0/1 (0%)
+    } else {
+      // Unexecuted code (lines 34-41) removed. Its line cov: 0/8 (0%)
+    }
+    // Unexecuted code (lines 43-59) removed. Its line cov: 0/15 (0%)
+    if (isnan(dstart)) {
+      // Unexecuted code (line 61) removed. Its line cov: 0/1 (0%)
+    }
+    // Unexecuted code (lines 63-98) removed. Its line cov: 0/34 (0%)
+  }
+
+  jv jv_get(jv t, jv k) {
+    // Unexecuted code (line 102) removed. Its line cov: 0/1 (0%)
+    if (jv_get_kind(t) == JV_KIND_OBJECT && jv_get_kind(k) == JV_KIND_STRING) {
+      // Unexecuted code (line 104) removed. Its line cov: 0/1 (0%)
+      if (!jv_is_valid(v)) {
+        // Unexecuted code (lines 106-107) removed. Its line cov: 0/2 (0%)
+      }
+    } else if (jv_get_kind(t) == JV_KIND_ARRAY && jv_get_kind(k) == JV_KIND_NUMBER) {
+      fprintf(stderr, "\n");
+      if (jvp_number_is_nan(k)) {
+        // Unexecuted code (lines 112-113) removed. Its line cov: 0/2 (0%)
+      } else {
+        // Unexecuted code (line 115) removed. Its line cov: 0/1 (0%)
+        if (jvp_number_is_nan(k)) {
+          // Unexecuted code (line 117) removed. Its line cov: 0/1 (0%)
+        } else {
+          // Unexecuted code (lines 119-125) removed. Its line cov: 0/7 (0%)
+          if (idx < 0) {
+            // Unexecuted code (line 127) removed. Its line cov: 0/1 (0%)
+          }
+          // Unexecuted code (line 129) removed. Its line cov: 0/1 (0%)
+          if (!jv_is_valid(v)) {
+            // Unexecuted code (lines 131-132) removed. Its line cov: 0/2 (0%)
+          }
+        }
+      }
+      // Unexecuted code (line 136) removed. Its line cov: 0/1 (0%)
+    } else if (jv_get_kind(t) == JV_KIND_ARRAY && jv_get_kind(k) == JV_KIND_OBJECT) {
+      // Unexecuted code (lines 138-139) removed. Its line cov: 0/2 (0%)
+      if (jv_get_kind(e) == JV_KIND_TRUE) {
+        // Unexecuted code (line 141) removed. Its line cov: 0/1 (0%)
+      } else {
+        // Unexecuted code (lines 143-144) removed. Its line cov: 0/2 (0%)
+      }
+    } else if (jv_get_kind(t) == JV_KIND_STRING && jv_get_kind(k) == JV_KIND_OBJECT) {
+      // Unexecuted code (lines 147-148) removed. Its line cov: 0/2 (0%)
+      if (jv_get_kind(e) == JV_KIND_TRUE) {
+        // Unexecuted code (line 150) removed. Its line cov: 0/1 (0%)
+      } else {
+        // Unexecuted code (lines 152-153) removed. Its line cov: 0/2 (0%)
+      }
+    } else if (jv_get_kind(t) == JV_KIND_ARRAY && jv_get_kind(k) == JV_KIND_ARRAY) {
+      // Unexecuted code (line 156) removed. Its line cov: 0/1 (0%)
+    } else if (jv_get_kind(t) == JV_KIND_NULL &&
+               (jv_get_kind(k) == JV_KIND_STRING ||
+                jv_get_kind(k) == JV_KIND_NUMBER ||
+                jv_get_kind(k) == JV_KIND_OBJECT)) {
+      // Unexecuted code (lines 161-163) removed. Its line cov: 0/3 (0%)
+    } else {
+      // Unexecuted code (lines 165-182) removed. Its line cov: 0/18 (0%)
+  }
+  jv jv_set(jv t, jv k, jv v) {
+    // Unexecuted code (lines 185-264) removed. Its line cov: 0/80 (0%)
+  }
+
+  jv jv_has(jv t, jv k) {
+    // Unexecuted code (lines 268-298) removed. Its line cov: 0/31 (0%)
+  }
+  // assumes keys is a sorted array
+  static jv jv_dels(jv t, jv keys) {
+    // Unexecuted code (lines 302-303) removed. Its line cov: 0/2 (0%)
+
+    if (jv_get_kind(t) == JV_KIND_NULL || jv_array_length(jv_copy(keys)) == 0) {
+      // Unexecuted code (line 306) removed. Its line cov: 0/1 (0%)
+    } else if (jv_get_kind(t) == JV_KIND_ARRAY) {
+      // Unexecuted code (lines 308-381) removed. Its line cov: 0/67 (0%)
+    arr_out:
+      // Unexecuted code (lines 384-389) removed. Its line cov: 0/6 (0%)
+    } else if (jv_get_kind(t) == JV_KIND_OBJECT) {
+      // Unexecuted code (lines 391-400) removed. Its line cov: 0/10 (0%)
+    } else {
+      // Unexecuted code (lines 402-405) removed. Its line cov: 0/4 (0%)
+    }
+    // Unexecuted code (lines 407-408) removed. Its line cov: 0/2 (0%)
+  }
+
+  jv jv_setpath(jv root, jv path, jv value) {
+    // Unexecuted code (lines 412-432) removed. Its line cov: 0/18 (0%)
+    /*
+     * We need to be careful not to make extra copies since that leads to
+     * quadratic behavior (e.g., when growing large data structures in a
+     * reduction with `setpath/2`, i.e., with `|=`.
+     */
+    if (jv_get_kind(pathcurr) == JV_KIND_OBJECT) {
+      // Unexecuted code (lines 440-442) removed. Its line cov: 0/3 (0%)
+    }
+
+    // Unexecuted code (lines 445-465) removed. Its line cov: 0/19 (0%)
+  }
+
+  jv jv_getpath(jv root, jv path) {
+    // Unexecuted code (lines 469-487) removed. Its line cov: 0/16 (0%)
+  }
+  // assumes paths is a sorted array of arrays
+  static jv delpaths_sorted(jv object, jv paths, int start) {
+    // Unexecuted code (line 491) removed. Its line cov: 0/1 (0%)
+    for (int i=0; i<jv_array_length(jv_copy(paths));) {
+      // Unexecuted code (lines 493-496) removed. Its line cov: 0/4 (0%)
+      while (j < jv_array_length(jv_copy(paths)) &&
+             jv_equal(jv_copy(key), jv_array_get(jv_array_get(jv_copy(paths), j), start)))
+      {
+        // Unexecuted code (line 500) removed. Its line cov: 0/1 (0%)
+      }
+      // Unexecuted code (line 502) removed. Its line cov: 0/1 (0%)
+      if (delkey) {
+        // Unexecuted code (lines 504-505) removed. Its line cov: 0/2 (0%)
+      } else {
+        // Unexecuted code (lines 507-508) removed. Its line cov: 0/2 (0%)
+        if (!jv_is_valid(subobject)) {
+          // Unexecuted code (lines 510-513) removed. Its line cov: 0/4 (0%)
+        } else if (jv_get_kind(subobject) == JV_KIND_NULL) {
+          // Unexecuted code (lines 515-516) removed. Its line cov: 0/2 (0%)
+        } else {
+          // Unexecuted code (line 518) removed. Its line cov: 0/1 (0%)
+          if (!jv_is_valid(newsubobject)) {
+            // Unexecuted code (lines 520-523) removed. Its line cov: 0/4 (0%)
+          }
+          // Unexecuted code (line 525) removed. Its line cov: 0/1 (0%)
+        }
+        // Unexecuted code (line 527) removed. Its line cov: 0/1 (0%)
+      }
+      // Unexecuted code (line 529) removed. Its line cov: 0/1 (0%)
+    }
+    // Unexecuted code (line 531) removed. Its line cov: 0/1 (0%)
+    if (jv_is_valid(object))
+    {
+      // Unexecuted code (line 534) removed. Its line cov: 0/1 (0%)
+    }
+    else
+    {
+      // Unexecuted code (line 538) removed. Its line cov: 0/1 (0%)
+    }
+    // Unexecuted code (line 540) removed. Its line cov: 0/1 (0%)
+  }
+
+  jv jv_delpaths(jv object, jv paths) {
+    fprintf(stderr, "\n");
+    // fprintf(stderr, "\n");
+    if (jv_get_kind(paths) != JV_KIND_ARRAY) {
+      // Unexecuted code (lines 547-549) removed. Its line cov: 0/3 (0%)
+    }
+    // Unexecuted code (line 551) removed. Its line cov: 0/1 (0%)
+    jv_array_foreach(paths, i, elem) {
+      fprintf(stderr, "\n");
+      // fprintf(stderr, "\n");
+      if (jv_get_kind(elem) != JV_KIND_ARRAY) {
+        // Unexecuted code (lines 556-561) removed. Its line cov: 0/6 (0%)
+      }
+      // Unexecuted code (line 563) removed. Its line cov: 0/1 (0%)
+    }
+    fprintf(stderr, "\n");
+    // fprintf(stderr, "\n");
+    if (jv_array_length(jv_copy(paths)) == 0) {
+      // Unexecuted code (lines 568-570) removed. Its line cov: 0/3 (0%)
+    }
+    fprintf(stderr, "\n");
+    // fprintf(stderr, "\n");
+    if (jv_array_length(jv_array_get(jv_copy(paths), 0)) == 0) {
+      // Unexecuted code (lines 575-578) removed. Its line cov: 0/4 (0%)
+    }
+    // Unexecuted code (line 580) removed. Its line cov: 0/1 (0%)
+  }
+
+
+  static int string_cmp(const void* pa, const void* pb){
+    // Unexecuted code (lines 585-592) removed. Its line cov: 0/8 (0%)
+  }
+
+  jv jv_keys_unsorted(jv x) {
+    fprintf(stderr, "\n");
+    // fprintf(stderr, "\n");
+    if (jv_get_kind(x) != JV_KIND_OBJECT) {
+      // Unexecuted code (line 599) removed. Its line cov: 0/1 (0%)
+    }
+    jv answer = jv_array_sized(jv_object_length(jv_copy(x)));
+    jv_object_foreach(x, key, value) {
+      answer = jv_array_append(answer, key);
+      jv_free(value);
+    }
+    jv_free(x);
+    return answer;
+  }
+
+  jv jv_keys(jv x) {
+    fprintf(stderr, "\n");
+    // fprintf(stderr, "\n");
+    if (jv_get_kind(x) == JV_KIND_OBJECT) {
+      // Unexecuted code (line 614) removed. Its line cov: 0/1 (0%)
+      if (nkeys == 0) {
+        // Unexecuted code (lines 616-617) removed. Its line cov: 0/2 (0%)
+      }
+      // Unexecuted code (lines 619-620) removed. Its line cov: 0/2 (0%)
+      jv_object_foreach(x, key, value) {
+        // Unexecuted code (lines 622-623) removed. Its line cov: 0/2 (0%)
+      }
+      // Unexecuted code (lines 625-626) removed. Its line cov: 0/2 (0%)
+      for (int i = 0; i<nkeys; i++) {
+        // Unexecuted code (line 628) removed. Its line cov: 0/1 (0%)
+      }
+      // Unexecuted code (lines 630-632) removed. Its line cov: 0/3 (0%)
+    } else if (jv_get_kind(x) == JV_KIND_ARRAY) {
+      // Unexecuted code (lines 634-635) removed. Its line cov: 0/2 (0%)
+      for (int i=0; i<n; i++){
+        // Unexecuted code (line 637) removed. Its line cov: 0/1 (0%)
+      }
+      // Unexecuted code (line 639) removed. Its line cov: 0/1 (0%)
+    } else {
+      // Unexecuted code (lines 641-642) removed. Its line cov: 0/2 (0%)
+    }
+  }
+  int jv_cmp(jv a, jv b) {
+    fprintf(stderr, "\n");
+    if (jv_get_kind(a) != jv_get_kind(b)) {
+      // Unexecuted code (lines 648-651) removed. Its line cov: 0/4 (0%)
+    }
+    // Unexecuted code (line 653) removed. Its line cov: 0/1 (0%)
+    switch (jv_get_kind(a)) {
+    default:
+      // Unexecuted code (line 656) removed. Its line cov: 0/1 (0%)
+    case JV_KIND_NULL:
+    case JV_KIND_FALSE:
+    case JV_KIND_TRUE:
+      // Unexecuted code (lines 660-662) removed. Its line cov: 0/3 (0%)
+
+    case JV_KIND_NUMBER: {
+      // Unexecuted code (lines 665-672) removed. Its line cov: 0/8 (0%)
+    }
+
+    case JV_KIND_STRING: {
+      // Unexecuted code (lines 676-677) removed. Its line cov: 0/2 (0%)
+    }
+
+    case JV_KIND_ARRAY: {
+      // Unexecuted code (lines 681-682) removed. Its line cov: 0/2 (0%)
+      
+      while (r == 0) {
+        // Unexecuted code (lines 685-695) removed. Its line cov: 0/11 (0%)
+      break;
+    }
+
+    case JV_KIND_OBJECT: {
+      // Unexecuted code (lines 700-712) removed. Its line cov: 0/13 (0%)
+    }
+    }
+
+    // Unexecuted code (lines 716-718) removed. Its line cov: 0/3 (0%)
+  }
+
+
+  struct sort_entry {
+    jv object;
+    jv key;
+    int index;
+  };
+
+  static int sort_cmp(const void* pa, const void* pb) {
+    // Unexecuted code (lines 729-733) removed. Its line cov: 0/5 (0%)
+  }
+
+  static struct sort_entry* sort_items(jv objects, jv keys) {
+    fprintf(stderr, "\n");
+    assert(jv_get_kind(objects) == JV_KIND_ARRAY);
+    assert(jv_get_kind(keys) == JV_KIND_ARRAY);
+    assert(jv_array_length(jv_copy(objects)) == jv_array_length(jv_copy(keys)));
+    int n = jv_array_length(jv_copy(objects));
+    if (n == 0) {
+      // Unexecuted code (lines 743-745) removed. Its line cov: 0/3 (0%)
+    }
+    // Unexecuted code (lines 747-756) removed. Its line cov: 0/10 (0%)
+  }
+
+  jv jv_sort(jv objects, jv keys) {
+    // Unexecuted code (lines 760-771) removed. Its line cov: 0/12 (0%)
+  }
+
+  jv jv_group(jv objects, jv keys) {
+    // Unexecuted code (lines 775-801) removed. Its line cov: 0/25 (0%)
+  }
+
+  jv jv_unique(jv objects, jv keys) {
+    // Unexecuted code (lines 805-824) removed. Its line cov: 0/20 (0%)
+  }
+  ```
+
+crash_info:
+execution_trace: |2
+
+  [jv_aux.c] enter jv_keys_unsorted 3
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 5
+execution_summary: |2+
+
+  ```c
+  // jv_aux.c (825 lines total)
+  #include <stdio.h>
+  #include <assert.h>
+  #include <limits.h>
+  #include <math.h>
+  #include <string.h>
+  #include <stdlib.h>
+  #include "jv.h"
+  #include "jv_alloc.h"
+  #include "jv_private.h"
+
+  // making this static verbose function here
+  // until we introduce a less confusing naming scheme
+  // of jv_* API with regards to the memory management
+  static double jv_number_get_value_and_consume(jv number) {
+    // Unexecuted code (lines 15-17) removed. Its line cov: 0/3 (0%)
+  }
+
+  static jv parse_slice(jv j, jv slice, int* pstart, int* pend) {
+    // Unexecuted code (lines 21-23) removed. Its line cov: 0/3 (0%)
+    if (jv_get_kind(start_jv) == JV_KIND_NULL) {
+      // Unexecuted code (lines 25-26) removed. Its line cov: 0/2 (0%)
+    }
+    // Unexecuted code (line 28) removed. Its line cov: 0/1 (0%)
+    if (jv_get_kind(j) == JV_KIND_ARRAY) {
+      // Unexecuted code (line 30) removed. Its line cov: 0/1 (0%)
+    } else if (jv_get_kind(j) == JV_KIND_STRING) {
+      // Unexecuted code (line 32) removed. Its line cov: 0/1 (0%)
+    } else {
+      // Unexecuted code (lines 34-41) removed. Its line cov: 0/8 (0%)
+    }
+    // Unexecuted code (lines 43-59) removed. Its line cov: 0/15 (0%)
+    if (isnan(dstart)) {
+      // Unexecuted code (line 61) removed. Its line cov: 0/1 (0%)
+    }
+    // Unexecuted code (lines 63-98) removed. Its line cov: 0/34 (0%)
+  }
+
+  jv jv_get(jv t, jv k) {
+    // Unexecuted code (line 102) removed. Its line cov: 0/1 (0%)
+    if (jv_get_kind(t) == JV_KIND_OBJECT && jv_get_kind(k) == JV_KIND_STRING) {
+      // Unexecuted code (line 104) removed. Its line cov: 0/1 (0%)
+      if (!jv_is_valid(v)) {
+        // Unexecuted code (lines 106-107) removed. Its line cov: 0/2 (0%)
+      }
+    } else if (jv_get_kind(t) == JV_KIND_ARRAY && jv_get_kind(k) == JV_KIND_NUMBER) {
+      fprintf(stderr, "\n");
+      if (jvp_number_is_nan(k)) {
+        // Unexecuted code (lines 112-113) removed. Its line cov: 0/2 (0%)
+      } else {
+        // Unexecuted code (line 115) removed. Its line cov: 0/1 (0%)
+        if (jvp_number_is_nan(k)) {
+          // Unexecuted code (line 117) removed. Its line cov: 0/1 (0%)
+        } else {
+          // Unexecuted code (lines 119-125) removed. Its line cov: 0/7 (0%)
+          if (idx < 0) {
+            // Unexecuted code (line 127) removed. Its line cov: 0/1 (0%)
+          }
+          // Unexecuted code (line 129) removed. Its line cov: 0/1 (0%)
+          if (!jv_is_valid(v)) {
+            // Unexecuted code (lines 131-132) removed. Its line cov: 0/2 (0%)
+          }
+        }
+      }
+      // Unexecuted code (line 136) removed. Its line cov: 0/1 (0%)
+    } else if (jv_get_kind(t) == JV_KIND_ARRAY && jv_get_kind(k) == JV_KIND_OBJECT) {
+      // Unexecuted code (lines 138-139) removed. Its line cov: 0/2 (0%)
+      if (jv_get_kind(e) == JV_KIND_TRUE) {
+        // Unexecuted code (line 141) removed. Its line cov: 0/1 (0%)
+      } else {
+        // Unexecuted code (lines 143-144) removed. Its line cov: 0/2 (0%)
+      }
+    } else if (jv_get_kind(t) == JV_KIND_STRING && jv_get_kind(k) == JV_KIND_OBJECT) {
+      // Unexecuted code (lines 147-148) removed. Its line cov: 0/2 (0%)
+      if (jv_get_kind(e) == JV_KIND_TRUE) {
+        // Unexecuted code (line 150) removed. Its line cov: 0/1 (0%)
+      } else {
+        // Unexecuted code (lines 152-153) removed. Its line cov: 0/2 (0%)
+      }
+    } else if (jv_get_kind(t) == JV_KIND_ARRAY && jv_get_kind(k) == JV_KIND_ARRAY) {
+      // Unexecuted code (line 156) removed. Its line cov: 0/1 (0%)
+    } else if (jv_get_kind(t) == JV_KIND_NULL &&
+               (jv_get_kind(k) == JV_KIND_STRING ||
+                jv_get_kind(k) == JV_KIND_NUMBER ||
+                jv_get_kind(k) == JV_KIND_OBJECT)) {
+      // Unexecuted code (lines 161-163) removed. Its line cov: 0/3 (0%)
+    } else {
+      // Unexecuted code (lines 165-182) removed. Its line cov: 0/18 (0%)
+  }
+  jv jv_set(jv t, jv k, jv v) {
+    // Unexecuted code (lines 185-264) removed. Its line cov: 0/80 (0%)
+  }
+
+  jv jv_has(jv t, jv k) {
+    // Unexecuted code (lines 268-298) removed. Its line cov: 0/31 (0%)
+  }
+  // assumes keys is a sorted array
+  static jv jv_dels(jv t, jv keys) {
+    // Unexecuted code (lines 302-303) removed. Its line cov: 0/2 (0%)
+
+    if (jv_get_kind(t) == JV_KIND_NULL || jv_array_length(jv_copy(keys)) == 0) {
+      // Unexecuted code (line 306) removed. Its line cov: 0/1 (0%)
+    } else if (jv_get_kind(t) == JV_KIND_ARRAY) {
+      // Unexecuted code (lines 308-381) removed. Its line cov: 0/67 (0%)
+    arr_out:
+      // Unexecuted code (lines 384-389) removed. Its line cov: 0/6 (0%)
+    } else if (jv_get_kind(t) == JV_KIND_OBJECT) {
+      // Unexecuted code (lines 391-400) removed. Its line cov: 0/10 (0%)
+    } else {
+      // Unexecuted code (lines 402-405) removed. Its line cov: 0/4 (0%)
+    }
+    // Unexecuted code (lines 407-408) removed. Its line cov: 0/2 (0%)
+  }
+
+  jv jv_setpath(jv root, jv path, jv value) {
+    // Unexecuted code (lines 412-432) removed. Its line cov: 0/18 (0%)
+    /*
+     * We need to be careful not to make extra copies since that leads to
+     * quadratic behavior (e.g., when growing large data structures in a
+     * reduction with `setpath/2`, i.e., with `|=`.
+     */
+    if (jv_get_kind(pathcurr) == JV_KIND_OBJECT) {
+      // Unexecuted code (lines 440-442) removed. Its line cov: 0/3 (0%)
+    }
+
+    // Unexecuted code (lines 445-465) removed. Its line cov: 0/19 (0%)
+  }
+
+  jv jv_getpath(jv root, jv path) {
+    // Unexecuted code (lines 469-487) removed. Its line cov: 0/16 (0%)
+  }
+  // assumes paths is a sorted array of arrays
+  static jv delpaths_sorted(jv object, jv paths, int start) {
+    // Unexecuted code (line 491) removed. Its line cov: 0/1 (0%)
+    for (int i=0; i<jv_array_length(jv_copy(paths));) {
+      // Unexecuted code (lines 493-496) removed. Its line cov: 0/4 (0%)
+      while (j < jv_array_length(jv_copy(paths)) &&
+             jv_equal(jv_copy(key), jv_array_get(jv_array_get(jv_copy(paths), j), start)))
+      {
+        // Unexecuted code (line 500) removed. Its line cov: 0/1 (0%)
+      }
+      // Unexecuted code (line 502) removed. Its line cov: 0/1 (0%)
+      if (delkey) {
+        // Unexecuted code (lines 504-505) removed. Its line cov: 0/2 (0%)
+      } else {
+        // Unexecuted code (lines 507-508) removed. Its line cov: 0/2 (0%)
+        if (!jv_is_valid(subobject)) {
+          // Unexecuted code (lines 510-513) removed. Its line cov: 0/4 (0%)
+        } else if (jv_get_kind(subobject) == JV_KIND_NULL) {
+          // Unexecuted code (lines 515-516) removed. Its line cov: 0/2 (0%)
+        } else {
+          // Unexecuted code (line 518) removed. Its line cov: 0/1 (0%)
+          if (!jv_is_valid(newsubobject)) {
+            // Unexecuted code (lines 520-523) removed. Its line cov: 0/4 (0%)
+          }
+          // Unexecuted code (line 525) removed. Its line cov: 0/1 (0%)
+        }
+        // Unexecuted code (line 527) removed. Its line cov: 0/1 (0%)
+      }
+      // Unexecuted code (line 529) removed. Its line cov: 0/1 (0%)
+    }
+    // Unexecuted code (line 531) removed. Its line cov: 0/1 (0%)
+    if (jv_is_valid(object))
+    {
+      // Unexecuted code (line 534) removed. Its line cov: 0/1 (0%)
+    }
+    else
+    {
+      // Unexecuted code (line 538) removed. Its line cov: 0/1 (0%)
+    }
+    // Unexecuted code (line 540) removed. Its line cov: 0/1 (0%)
+  }
+
+  jv jv_delpaths(jv object, jv paths) {
+    fprintf(stderr, "\n");
+    // fprintf(stderr, "\n");
+    if (jv_get_kind(paths) != JV_KIND_ARRAY) {
+      // Unexecuted code (lines 547-549) removed. Its line cov: 0/3 (0%)
+    }
+    // Unexecuted code (line 551) removed. Its line cov: 0/1 (0%)
+    jv_array_foreach(paths, i, elem) {
+      fprintf(stderr, "\n");
+      // fprintf(stderr, "\n");
+      if (jv_get_kind(elem) != JV_KIND_ARRAY) {
+        // Unexecuted code (lines 556-561) removed. Its line cov: 0/6 (0%)
+      }
+      // Unexecuted code (line 563) removed. Its line cov: 0/1 (0%)
+    }
+    fprintf(stderr, "\n");
+    // fprintf(stderr, "\n");
+    if (jv_array_length(jv_copy(paths)) == 0) {
+      // Unexecuted code (lines 568-570) removed. Its line cov: 0/3 (0%)
+    }
+    fprintf(stderr, "\n");
+    // fprintf(stderr, "\n");
+    if (jv_array_length(jv_array_get(jv_copy(paths), 0)) == 0) {
+      // Unexecuted code (lines 575-578) removed. Its line cov: 0/4 (0%)
+    }
+    // Unexecuted code (line 580) removed. Its line cov: 0/1 (0%)
+  }
+
+
+  static int string_cmp(const void* pa, const void* pb){
+    // Unexecuted code (lines 585-592) removed. Its line cov: 0/8 (0%)
+  }
+
+  jv jv_keys_unsorted(jv x) {
+    fprintf(stderr, "\n");
+    // fprintf(stderr, "\n");
+    if (jv_get_kind(x) != JV_KIND_OBJECT) {
+      // Unexecuted code (line 599) removed. Its line cov: 0/1 (0%)
+    }
+    jv answer = jv_array_sized(jv_object_length(jv_copy(x)));
+    jv_object_foreach(x, key, value) {
+      answer = jv_array_append(answer, key);
+      jv_free(value);
+    }
+    jv_free(x);
+    return answer;
+  }
+
+  jv jv_keys(jv x) {
+    fprintf(stderr, "\n");
+    // fprintf(stderr, "\n");
+    if (jv_get_kind(x) == JV_KIND_OBJECT) {
+      // Unexecuted code (line 614) removed. Its line cov: 0/1 (0%)
+      if (nkeys == 0) {
+        // Unexecuted code (lines 616-617) removed. Its line cov: 0/2 (0%)
+      }
+      // Unexecuted code (lines 619-620) removed. Its line cov: 0/2 (0%)
+      jv_object_foreach(x, key, value) {
+        // Unexecuted code (lines 622-623) removed. Its line cov: 0/2 (0%)
+      }
+      // Unexecuted code (lines 625-626) removed. Its line cov: 0/2 (0%)
+      for (int i = 0; i<nkeys; i++) {
+        // Unexecuted code (line 628) removed. Its line cov: 0/1 (0%)
+      }
+      // Unexecuted code (lines 630-632) removed. Its line cov: 0/3 (0%)
+    } else if (jv_get_kind(x) == JV_KIND_ARRAY) {
+      // Unexecuted code (lines 634-635) removed. Its line cov: 0/2 (0%)
+      for (int i=0; i<n; i++){
+        // Unexecuted code (line 637) removed. Its line cov: 0/1 (0%)
+      }
+      // Unexecuted code (line 639) removed. Its line cov: 0/1 (0%)
+    } else {
+      // Unexecuted code (lines 641-642) removed. Its line cov: 0/2 (0%)
+    }
+  }
+  int jv_cmp(jv a, jv b) {
+    fprintf(stderr, "\n");
+    if (jv_get_kind(a) != jv_get_kind(b)) {
+      // Unexecuted code (lines 648-651) removed. Its line cov: 0/4 (0%)
+    }
+    // Unexecuted code (line 653) removed. Its line cov: 0/1 (0%)
+    switch (jv_get_kind(a)) {
+    default:
+      // Unexecuted code (line 656) removed. Its line cov: 0/1 (0%)
+    case JV_KIND_NULL:
+    case JV_KIND_FALSE:
+    case JV_KIND_TRUE:
+      // Unexecuted code (lines 660-662) removed. Its line cov: 0/3 (0%)
+
+    case JV_KIND_NUMBER: {
+      // Unexecuted code (lines 665-672) removed. Its line cov: 0/8 (0%)
+    }
+
+    case JV_KIND_STRING: {
+      // Unexecuted code (lines 676-677) removed. Its line cov: 0/2 (0%)
+    }
+
+    case JV_KIND_ARRAY: {
+      // Unexecuted code (lines 681-682) removed. Its line cov: 0/2 (0%)
+      
+      while (r == 0) {
+        // Unexecuted code (lines 685-695) removed. Its line cov: 0/11 (0%)
+      break;
+    }
+
+    case JV_KIND_OBJECT: {
+      // Unexecuted code (lines 700-712) removed. Its line cov: 0/13 (0%)
+    }
+    }
+
+    // Unexecuted code (lines 716-718) removed. Its line cov: 0/3 (0%)
+  }
+
+
+  struct sort_entry {
+    jv object;
+    jv key;
+    int index;
+  };
+
+  static int sort_cmp(const void* pa, const void* pb) {
+    // Unexecuted code (lines 729-733) removed. Its line cov: 0/5 (0%)
+  }
+
+  static struct sort_entry* sort_items(jv objects, jv keys) {
+    fprintf(stderr, "\n");
+    assert(jv_get_kind(objects) == JV_KIND_ARRAY);
+    assert(jv_get_kind(keys) == JV_KIND_ARRAY);
+    assert(jv_array_length(jv_copy(objects)) == jv_array_length(jv_copy(keys)));
+    int n = jv_array_length(jv_copy(objects));
+    if (n == 0) {
+      // Unexecuted code (lines 743-745) removed. Its line cov: 0/3 (0%)
+    }
+    // Unexecuted code (lines 747-756) removed. Its line cov: 0/10 (0%)
+  }
+
+  jv jv_sort(jv objects, jv keys) {
+    // Unexecuted code (lines 760-771) removed. Its line cov: 0/12 (0%)
+  }
+
+  jv jv_group(jv objects, jv keys) {
+    // Unexecuted code (lines 775-801) removed. Its line cov: 0/25 (0%)
+  }
+
+  jv jv_unique(jv objects, jv keys) {
+    // Unexecuted code (lines 805-824) removed. Its line cov: 0/20 (0%)
+  }
+  ```
+
+src_exec_code: |-
+  import subprocess
+  import signal
+  from pathlib import Path
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      # script_dir = Path(__file__).resolve().parent
+      exe =  "./temp_executable"   # jq binary
+
+      # Minimal valid JSON to force parser path
+      json_input = "{}"
+
+      try:
+          result = subprocess.run(
+              [str(exe), "."],        # FILTER only
+              input=json_input,       # JSON provided explicitly
+              text=True,
+              capture_output=True,
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+
+      except subprocess.TimeoutExpired as e:
+          return e.stderr or "", -signal.SIGKILL
+
+  # #main
+  # if __name__ == "__main__":
+  #     timeout_seconds = 5
+  #     stderr_output, return_code = execute_program(timeout_seconds)
+  #     print("Return Code:", return_code)
+  #     print("Stderr Output:")
+  #     print(stderr_output)
+src_execution_trace: |2
+
+  [jv_aux.c] enter jv_keys_unsorted 3
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 4
+  [jv_aux.c] enter jv_keys_unsorted 5

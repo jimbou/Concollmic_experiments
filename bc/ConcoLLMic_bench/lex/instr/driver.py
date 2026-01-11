@@ -1,14 +1,13 @@
 import subprocess
 import signal
-from pathlib import Path
 
 def execute_program(timeout: int) -> tuple[str, int]:
-    script_dir = Path(__file__).resolve().parent
-    exe = script_dir / "temp_executable"
+    exe = "./temp_executable"
 
     try:
         result = subprocess.run(
-            [str(exe), "-e", "1+1"],
+            [str(exe)],              # no -e
+            input="1+1\n",           # pass expression via stdin
             text=True,
             capture_output=True,
             timeout=timeout,
@@ -21,4 +20,7 @@ def execute_program(timeout: int) -> tuple[str, int]:
     except Exception:
         raise
 
-
+if __name__ == "__main__":
+    stderr, returncode = execute_program(timeout=5)
+    print(f"Return code: {returncode}")
+    print(f"Stderr: {stderr}")

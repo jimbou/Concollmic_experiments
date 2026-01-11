@@ -1,0 +1,586 @@
+id: 1
+src_id: 0
+create_time: '2026-01-10 23:33:53.064'
+time_taken: 172
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 2
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.95788000
+    call_cnt: 4
+    latency: 90.08s
+    input_tokens: 23672
+    output_tokens: 8074
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.83788000
+      call_cnt: 3
+      latency: 75.68s
+      input_tokens: 20939
+      output_tokens: 6985
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.12300000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.32076000
+      call_cnt: 1
+      latency: 36.48s
+      input_tokens: 6150
+      output_tokens: 2916
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.36244000
+      call_cnt: 1
+      latency: 32.14s
+      input_tokens: 7290
+      output_tokens: 3541
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03168000
+      call_cnt: 1
+      latency: 7.06s
+      input_tokens: 7499
+      output_tokens: 528
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.12000000
+      call_cnt: 1
+      latency: 14.40s
+      input_tokens: 2733
+      output_tokens: 1089
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05466000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.06534000
+      call_cnt: 1
+      latency: 14.40s
+      input_tokens: 2733
+      output_tokens: 1089
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (bc_parse_zero[0] == string[0] && bc_parse_zero[1] == string[1])
+  -> true in parse.c:bc_parse_addNum
+target_file_lines: parse.c:108-109
+target_lines_content: |2-
+      bc_parse_push(p, BC_INST_ZERO);
+      return;
+justification: This branch (the literal-zero special case) has zero historical coverage
+  (lines 108-109 marked as unexecuted). It is core to numeric parsing and will exercise
+  a distinct path from the current run, which only hit the literal-one special case.
+  Reaching it is straightforward via stdin input and will validate handling of the
+  most common constant value.
+target_path_constraint: |-
+  Constraints to reach parse.c:bc_parse_addNum zero-special-case branch (condition true):
+
+  1. Program invocation via the given harness:
+     - Execute the program as a single executable without any command-line arguments beyond the executable path. The harness runs: ["./temp_executable"]. Ensure the executable starts and reads expressions from standard input (stdin).
+
+  2. Input delivery (stdin stream properties):
+     - Provide a text input stream encoded as ASCII or UTF-8 without BOM.
+     - The input must contain a single arithmetic expression representing the numeric literal zero followed by a line terminator so the lexer obtains a complete token. Acceptable line terminators: "\n" (LF) or "\r\n" (CRLF).
+     - Do not include leading whitespace or a sign before the zero; the parser’s zero-special-case compares the first two characters of the numeric token to a precomputed "0" sequence.
+
+  3. Numeric token format to trigger zero-special-case:
+     - The first character of the numeric token must be the digit '0' (byte value 0x30).
+     - The second character of the numeric token must be the string terminator (nul byte 0x00) from the lexer’s buffer immediately after the digit '0'. In practice, this requires that the token consist of exactly one character: '0'. Any trailing characters like '.', digits, or whitespace must not be part of the token; they must either not exist or be separated by token delimiters so the token is exactly "0".
+     - Do NOT include a sign (+ or -), leading zeros beyond a single '0', a decimal point, exponent, or any suffix. Examples that must be avoided: "00", "0.0", "-0", "+0", "0e0".
+
+  4. Expression structure constraints:
+     - Ensure the input is parsed into a number token; avoid operators or identifiers preceding the zero that could change token boundaries. Providing just the literal zero as the entire expression is sufficient.
+
+  5. Environment constraints:
+     - No environment variables or files are required. Standard input must be readable, and the process must not time out under the provided harness timeout.
+
+  These constraints guarantee that when bc_parse_number calls bc_parse_addNum with the lexer’s current token, the 2-byte comparison against bc_parse_zero succeeds, taking the zero-special-case branch body.
+selected_cnt: 3
+successful_generation_cnt: 3
+exec_code: |
+  import subprocess
+  import signal
+
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      exe = "./temp_executable"
+
+      try:
+          # Provide exactly the literal zero as the entire expression, followed by a newline
+          # This ensures the numeric token is exactly "0" and triggers the zero-special-case path
+          result = subprocess.run(
+              [str(exe)],
+              input="0\n",
+              text=True,
+              capture_output=True,
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+
+      except Exception:
+          raise
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // parse.c (286 lines total)
+
+  #include <assert.h>
+  #include <stddef.h>
+  #include <stdlib.h>
+  #include <string.h>
+
+  #include <limits.h>
+
+  #include <parse.h>
+  #include <program.h>
+  #include <vm.h>
+
+  #include <stdio.h>
+
+  void
+  bc_parse_updateFunc(BcParse* p, size_t fidx)
+  {
+    p->fidx = fidx;
+    p->func = bc_vec_item(&p->prog->fns, fidx);
+  }
+
+  inline void
+  bc_parse_pushName(const BcParse* p, char* name, bool var)
+  {
+    // Unexecuted code (line 59) removed. Its line cov: 0/1 (0%)
+  }
+
+  /**
+   * Updates the function, then pushes the instruction and the index. This is a
+   * convenience function.
+   * @param p     The parser.
+   * @param inst  The instruction to push.
+   * @param idx   The index to push.
+   */
+  static inline void
+  bc_parse_pushInstIdx(BcParse* p, uchar inst, size_t idx)
+  {
+    // Unexecuted code (lines 72-73) removed. Its line cov: 0/2 (0%)
+  }
+
+  void
+  bc_parse_addString(BcParse* p)
+  {
+    // Unexecuted code (lines 79-84) removed. Its line cov: 0/4 (0%)
+  }
+
+  static void
+  bc_parse_addNum(BcParse* p, const char* string)
+  {
+    fprintf(stderr, "\n");
+    BcProgram* prog = p->prog;
+    size_t idx;
+
+    // XXX: This function has an implicit assumption: that string is a valid C
+    // string with a nul terminator. This is because of the unchecked array
+    // accesses below. I can't check this with an assert() because that could
+    // lead to out-of-bounds access.
+    //
+    // XXX: In fact, just for safety's sake, assume that this function needs a
+    // non-empty string with a nul terminator, just in case bc_parse_zero or
+    // bc_parse_one change in the future, which I doubt.
+
+    BC_SIG_ASSERT_LOCKED;
+
+    // Special case 0.
+    if (bc_parse_zero[0] == string[0] && bc_parse_zero[1] == string[1])
+    {
+      // Unexecuted code (lines 108-109) removed. Its line cov: 0/2 (0%)
+    }
+
+    // Special case 1.
+    if (bc_parse_one[0] == string[0] && bc_parse_one[1] == string[1])
+    {
+      bc_parse_push(p, BC_INST_ONE);
+      return;
+    }
+
+    if (bc_map_insert(&prog->const_map, string, prog->consts.len, &idx))
+    {
+      // Unexecuted code (lines 121-137) removed. Its line cov: 0/13 (0%)
+    }
+    else
+    {
+      // Unexecuted code (lines 141-142) removed. Its line cov: 0/2 (0%)
+    }
+
+    // Unexecuted code (line 145) removed. Its line cov: 0/1 (0%)
+  }
+
+  void
+  bc_parse_number(BcParse* p)
+  {
+  #if BC_ENABLE_EXTRA_MATH
+    char* exp = strchr(p->l.str.v, 'e');
+    size_t idx = SIZE_MAX;
+
+    // Do we have a number in scientific notation? If so, add a nul byte where
+    // the e is.
+    if (exp != NULL)
+    {
+      // Unexecuted code (lines 159-160) removed. Its line cov: 0/2 (0%)
+    }
+  #endif // BC_ENABLE_EXTRA_MATH
+
+    bc_parse_addNum(p, p->l.str.v);
+
+  #if BC_ENABLE_EXTRA_MATH
+    // If we have a number in scientific notation...
+    if (exp != NULL)
+    {
+      // Unexecuted code (lines 170-177) removed. Its line cov: 0/6 (0%)
+    }
+  #endif // BC_ENABLE_EXTRA_MATH
+  }
+
+  void
+  bc_parse_text(BcParse* p, const char* text, BcMode mode)
+  {
+    BC_SIG_LOCK;
+
+    // Make sure the pointer isn't invalidated.
+    p->func = bc_vec_item(&p->prog->fns, p->fidx);
+    bc_lex_text(&p->l, text, mode);
+
+    BC_SIG_UNLOCK;
+  }
+
+  void
+  bc_parse_reset(BcParse* p)
+  {
+    // Unexecuted code (lines 197-229) removed. Its line cov: 0/28 (0%)
+  }
+  #if BC_DEBUG
+  void
+  bc_parse_free(BcParse* p)
+  {
+  	// Unexecuted code (lines 235-237) removed. Its line cov: 0/2 (0%)
+
+  #if BC_ENABLED
+  	if (BC_IS_BC)
+  	{
+  		// Unexecuted code (lines 242-246) removed. Its line cov: 0/5 (0%)
+  	}
+  #endif // BC_ENABLED
+
+  	// Unexecuted code (line 250) removed. Its line cov: 0/1 (0%)
+  }
+  #endif // BC_DEBUG
+
+  void
+  bc_parse_init(BcParse* p, BcProgram* prog, size_t func)
+  {
+  #if BC_ENABLED
+  	uint16_t flag = 0;
+  #endif // BC_ENABLED
+
+  	BC_SIG_ASSERT_LOCKED;
+
+  	assert(p != NULL && prog != NULL);
+
+  #if BC_ENABLED
+  	if (BC_IS_BC)
+  	{
+  		// We always want at least one flag set on the flags stack.
+  		bc_vec_init(&p->flags, sizeof(uint16_t), BC_DTOR_NONE);
+  		bc_vec_push(&p->flags, &flag);
+
+  		bc_vec_init(&p->exits, sizeof(BcInstPtr), BC_DTOR_NONE);
+  		bc_vec_init(&p->conds, sizeof(size_t), BC_DTOR_NONE);
+  		bc_vec_init(&p->ops, sizeof(BcLexType), BC_DTOR_NONE);
+  		bc_vec_init(&p->buf, sizeof(char), BC_DTOR_NONE);
+
+  		p->auto_part = false;
+  	}
+  #endif // BC_ENABLED
+
+  	bc_lex_init(&p->l);
+
+  	// Set up the function.
+  	p->prog = prog;
+  	bc_parse_updateFunc(p, func);
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [parse.c] enter bc_parse_init 1
+  [parse.c] enter bc_parse_init 2
+  [parse.c] enter bc_parse_init 3
+  [parse.c] enter bc_parse_updateFunc 1
+  [parse.c] enter bc_parse_text 1
+  [parse.c] enter bc_parse_number 1
+
+  [parse.c] enter bc_parse_addNum 2
+execution_summary: |2+
+
+  ```c
+  // parse.c (286 lines total)
+
+  #include <assert.h>
+  #include <stddef.h>
+  #include <stdlib.h>
+  #include <string.h>
+
+  #include <limits.h>
+
+  #include <parse.h>
+  #include <program.h>
+  #include <vm.h>
+
+  #include <stdio.h>
+
+  void
+  bc_parse_updateFunc(BcParse* p, size_t fidx)
+  {
+    p->fidx = fidx;
+    p->func = bc_vec_item(&p->prog->fns, fidx);
+  }
+
+  inline void
+  bc_parse_pushName(const BcParse* p, char* name, bool var)
+  {
+    // Unexecuted code (line 59) removed. Its line cov: 0/1 (0%)
+  }
+
+  /**
+   * Updates the function, then pushes the instruction and the index. This is a
+   * convenience function.
+   * @param p     The parser.
+   * @param inst  The instruction to push.
+   * @param idx   The index to push.
+   */
+  static inline void
+  bc_parse_pushInstIdx(BcParse* p, uchar inst, size_t idx)
+  {
+    // Unexecuted code (lines 72-73) removed. Its line cov: 0/2 (0%)
+  }
+
+  void
+  bc_parse_addString(BcParse* p)
+  {
+    // Unexecuted code (lines 79-84) removed. Its line cov: 0/4 (0%)
+  }
+
+  static void
+  bc_parse_addNum(BcParse* p, const char* string)
+  {
+    fprintf(stderr, "\n");
+    BcProgram* prog = p->prog;
+    size_t idx;
+
+    // XXX: This function has an implicit assumption: that string is a valid C
+    // string with a nul terminator. This is because of the unchecked array
+    // accesses below. I can't check this with an assert() because that could
+    // lead to out-of-bounds access.
+    //
+    // XXX: In fact, just for safety's sake, assume that this function needs a
+    // non-empty string with a nul terminator, just in case bc_parse_zero or
+    // bc_parse_one change in the future, which I doubt.
+
+    BC_SIG_ASSERT_LOCKED;
+
+    // Special case 0.
+    if (bc_parse_zero[0] == string[0] && bc_parse_zero[1] == string[1])
+    {
+      bc_parse_push(p, BC_INST_ZERO);
+      return;
+    }
+
+    // Special case 1.
+    if (bc_parse_one[0] == string[0] && bc_parse_one[1] == string[1])
+    {
+      // Unexecuted code (lines 115-116) removed. Its line cov: 2/2 (100%)
+    }
+
+    if (bc_map_insert(&prog->const_map, string, prog->consts.len, &idx))
+    {
+      // Unexecuted code (lines 121-137) removed. Its line cov: 0/13 (0%)
+    }
+    else
+    {
+      // Unexecuted code (lines 141-142) removed. Its line cov: 0/2 (0%)
+    }
+
+    // Unexecuted code (line 145) removed. Its line cov: 0/1 (0%)
+  }
+
+  void
+  bc_parse_number(BcParse* p)
+  {
+  #if BC_ENABLE_EXTRA_MATH
+    char* exp = strchr(p->l.str.v, 'e');
+    size_t idx = SIZE_MAX;
+
+    // Do we have a number in scientific notation? If so, add a nul byte where
+    // the e is.
+    if (exp != NULL)
+    {
+      // Unexecuted code (lines 159-160) removed. Its line cov: 0/2 (0%)
+    }
+  #endif // BC_ENABLE_EXTRA_MATH
+
+    bc_parse_addNum(p, p->l.str.v);
+
+  #if BC_ENABLE_EXTRA_MATH
+    // If we have a number in scientific notation...
+    if (exp != NULL)
+    {
+      // Unexecuted code (lines 170-177) removed. Its line cov: 0/6 (0%)
+    }
+  #endif // BC_ENABLE_EXTRA_MATH
+  }
+
+  void
+  bc_parse_text(BcParse* p, const char* text, BcMode mode)
+  {
+    BC_SIG_LOCK;
+
+    // Make sure the pointer isn't invalidated.
+    p->func = bc_vec_item(&p->prog->fns, p->fidx);
+    bc_lex_text(&p->l, text, mode);
+
+    BC_SIG_UNLOCK;
+  }
+
+  void
+  bc_parse_reset(BcParse* p)
+  {
+    // Unexecuted code (lines 197-229) removed. Its line cov: 0/28 (0%)
+  }
+  #if BC_DEBUG
+  void
+  bc_parse_free(BcParse* p)
+  {
+  	// Unexecuted code (lines 235-237) removed. Its line cov: 0/2 (0%)
+
+  #if BC_ENABLED
+  	if (BC_IS_BC)
+  	{
+  		// Unexecuted code (lines 242-246) removed. Its line cov: 0/5 (0%)
+  	}
+  #endif // BC_ENABLED
+
+  	// Unexecuted code (line 250) removed. Its line cov: 0/1 (0%)
+  }
+  #endif // BC_DEBUG
+
+  void
+  bc_parse_init(BcParse* p, BcProgram* prog, size_t func)
+  {
+  #if BC_ENABLED
+  	uint16_t flag = 0;
+  #endif // BC_ENABLED
+
+  	BC_SIG_ASSERT_LOCKED;
+
+  	assert(p != NULL && prog != NULL);
+
+  #if BC_ENABLED
+  	if (BC_IS_BC)
+  	{
+  		// We always want at least one flag set on the flags stack.
+  		bc_vec_init(&p->flags, sizeof(uint16_t), BC_DTOR_NONE);
+  		bc_vec_push(&p->flags, &flag);
+
+  		bc_vec_init(&p->exits, sizeof(BcInstPtr), BC_DTOR_NONE);
+  		bc_vec_init(&p->conds, sizeof(size_t), BC_DTOR_NONE);
+  		bc_vec_init(&p->ops, sizeof(BcLexType), BC_DTOR_NONE);
+  		bc_vec_init(&p->buf, sizeof(char), BC_DTOR_NONE);
+
+  		p->auto_part = false;
+  	}
+  #endif // BC_ENABLED
+
+  	bc_lex_init(&p->l);
+
+  	// Set up the function.
+  	p->prog = prog;
+  	bc_parse_updateFunc(p, func);
+  }
+  ```
+
+src_exec_code: |-
+  import subprocess
+  import signal
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      exe = "./temp_executable"
+
+      try:
+          result = subprocess.run(
+              [str(exe)],              # no -e
+              input="1+1\n",           # pass expression via stdin
+              text=True,
+              capture_output=True,
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+
+      except Exception:
+          raise
+src_execution_trace: |
+  [parse.c] enter bc_parse_init 1
+  [parse.c] enter bc_parse_init 2
+  [parse.c] enter bc_parse_init 3
+  [parse.c] enter bc_parse_updateFunc 1
+  [parse.c] enter bc_parse_text 1
+  [parse.c] enter bc_parse_number 1
+
+  [parse.c] enter bc_parse_addNum 3
+  [parse.c] enter bc_parse_number 1
+
+  [parse.c] enter bc_parse_addNum 3

@@ -1,0 +1,834 @@
+id: 4
+src_id: 2
+create_time: '2026-01-10 23:28:58.318'
+time_taken: 788
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 26
+is_satisfiable: true
+is_crash: false
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $1.39640000
+    call_cnt: 4
+    latency: 124.89s
+    input_tokens: 27892
+    output_tokens: 13976
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $1.18322000
+      call_cnt: 3
+      latency: 99.92s
+      input_tokens: 24970
+      output_tokens: 11397
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.13974000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    request_code:
+      model: gpt-5
+      cost: $0.40140000
+      call_cnt: 1
+      latency: 31.22s
+      input_tokens: 6987
+      output_tokens: 3728
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.60164000
+      call_cnt: 1
+      latency: 58.06s
+      input_tokens: 8886
+      output_tokens: 6995
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.04044000
+      call_cnt: 1
+      latency: 10.64s
+      input_tokens: 9097
+      output_tokens: 674
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.21318000
+      call_cnt: 1
+      latency: 24.97s
+      input_tokens: 2922
+      output_tokens: 2579
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05844000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.15474000
+      call_cnt: 1
+      latency: 24.97s
+      input_tokens: 2922
+      output_tokens: 2579
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: "lex.c: bc_lex_num() -> take the true branch of `if (c == '\\')` inside
+  the number-scanning loop (enter the line-continuation handling for numbers)"
+target_file_lines: lex.c:177-186
+target_lines_content: |
+  			i += 2;
+
+  			// Make sure to eat whitespace at the beginning of the line.
+  			while (isspace(buf[i]) && buf[i] != '\n')
+  			{
+  				i += 1;
+  			}
+
+  			c = buf[i];
+justification: This branch protects a large, complex block (lines 173-201) with 0/22
+  (0%) historical coverage. Exercising the line-continuation logic within numeric
+  literals will trigger previously untested behaviors of the lexer and substantially
+  improve coverage, and it is reachable purely via stdin input under the current harness.
+target_path_constraint: |
+  Chronological constraints to reach bc_lex_num() branch where c == '\' inside the numeric scanning loop:
+
+  1. Program invocation (command-line):
+     - Execute the binary with no command-line arguments beyond the program path.
+     - Provide all input via standard input (stdin). No files or environment variables are required.
+
+  2. Lexing mode and initial input requirements:
+     - The lexer must be initialized to read from stdin and to start lexing text that begins with a numeric token (a number literal). This ensures the lexer calls bc_lex_number() which then calls bc_lex_num().
+     - Therefore, the first non-whitespace characters in stdin must start a number literal according to typical C/BC-style numeric grammar: one of:
+       a) A digit '0'–'9', or
+       b) A dot '.' followed by a digit to represent a fractional number.
+
+  3. Numeric literal structure to force entering the line-continuation path:
+     - Within the numeric literal, include a backslash character '\\' immediately followed by a newline character '\n'. This pair must appear while still lexing the same number literal.
+     - The newline must be LF (ASCII 0x0A). No carriage return (CR) should precede LF; i.e., avoid "\r\n" sequences.
+     - After the backslash-newline pair, the next character must be a valid numeric character per the lexer’s number rules, so that bc_lex_num() continues scanning the same number instead of bailing. Valid characters at this point include digits '0'–'9', a single radix point '.', or exponent notation if supported by the configuration; however, to avoid relying on optional features, prefer a digit.
+
+  4. Continuity and termination of the number token:
+     - Ensure that the number token continues with valid numeric characters after the backslash-newline sequence (at least one digit), so the loop body that handles the line continuation is executed and the scan proceeds.
+     - The numeric token should end with a character that is not part of a number (e.g., whitespace or an operator) or EOF, allowing the lexer to finalize the token without errors.
+
+  5. Input stream formatting constraints:
+     - Do not include a block comment opener "/*" before the numeric token; comments would divert control to bc_lex_comment() and bypass bc_lex_num().
+     - Avoid starting the input with identifiers or non-numeric punctuation that would route lexing to bc_lex_name() or bc_lex_invalidChar().
+     - Use plain ASCII; avoid non-ASCII bytes that could be treated as invalid characters.
+
+  6. Summary of the required stdin content properties (not a concrete example):
+     - Begins with optional ASCII whitespace only, then a number-start character (digit or "." followed by digit).
+     - Contains, within that same number token, the exact two-character sequence backslash then newline, followed immediately by at least one digit.
+     - After the continued digits, ends the token with whitespace, operator, or EOF.
+selected_cnt: 0
+successful_generation_cnt: 0
+exec_code: |
+  import subprocess
+  import signal
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      exe = "./temp_executable"
+
+      # Construct stdin to start with a number, include a backslash-newline within the same number,
+      # then continue with at least one digit, and terminate the token with whitespace.
+      # This satisfies: starts numeric -> encounters '\n' continuation inside number -> continues scanning digits -> token ends.
+      stdin_data = "1\\\n2 "  # "1", then backslash+LF, then digit "2", then a space to end the number token
+
+      try:
+          result = subprocess.run(
+              [str(exe)],              # no additional command-line arguments
+              input=stdin_data,        # pass expression via stdin
+              text=True,
+              capture_output=True,
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+
+      except subprocess.TimeoutExpired as e:
+          return (e.stderr if e.stderr is not None else ""), -signal.SIGKILL
+
+      except Exception:
+          raise
+returncode: 0
+src_execution_summary: |2+
+
+  ```c
+  // lex.c (417 lines total)
+
+  #include <assert.h>
+  #include <ctype.h>
+  #include <stdbool.h>
+  #include <string.h>
+  #include <stdio.h>
+
+  #include <lex.h>
+  #include <vm.h>
+  #include <bc.h>
+
+  void
+  bc_lex_invalidChar(BcLex* l, char c)
+  {
+  	// Unexecuted code (lines 49-50) removed. Its line cov: 0/2 (0%)
+  }
+
+  void
+  bc_lex_lineComment(BcLex* l)
+  {
+  	// Unexecuted code (lines 56-60) removed. Its line cov: 0/5 (0%)
+  }
+
+  void
+  bc_lex_comment(BcLex* l)
+  {
+  	size_t i, nlines = 0;
+  	const char* buf;
+  	bool end = false, got_more;
+  	char c;
+
+  	l->i += 1;
+  	l->t = BC_LEX_WHITESPACE;
+
+  	// This loop is complex because it might need to request more data from
+  	// stdin if the comment is not ended. This loop is taken until the comment
+  	// is finished or we have EOF.
+  	do
+  	{
+  		buf = l->buf;
+  		got_more = false;
+
+  		// If we are in stdin mode, the buffer must be the one used for stdin.
+  #if !BC_ENABLE_OSSFUZZ
+  		assert(vm->mode != BC_MODE_STDIN || buf == vm->buffer.v);
+  #endif // !BC_ENABLE_OSSFUZZ
+
+  		// Find the end of the comment.
+  		for (i = l->i; !end; i += !end)
+  		{
+  			// While we don't have an asterisk, eat, but increment nlines.
+  			for (; (c = buf[i]) && c != '*'; ++i)
+  			{
+  				// Unexecuted code (line 93) removed. Its line cov: 1/1 (100%)
+  			}
+
+  			// If this is true, we need to request more data.
+  			if (BC_ERR(!c || buf[i + 1] == '\0'))
+  			{
+  #if !BC_ENABLE_OSSFUZZ
+  				// Read more, if possible.
+  				if (!vm->eof && l->mode != BC_MODE_FILE)
+  				{
+  					// Unexecuted code (line 103) removed. Its line cov: 1/1 (100%)
+  				}
+  #endif // !BC_ENABLE_OSSFUZZ
+
+  				break;
+  			}
+
+  			// If this turns true, we found the end. Yay!
+  			// Unexecuted code (line 111) removed. Its line cov: 1/1 (100%)
+  		}
+  	}
+  	while (got_more && !end);
+
+  	// If we didn't find the end, barf.
+  	fprintf(stderr, "\n");
+  	if (!end)
+  	{
+  		l->i = i;
+  		bc_lex_err(l, BC_ERR_PARSE_COMMENT);
+  	}
+
+  	// Unexecuted code (lines 124-125) removed. Its line cov: 2/2 (100%)
+  }
+
+  void
+  bc_lex_whitespace(BcLex* l)
+  {
+  	// Unexecuted code (lines 131-133) removed. Its line cov: 0/2 (0%)
+
+  	// Eat. We don't eat newlines because they can be special.
+  	// Unexecuted code (lines 136-139) removed. Its line cov: 0/4 (0%)
+  }
+
+  void
+  bc_lex_commonTokens(BcLex* l, char c)
+  {
+  	// Unexecuted code (lines 145-147) removed. Its line cov: 3/3 (100%)
+  }
+
+  /**
+   * Parses a number.
+   * @param l         The lexer.
+   * @param start     The start character.
+   * @param int_only  Whether this function should only look for an integer. This
+   *                  is used to implement the exponent of scientific notation.
+   */
+  static size_t
+  bc_lex_num(BcLex* l, char start, bool int_only)
+  {
+  	// Unexecuted code (lines 160-163) removed. Its line cov: 4/4 (100%)
+
+  	// This loop looks complex. It is not. It is asking if the character is not
+  	// a nul byte and it if it a valid num character based on what we have found
+  	// thus far, or whether it is a backslash followed by a newline. I can do
+  	// i+1 on the buffer because the buffer must have a nul byte.
+  	for (i = 0; (c = buf[i]) && (BC_LEX_NUM_CHAR(c, pt, int_only) ||
+  	                             (c == '\\' && buf[i + 1] == '\n'));
+  	     ++i)
+  	{
+  		// Unexecuted code (lines 173-201) removed. Its line cov: 0/22 (0%)
+  	}
+
+  	// Unexecuted code (line 204) removed. Its line cov: 1/1 (100%)
+  }
+
+  void
+  bc_lex_number(BcLex* l, char start)
+  {
+  	// Unexecuted code (lines 210-217) removed. Its line cov: 6/6 (100%)
+
+  #if BC_ENABLE_EXTRA_MATH
+  	{
+  		// Unexecuted code (lines 221-252) removed. Its line cov: 24/27 (89%)
+  	}
+  #endif // BC_ENABLE_EXTRA_MATH
+
+  	// Unexecuted code (line 256) removed. Its line cov: 1/1 (100%)
+  }
+
+  void
+  bc_lex_name(BcLex* l)
+  {
+  	// Unexecuted code (lines 262-266) removed. Its line cov: 0/4 (0%)
+
+  	// Should be obvious. It's looking for valid characters.
+  	while ((c >= 'a' && c <= 'z') || isdigit(c) || c == '_')
+  	{
+  		// Unexecuted code (line 271) removed. Its line cov: 0/1 (0%)
+  	}
+
+  	// Unexecuted code (lines 274-278) removed. Its line cov: 0/4 (0%)
+  }
+
+  void
+  bc_lex_init(BcLex* l)
+  {
+  	BC_SIG_ASSERT_LOCKED;
+  	assert(l != NULL);
+  	bc_vec_init(&l->str, sizeof(char), BC_DTOR_NONE);
+  }
+
+  void
+  bc_lex_free(BcLex* l)
+  {
+  	// Unexecuted code (lines 292-294) removed. Its line cov: 0/3 (0%)
+  }
+
+  void
+  bc_lex_file(BcLex* l, const char* file)
+  {
+  	assert(l != NULL && file != NULL);
+  	l->line = 1;
+  	vm->file = file;
+  }
+
+  void
+  bc_lex_next(BcLex* l)
+  {
+  	BC_SIG_ASSERT_LOCKED;
+
+  	assert(l != NULL);
+
+  	l->last = l->t;
+
+  	// If this wasn't here, the line number would be off.
+  	l->line += (l->i != 0 && l->buf[l->i - 1] == '\n');
+
+  	// If the last token was EOF, someone called this one too many times.
+  	if (BC_ERR(l->last == BC_LEX_EOF))
+  	{
+  		// Unexecuted code (line 320) removed. Its line cov: 0/1 (0%)
+  	}
+
+  	l->t = BC_LEX_EOF;
+
+  	// We are done if this is true.
+  	if (l->i == l->len)
+  	{
+  		// Unexecuted code (line 328) removed. Its line cov: 1/1 (100%)
+  	}
+
+  	// Loop until failure or we don't have whitespace. This
+  	// is so the parser doesn't get inundated with whitespace.
+  	do
+  	{
+  		vm->next(l);
+  	}
+  	while (l->t == BC_LEX_WHITESPACE);
+  }
+
+  /**
+   * Updates the buffer and len so that they are not invalidated when the stdin
+   * buffer grows.
+   * @param l     The lexer.
+   * @param text  The text.
+   * @param len   The length of the text.
+   */
+  static void
+  bc_lex_fixText(BcLex* l, const char* text, size_t len)
+  {
+  	l->buf = text;
+  	l->len = len;
+  }
+  bool
+  bc_lex_readLine(BcLex* l)
+  {
+  	// Unexecuted code (lines 356-360) removed. Its line cov: 4/4 (100%)
+
+  	// Make sure we read from the appropriate place.
+  	switch (l->mode)
+  	{
+  		case BC_MODE_EXPRS:
+  		{
+  			// Unexecuted code (lines 367-368) removed. Its line cov: 0/2 (0%)
+  		}
+
+  		case BC_MODE_FILE:
+  		{
+  			// Unexecuted code (lines 373-374) removed. Its line cov: 0/2 (0%)
+  		}
+
+  #if !BC_ENABLE_OSSFUZZ
+
+  		case BC_MODE_STDIN:
+  		{
+  			// Unexecuted code (lines 381-382) removed. Its line cov: 2/2 (100%)
+  		}
+
+  #endif // !BC_ENABLE_OSSFUZZ
+
+  #ifdef __GNUC__
+  #ifndef __clang__
+  		default:
+  		{
+  			// Unexecuted code (lines 391-392) removed. Its line cov: 0/2 (0%)
+  		}
+  #endif // __clang__
+  #endif // __GNUC__
+  	}
+  	// Unexecuted code (lines 397-401) removed. Its line cov: 3/3 (100%)
+  }
+
+  void
+  bc_lex_text(BcLex* l, const char* text, BcMode mode)
+  {
+  	BC_SIG_ASSERT_LOCKED;
+
+  	assert(l != NULL && text != NULL);
+
+  	bc_lex_fixText(l, text, strlen(text));
+  	l->i = 0;
+  	l->t = l->last = BC_LEX_INVALID;
+  	l->mode = mode;
+
+  	bc_lex_next(l);
+  }
+  ```
+
+crash_info:
+execution_trace: |
+  [lex.c] enter bc_lex_init 1
+  [lex.c] enter bc_lex_file 1
+  [lex.c] enter bc_lex_text 1
+  [lex.c] enter bc_lex_fixText 1
+  [lex.c] enter bc_lex_next 1
+  [lex.c] enter bc_lex_next 3
+  [lex.c] enter bc_lex_next 5
+  [lex.c] enter bc_lex_next 6
+  [lex.c] enter bc_lex_number 1
+  [lex.c] enter bc_lex_num 1
+  [lex.c] enter bc_lex_num 2
+  [lex.c] enter bc_lex_num 3
+  [lex.c] enter bc_lex_num 5
+  [lex.c] enter bc_lex_num 6
+  [lex.c] enter bc_lex_number 2
+  [lex.c] enter bc_lex_number 7
+  [lex.c] enter bc_lex_next 1
+  [lex.c] enter bc_lex_next 3
+  [lex.c] enter bc_lex_next 5
+  [lex.c] enter bc_lex_next 6
+  [lex.c] enter bc_lex_commonTokens 1
+  [lex.c] enter bc_lex_whitespace 1
+  [lex.c] enter bc_lex_whitespace 2
+  [lex.c] enter bc_lex_next 6
+  [lex.c] enter bc_lex_commonTokens 1
+execution_summary: |2+
+
+  ```c
+  // lex.c (417 lines total)
+
+  #include <assert.h>
+  #include <ctype.h>
+  #include <stdbool.h>
+  #include <string.h>
+  #include <stdio.h>
+
+  #include <lex.h>
+  #include <vm.h>
+  #include <bc.h>
+
+  void
+  bc_lex_invalidChar(BcLex* l, char c)
+  {
+  	// Unexecuted code (lines 49-50) removed. Its line cov: 0/2 (0%)
+  }
+
+  void
+  bc_lex_lineComment(BcLex* l)
+  {
+  	// Unexecuted code (lines 56-60) removed. Its line cov: 0/5 (0%)
+  }
+
+  void
+  bc_lex_comment(BcLex* l)
+  {
+  	// Unexecuted code (lines 66-72) removed. Its line cov: 6/6 (100%)
+
+  	// This loop is complex because it might need to request more data from
+  	// stdin if the comment is not ended. This loop is taken until the comment
+  	// is finished or we have EOF.
+  	// Unexecuted code (lines 77-114) removed. Its line cov: 33/33 (100%)
+
+  	// If we didn't find the end, barf.
+  	fprintf(stderr, "\n");
+  	if (!end)
+  	{
+  		// Unexecuted code (lines 120-121) removed. Its line cov: 2/2 (100%)
+  	}
+
+  	// Unexecuted code (lines 124-125) removed. Its line cov: 2/2 (100%)
+  }
+
+  void
+  bc_lex_whitespace(BcLex* l)
+  {
+  	char c;
+
+  	l->t = BC_LEX_WHITESPACE;
+
+  	// Eat. We don't eat newlines because they can be special.
+  	for (c = l->buf[l->i]; c != '\n' && isspace(c); c = l->buf[++l->i])
+  	{
+  		// Unexecuted code (line 138) removed. Its line cov: 0/1 (0%)
+  	}
+  }
+
+  void
+  bc_lex_commonTokens(BcLex* l, char c)
+  {
+  	if (!c) l->t = BC_LEX_EOF;
+  	else if (c == '\n') l->t = BC_LEX_NLINE;
+  	else bc_lex_whitespace(l);
+  }
+
+  /**
+   * Parses a number.
+   * @param l         The lexer.
+   * @param start     The start character.
+   * @param int_only  Whether this function should only look for an integer. This
+   *                  is used to implement the exponent of scientific notation.
+   */
+  static size_t
+  bc_lex_num(BcLex* l, char start, bool int_only)
+  {
+  	const char* buf = l->buf + l->i;
+  	size_t i;
+  	char c;
+  	bool last_pt, pt = (start == '.');
+
+  	// This loop looks complex. It is not. It is asking if the character is not
+  	// a nul byte and it if it a valid num character based on what we have found
+  	// thus far, or whether it is a backslash followed by a newline. I can do
+  	// i+1 on the buffer because the buffer must have a nul byte.
+  	for (i = 0; (c = buf[i]) && (BC_LEX_NUM_CHAR(c, pt, int_only) ||
+  	                             (c == '\\' && buf[i + 1] == '\n'));
+  	     ++i)
+  	{
+  		// I don't need to test that the next character is a newline because
+  		// the loop condition above ensures that.
+  		if (c == '\\')
+  		{
+  			i += 2;
+
+  			// Make sure to eat whitespace at the beginning of the line.
+  			while (isspace(buf[i]) && buf[i] != '\n')
+  			{
+  				// Unexecuted code (line 182) removed. Its line cov: 0/1 (0%)
+  			}
+
+  			c = buf[i];
+
+  			// If the next character is not a number character, bail.
+  			if (!BC_LEX_NUM_CHAR(c, pt, int_only)) break;
+  		}
+
+  		// Did we find the radix point?
+  		last_pt = (c == '.');
+
+  		// If we did, and we already have one, then break because it's not part
+  		// of this number.
+  		if (pt && last_pt) break;
+
+  		// Set whether we have found a radix point.
+  		pt = pt || last_pt;
+
+  		bc_vec_push(&l->str, &c);
+  	}
+
+  	return i;
+  }
+
+  void
+  bc_lex_number(BcLex* l, char start)
+  {
+  	l->t = BC_LEX_NUMBER;
+
+  	// Make sure the string is clear.
+  	bc_vec_popAll(&l->str);
+  	bc_vec_push(&l->str, &start);
+
+  	// Parse the number.
+  	l->i += bc_lex_num(l, start, false);
+
+  #if BC_ENABLE_EXTRA_MATH
+  	{
+  		char c = l->buf[l->i];
+
+  		// Do we have a number in scientific notation?
+  		if (c == 'e')
+  		{
+  // Unexecuted code (lines 226-251) removed. Its line cov: 19/22 (86%)
+  		}
+  	}
+  #endif // BC_ENABLE_EXTRA_MATH
+
+  	bc_vec_pushByte(&l->str, '\0');
+  }
+
+  void
+  bc_lex_name(BcLex* l)
+  {
+  	// Unexecuted code (lines 262-266) removed. Its line cov: 0/4 (0%)
+
+  	// Should be obvious. It's looking for valid characters.
+  	while ((c >= 'a' && c <= 'z') || isdigit(c) || c == '_')
+  	{
+  		// Unexecuted code (line 271) removed. Its line cov: 0/1 (0%)
+  	}
+
+  	// Unexecuted code (lines 274-278) removed. Its line cov: 0/4 (0%)
+  }
+
+  void
+  bc_lex_init(BcLex* l)
+  {
+  	BC_SIG_ASSERT_LOCKED;
+  	assert(l != NULL);
+  	bc_vec_init(&l->str, sizeof(char), BC_DTOR_NONE);
+  }
+
+  void
+  bc_lex_free(BcLex* l)
+  {
+  	// Unexecuted code (lines 292-294) removed. Its line cov: 0/3 (0%)
+  }
+
+  void
+  bc_lex_file(BcLex* l, const char* file)
+  {
+  	assert(l != NULL && file != NULL);
+  	l->line = 1;
+  	vm->file = file;
+  }
+
+  void
+  bc_lex_next(BcLex* l)
+  {
+  	BC_SIG_ASSERT_LOCKED;
+
+  	assert(l != NULL);
+
+  	l->last = l->t;
+
+  	// If this wasn't here, the line number would be off.
+  	l->line += (l->i != 0 && l->buf[l->i - 1] == '\n');
+
+  	// If the last token was EOF, someone called this one too many times.
+  	if (BC_ERR(l->last == BC_LEX_EOF))
+  	{
+  		// Unexecuted code (line 320) removed. Its line cov: 0/1 (0%)
+  	}
+
+  	l->t = BC_LEX_EOF;
+
+  	// We are done if this is true.
+  	if (l->i == l->len)
+  	{
+  		// Unexecuted code (line 328) removed. Its line cov: 1/1 (100%)
+  	}
+
+  	// Loop until failure or we don't have whitespace. This
+  	// is so the parser doesn't get inundated with whitespace.
+  	do
+  	{
+  		vm->next(l);
+  	}
+  	while (l->t == BC_LEX_WHITESPACE);
+  }
+
+  /**
+   * Updates the buffer and len so that they are not invalidated when the stdin
+   * buffer grows.
+   * @param l     The lexer.
+   * @param text  The text.
+   * @param len   The length of the text.
+   */
+  static void
+  bc_lex_fixText(BcLex* l, const char* text, size_t len)
+  {
+  	l->buf = text;
+  	l->len = len;
+  }
+  bool
+  bc_lex_readLine(BcLex* l)
+  {
+  	// Unexecuted code (lines 356-360) removed. Its line cov: 4/4 (100%)
+
+  	// Make sure we read from the appropriate place.
+  	switch (l->mode)
+  	{
+  		case BC_MODE_EXPRS:
+  		{
+  			// Unexecuted code (lines 367-368) removed. Its line cov: 0/2 (0%)
+  		}
+
+  		case BC_MODE_FILE:
+  		{
+  			// Unexecuted code (lines 373-374) removed. Its line cov: 0/2 (0%)
+  		}
+
+  #if !BC_ENABLE_OSSFUZZ
+
+  		case BC_MODE_STDIN:
+  		{
+  			// Unexecuted code (lines 381-382) removed. Its line cov: 2/2 (100%)
+  		}
+
+  #endif // !BC_ENABLE_OSSFUZZ
+
+  #ifdef __GNUC__
+  #ifndef __clang__
+  		default:
+  		{
+  			// Unexecuted code (lines 391-392) removed. Its line cov: 0/2 (0%)
+  		}
+  #endif // __clang__
+  #endif // __GNUC__
+  	}
+  	// Unexecuted code (lines 397-401) removed. Its line cov: 3/3 (100%)
+  }
+
+  void
+  bc_lex_text(BcLex* l, const char* text, BcMode mode)
+  {
+  	BC_SIG_ASSERT_LOCKED;
+
+  	assert(l != NULL && text != NULL);
+
+  	bc_lex_fixText(l, text, strlen(text));
+  	l->i = 0;
+  	l->t = l->last = BC_LEX_INVALID;
+  	l->mode = mode;
+
+  	bc_lex_next(l);
+  }
+  ```
+
+src_exec_code: |
+  import subprocess
+  import signal
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      exe = "./temp_executable"
+
+      try:
+          # Provide stdin that begins with "/*" and contains no closing "*/" before EOF.
+          # Minimal satisfier: exactly two bytes "/" and "*" with no trailing newline.
+          stdin_data = "/*"
+          result = subprocess.run(
+              [str(exe)],              # no additional command-line arguments
+              input=stdin_data,        # pass expression via stdin
+              text=True,
+              capture_output=True,
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+
+      except subprocess.TimeoutExpired as e:
+          return (e.stderr if e.stderr is not None else ""), -signal.SIGKILL
+
+      except Exception:
+          raise
+src_execution_trace: |+
+  [lex.c] enter bc_lex_init 1
+  [lex.c] enter bc_lex_file 1
+  [lex.c] enter bc_lex_text 1
+  [lex.c] enter bc_lex_fixText 1
+  [lex.c] enter bc_lex_next 1
+  [lex.c] enter bc_lex_next 3
+  [lex.c] enter bc_lex_next 5
+  [lex.c] enter bc_lex_next 6
+  [lex.c] enter bc_lex_comment 1
+  [lex.c] enter bc_lex_comment 2
+  [lex.c] enter bc_lex_comment 3
+  [lex.c] enter bc_lex_comment 4
+  [lex.c] enter bc_lex_comment 5
+  [lex.c] enter bc_lex_comment 6
+  [lex.c] enter bc_lex_comment 8
+
+  [lex.c] enter bc_lex_comment 12
+
+  Parse error: comment end cannot be found
+      <stdin>:1
+
+...

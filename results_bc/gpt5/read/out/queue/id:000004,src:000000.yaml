@@ -1,0 +1,739 @@
+id: 4
+src_id: 0
+create_time: '2026-01-10 23:56:17.447'
+time_taken: 609
+states:
+  - SELECT
+  - SUMMARIZE
+  - SOLVE
+  - EXECUTE
+  - FINISHED
+is_target_covered: true
+new_coverage: true
+newly_covered_lines: 2
+is_satisfiable: true
+is_crash: true
+is_hang: false
+usage: |
+  TOTAL:
+    model: gpt-5
+    cost: $0.83002000
+    call_cnt: 3
+    latency: 77.71s
+    input_tokens: 16343
+    output_tokens: 8386
+    cache_read_tokens: 0
+    cache_write_tokens: 0
+  SELECT:
+    TOTAL: {}
+  SUMMARIZE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.67506000
+      call_cnt: 2
+      latency: 61.47s
+      input_tokens: 13530
+      output_tokens: 6741
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.13338000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    select_target_branch:
+      model: gpt-5
+      cost: $0.50688000
+      call_cnt: 1
+      latency: 54.86s
+      input_tokens: 6669
+      output_tokens: 6161
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    generate_path_constraint:
+      model: gpt-5
+      cost: $0.03480000
+      call_cnt: 1
+      latency: 6.62s
+      input_tokens: 6861
+      output_tokens: 580
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  SOLVE:
+    TOTAL:
+      model: gpt-5
+      cost: $0.15496000
+      call_cnt: 1
+      latency: 16.24s
+      input_tokens: 2813
+      output_tokens: 1645
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    INITIAL:
+      model: gpt-5
+      cost: $0.05626000
+      call_cnt: 0
+      latency: 0.00s
+      input_tokens: 0
+      output_tokens: 0
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+    provide_solution:
+      model: gpt-5
+      cost: $0.09870000
+      call_cnt: 1
+      latency: 16.24s
+      input_tokens: 2813
+      output_tokens: 1645
+      cache_read_tokens: 0
+      cache_write_tokens: 0
+  EXECUTE:
+    TOTAL: {}
+target_branch: if (BC_ERR(BC_READ_BIN_CHAR(buf[i]))) -> true in read.c:bc_read_binary()
+target_file_lines: read.c:92-92
+target_lines_content: "\t\t\treturn true;"
+justification: 'This branch has 0% historical coverage (line 92). It is central to
+  the program’s input sanitization: it detects non-text (binary) bytes in the read
+  line. Reaching it exercises the binary-character detection path and likely triggers
+  distinct handling downstream. It is reachable using the current harness by supplying
+  a specially crafted stdin line; no command-line flags or TTY interaction are required.'
+target_path_constraint: |-
+  Chronological external constraints to reach bc_read_binary()’s non-text detection branch (true):
+
+  1. Program invocation:
+  - Launch the executable with no command-line arguments, exactly as the harness does.
+  - Provide input via standard input (stdin). No environment variables or files are required.
+
+  2. Input delivery and structure expectations:
+  - The program reads a single line from stdin, terminated by a newline byte (ASCII 0x0A). Ensure stdin delivers at least one newline so the line-reading loop completes.
+  - The reader accumulates bytes until a newline is encountered; only bytes up to (and including) the newline are considered the line, and the binary check is performed on the line content excluding the final string terminator.
+
+  3. Binary byte requirement (to trigger the target branch):
+  - The stdin line must contain at least one byte that the program classifies as a “non-text/binary” character. This byte must appear before the newline terminator.
+  - Allowed position: anywhere in the line (beginning, middle, or end), as long as it precedes the newline.
+  - Encoding: treat stdin as a raw byte stream. The binary byte must be a value outside printable ASCII and not whitespace characters typically allowed in text expressions. Examples include control bytes in the ranges 0x00–0x08, 0x0B–0x0C, 0x0E–0x1F, or any 8-bit values with the high bit set (0x80–0xFF). Avoid 0x0A (newline) for the binary byte, as that ends the line; place the binary byte elsewhere.
+
+  4. Line composition constraints to ensure the program proceeds to bc_read_binary():
+  - The line may contain any additional bytes (e.g., digits, operators, spaces) before/after the binary byte; there is no requirement that the line be a valid expression because the binary check happens immediately after reading the line.
+  - Ensure that no prior read error or EOF occurs: stdin must supply the bytes and final newline within the program’s read call timeout and without being interrupted.
+
+  5. Summary SMT-style condition over the stdin byte sequence L[0..k], with L[k] = 0x0A (newline):
+  - Exists i in [0, k): BinaryChar(L[i]) = true
+  - Where BinaryChar(b) = (b ∈ {0x00..0x08, 0x0B, 0x0C, 0x0E..0x1F} or b ∈ {0x80..0xFF})
+  - k ≥ 1
+selected_cnt: 1
+successful_generation_cnt: 1
+exec_code: |
+  import subprocess
+  import signal
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      """
+      Executes the original test harness with a stdin line that contains a binary byte before the newline
+      to trigger bc_read_binary()'s non-text detection branch.
+
+      Concrete stdin bytes: 0x00 0x0A ("\x00\n")
+      - No command-line arguments, as required
+      - The input is provided via stdin with text=True; "\x00" encodes to a single 0x00 byte in UTF-8
+      - The newline is 0x0A, ensuring the line read completes
+      """
+      exe = "./temp_executable"
+      input_data = "\x00\n"  # Binary byte (NUL) before newline
+
+      try:
+          result = subprocess.run(
+              [str(exe)],
+              input=input_data,
+              text=True,
+              capture_output=True,
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+
+      except Exception:
+          raise
+returncode: 4
+src_execution_summary: |2+
+
+  ```c
+  // read.c (347 lines total)
+  #include <stdio.h>
+
+  #include <assert.h>
+  #include <ctype.h>
+  #include <errno.h>
+  #include <stdlib.h>
+  #include <string.h>
+
+  #include <signal.h>
+
+  #include <fcntl.h>
+  #include <sys/stat.h>
+
+  #ifndef _WIN32
+  #include <unistd.h>
+  #endif // _WIN32
+
+  #include <read.h>
+  #include <history.h>
+  #include <program.h>
+  #include <vm.h>
+
+  /**
+   * A portability file open function. This is copied to gen/strgen.c. Make sure
+   * to update that if this changes.
+   * @param path  The path to the file to open.
+   * @param mode  The mode to open in.
+   */
+  static int
+  bc_read_open(const char* path, int mode)
+  {
+  	// Unexecuted code (line 66) removed. Its line cov: 0/1 (0%)
+
+  #ifndef _WIN32
+  	// Unexecuted code (line 69) removed. Its line cov: 0/1 (0%)
+  #else // _WIN32
+  	// Unexecuted code (lines 71-72) removed. Its line cov: 0/2 (0%)
+  #endif
+
+  	// Unexecuted code (line 75) removed. Its line cov: 0/1 (0%)
+  }
+
+  /**
+   * Returns true if the buffer data is non-text.
+   * @param buf   The buffer to test.
+   * @param size  The size of the buffer.
+   */
+  static bool
+  bc_read_binary(const char* buf, size_t size)
+  {
+  	size_t i;
+
+  	for (i = 0; i < size; ++i)
+  	{
+  		if (BC_ERR(BC_READ_BIN_CHAR(buf[i])))
+  		{
+  			// Unexecuted code (line 92) removed. Its line cov: 0/1 (0%)
+  		}
+  	}
+
+  	return false;
+  }
+
+  bool
+  bc_read_buf(BcVec* vec, char* buf, size_t* buf_len)
+  {
+  	char* nl;
+
+  	// If nothing there, return.
+  	if (!*buf_len)
+  	{
+  		return false;
+  	}
+
+  	// Find the newline.
+  	nl = strchr(buf, '\n');
+
+  	// If a newline exists...
+  	if (nl != NULL)
+  	{
+  		// Get the size of the data up to, and including, the newline.
+  		size_t nllen = (size_t) ((nl + 1) - buf);
+
+  		nllen = *buf_len >= nllen ? nllen : *buf_len;
+
+  		// Move data into the vector, and move the rest of the data in the
+  		// buffer up.
+  		bc_vec_npush(vec, nllen, buf);
+  		*buf_len -= nllen;
+  		// NOLINTNEXTLINE
+  		memmove(buf, nl + 1, *buf_len + 1);
+
+  		return true;
+  	}
+
+  	// Just put the data into the vector.
+  	// Unexecuted code (lines 132-135) removed. Its line cov: 3/3 (100%)
+  }
+  BcStatus
+  bc_read_chars(BcVec* vec, const char* prompt)
+  {
+  	bool done = false;
+
+  	assert(vec != NULL && vec->size == sizeof(char));
+
+  	BC_SIG_ASSERT_NOT_LOCKED;
+
+  	// Clear the vector.
+  	bc_vec_popAll(vec);
+
+  	// Handle the prompt, if desired.
+  	if (BC_PROMPT)
+  	{
+  		// Unexecuted code (lines 152-153) removed. Its line cov: 0/2 (0%)
+  	}
+
+  	// Try reading from the buffer, and if successful, just return.
+  	if (bc_read_buf(vec, vm->buf, &vm->buf_len))
+  	{
+  		// Unexecuted code (lines 159-160) removed. Its line cov: 0/2 (0%)
+  	}
+
+  	// Loop until we have something.
+  	while (!done)
+  	{
+  		ssize_t r;
+
+  		BC_SIG_LOCK;
+
+  		// Read data from stdin.
+  		r = read(STDIN_FILENO, vm->buf + vm->buf_len,
+  		         BC_VM_STDIN_BUF_SIZE - vm->buf_len);
+
+  		// If there was an error...
+  		if (BC_UNLIKELY(r < 0))
+  		{
+  			// If interupted...
+  			if (errno == EINTR)
+  			{
+  				// Unexecuted code (lines 180-200) removed. Its line cov: 0/16 (0%)
+  			}
+
+  			// Unexecuted code (lines 203-206) removed. Its line cov: 0/3 (0%)
+  		}
+
+  		BC_SIG_UNLOCK;
+
+  		// If we read nothing, make sure to terminate the string and return EOF.
+  		if (r == 0)
+  		{
+  			bc_vec_pushByte(vec, '\0');
+  			return BC_STATUS_EOF;
+  		}
+
+  		BC_SIG_LOCK;
+
+  		// Add to the buffer.
+  		vm->buf_len += (size_t) r;
+  		vm->buf[vm->buf_len] = '\0';
+
+  		// Read from the buffer.
+  		done = bc_read_buf(vec, vm->buf, &vm->buf_len);
+
+  		BC_SIG_UNLOCK;
+  	}
+
+  	// Terminate the string.
+  	bc_vec_pushByte(vec, '\0');
+
+  	return BC_STATUS_SUCCESS;
+  }
+
+  BcStatus
+  bc_read_line(BcVec* vec, const char* prompt)
+  {
+  	BcStatus s;
+
+  #if BC_ENABLE_HISTORY
+  	// Get a line from either history or manual reading.
+  	if (BC_TTY && !vm->history.badTerm)
+  	{
+  		// Unexecuted code (line 245) removed. Its line cov: 0/1 (0%)
+  	}
+  	else
+  	{
+  		s = bc_read_chars(vec, prompt);
+  	}
+  #else // BC_ENABLE_HISTORY
+  	// Unexecuted code (line 252) removed. Its line cov: 0/1 (0%)
+  #endif // BC_ENABLE_HISTORY
+
+  	if (BC_ERR(bc_read_binary(vec->v, vec->len - 1)))
+  	{
+  		// Unexecuted code (line 257) removed. Its line cov: 0/1 (0%)
+  	}
+
+  	return s;
+  }
+
+  char*
+  bc_read_file(const char* path)
+  {
+  	// Unexecuted code (lines 266-286) removed. Its line cov: 0/16 (0%)
+
+  	// If we can't read a file, we just barf.
+  	if (BC_ERR(fd < 0))
+  	{
+  		// Unexecuted code (line 291) removed. Its line cov: 0/1 (0%)
+  	}
+
+  	// The reason we call fstat is to eliminate TOCTOU race conditions. This
+  	// way, we have an open file, so it's not going anywhere.
+  	if (BC_ERR(fstat(fd, &pstat) == -1))
+  	{
+  		// Unexecuted code (line 298) removed. Its line cov: 0/1 (0%)
+  	}
+
+  	// Make sure it's not a directory.
+  	if (BC_ERR(S_ISDIR(pstat.st_mode)))
+  	{
+  		// Unexecuted code (lines 304-305) removed. Its line cov: 0/2 (0%)
+  	}
+
+  	// Unexecuted code (lines 308-312) removed. Its line cov: 0/5 (0%)
+
+  	do
+  	{
+  		// Unexecuted code (lines 316-318) removed. Its line cov: 0/3 (0%)
+  		if (BC_ERR(r < 0))
+  		{
+  			// Unexecuted code (line 321) removed. Its line cov: 0/1 (0%)
+  		}
+  		// Unexecuted code (lines 323-324) removed. Its line cov: 0/2 (0%)
+  	}
+  	while (to_read);
+
+  	// Unexecuted code (lines 328-329) removed. Its line cov: 0/2 (0%)
+
+  	if (BC_ERR(bc_read_binary(buf, size)))
+  	{
+  		// Unexecuted code (lines 333-334) removed. Its line cov: 0/2 (0%)
+  	}
+
+  	// Unexecuted code (lines 337-339) removed. Its line cov: 0/2 (0%)
+
+  read_err:
+  	// Unexecuted code (line 342) removed. Its line cov: 0/1 (0%)
+  malloc_err:
+  	// Unexecuted code (lines 344-346) removed. Its line cov: 0/3 (0%)
+  }
+  ```
+
+crash_info: |
+  Crash reason: Segmentation fault
+  Stderr:
+  Fatal error: file is not text: <stdin>
+  0: (main)
+execution_trace: |+
+  [read.c] enter bc_read_line 1
+  [read.c] enter bc_read_line 3
+  [read.c] enter bc_read_chars 1
+  [read.c] enter bc_read_buf 1
+  [read.c] enter bc_read_buf 2
+  [read.c] enter bc_read_chars 4
+  [read.c] enter bc_read_chars 7
+  [read.c] enter bc_read_chars 9
+  [read.c] enter bc_read_buf 1
+  [read.c] enter bc_read_buf 3
+  [read.c] enter bc_read_buf 5
+  [read.c] enter bc_read_buf 6
+  [read.c] enter bc_read_chars 4
+  [read.c] enter bc_read_chars 7
+  [read.c] enter bc_read_chars 8
+  [read.c] enter bc_read_binary 1
+  [read.c] enter bc_read_binary 2
+  [read.c] enter bc_read_line 5
+
+  Fatal error: file is not text: <stdin>
+      0: (main)
+
+execution_summary: |2+
+
+  ```c
+  // read.c (347 lines total)
+  #include <stdio.h>
+
+  #include <assert.h>
+  #include <ctype.h>
+  #include <errno.h>
+  #include <stdlib.h>
+  #include <string.h>
+
+  #include <signal.h>
+
+  #include <fcntl.h>
+  #include <sys/stat.h>
+
+  #ifndef _WIN32
+  #include <unistd.h>
+  #endif // _WIN32
+
+  #include <read.h>
+  #include <history.h>
+  #include <program.h>
+  #include <vm.h>
+
+  /**
+   * A portability file open function. This is copied to gen/strgen.c. Make sure
+   * to update that if this changes.
+   * @param path  The path to the file to open.
+   * @param mode  The mode to open in.
+   */
+  static int
+  bc_read_open(const char* path, int mode)
+  {
+  	// Unexecuted code (line 66) removed. Its line cov: 0/1 (0%)
+
+  #ifndef _WIN32
+  	// Unexecuted code (line 69) removed. Its line cov: 0/1 (0%)
+  #else // _WIN32
+  	// Unexecuted code (lines 71-72) removed. Its line cov: 0/2 (0%)
+  #endif
+
+  	// Unexecuted code (line 75) removed. Its line cov: 0/1 (0%)
+  }
+
+  /**
+   * Returns true if the buffer data is non-text.
+   * @param buf   The buffer to test.
+   * @param size  The size of the buffer.
+   */
+  static bool
+  bc_read_binary(const char* buf, size_t size)
+  {
+  	size_t i;
+
+  	for (i = 0; i < size; ++i)
+  	{
+  		if (BC_ERR(BC_READ_BIN_CHAR(buf[i])))
+  		{
+  			return true;
+  		}
+  	}
+
+  	// Unexecuted code (line 96) removed. Its line cov: 1/1 (100%)
+  }
+
+  bool
+  bc_read_buf(BcVec* vec, char* buf, size_t* buf_len)
+  {
+  	char* nl;
+
+  	// If nothing there, return.
+  	if (!*buf_len)
+  	{
+  		return false;
+  	}
+
+  	// Find the newline.
+  	nl = strchr(buf, '\n');
+
+  	// If a newline exists...
+  	if (nl != NULL)
+  	{
+  		// Unexecuted code (lines 116-128) removed. Its line cov: 10/10 (100%)
+  	}
+
+  	// Just put the data into the vector.
+  	bc_vec_npush(vec, *buf_len, buf);
+  	*buf_len = 0;
+
+  	return false;
+  }
+  BcStatus
+  bc_read_chars(BcVec* vec, const char* prompt)
+  {
+  	bool done = false;
+
+  	assert(vec != NULL && vec->size == sizeof(char));
+
+  	BC_SIG_ASSERT_NOT_LOCKED;
+
+  	// Clear the vector.
+  	bc_vec_popAll(vec);
+
+  	// Handle the prompt, if desired.
+  	if (BC_PROMPT)
+  	{
+  		// Unexecuted code (lines 152-153) removed. Its line cov: 0/2 (0%)
+  	}
+
+  	// Try reading from the buffer, and if successful, just return.
+  	if (bc_read_buf(vec, vm->buf, &vm->buf_len))
+  	{
+  		// Unexecuted code (lines 159-160) removed. Its line cov: 0/2 (0%)
+  	}
+
+  	// Loop until we have something.
+  	while (!done)
+  	{
+  		ssize_t r;
+
+  		BC_SIG_LOCK;
+
+  		// Read data from stdin.
+  		r = read(STDIN_FILENO, vm->buf + vm->buf_len,
+  		         BC_VM_STDIN_BUF_SIZE - vm->buf_len);
+
+  		// If there was an error...
+  		if (BC_UNLIKELY(r < 0))
+  		{
+  			// If interupted...
+  			if (errno == EINTR)
+  			{
+  				// Unexecuted code (lines 180-200) removed. Its line cov: 0/16 (0%)
+  			}
+
+  			// Unexecuted code (lines 203-206) removed. Its line cov: 0/3 (0%)
+  		}
+
+  		BC_SIG_UNLOCK;
+
+  		// If we read nothing, make sure to terminate the string and return EOF.
+  		if (r == 0)
+  		{
+  			bc_vec_pushByte(vec, '\0');
+  			return BC_STATUS_EOF;
+  		}
+
+  		BC_SIG_LOCK;
+
+  		// Add to the buffer.
+  		vm->buf_len += (size_t) r;
+  		vm->buf[vm->buf_len] = '\0';
+
+  		// Read from the buffer.
+  		done = bc_read_buf(vec, vm->buf, &vm->buf_len);
+
+  		BC_SIG_UNLOCK;
+  	}
+
+  	// Unexecuted code (lines 230-233) removed. Its line cov: 3/3 (100%)
+  }
+
+  BcStatus
+  bc_read_line(BcVec* vec, const char* prompt)
+  {
+  	BcStatus s;
+
+  #if BC_ENABLE_HISTORY
+  	// Get a line from either history or manual reading.
+  	if (BC_TTY && !vm->history.badTerm)
+  	{
+  		// Unexecuted code (line 245) removed. Its line cov: 0/1 (0%)
+  	}
+  	else
+  	{
+  		s = bc_read_chars(vec, prompt);
+  	}
+  #else // BC_ENABLE_HISTORY
+  	// Unexecuted code (line 252) removed. Its line cov: 0/1 (0%)
+  #endif // BC_ENABLE_HISTORY
+
+  	if (BC_ERR(bc_read_binary(vec->v, vec->len - 1)))
+  	{
+  		bc_verr(BC_ERR_FATAL_BIN_FILE, bc_program_stdin_name);
+  	}
+
+  	// Unexecuted code (line 260) removed. Its line cov: 1/1 (100%)
+  }
+
+  char*
+  bc_read_file(const char* path)
+  {
+  	// Unexecuted code (lines 266-286) removed. Its line cov: 0/16 (0%)
+
+  	// If we can't read a file, we just barf.
+  	if (BC_ERR(fd < 0))
+  	{
+  		// Unexecuted code (line 291) removed. Its line cov: 0/1 (0%)
+  	}
+
+  	// The reason we call fstat is to eliminate TOCTOU race conditions. This
+  	// way, we have an open file, so it's not going anywhere.
+  	if (BC_ERR(fstat(fd, &pstat) == -1))
+  	{
+  		// Unexecuted code (line 298) removed. Its line cov: 0/1 (0%)
+  	}
+
+  	// Make sure it's not a directory.
+  	if (BC_ERR(S_ISDIR(pstat.st_mode)))
+  	{
+  		// Unexecuted code (lines 304-305) removed. Its line cov: 0/2 (0%)
+  	}
+
+  	// Unexecuted code (lines 308-312) removed. Its line cov: 0/5 (0%)
+
+  	do
+  	{
+  		// Unexecuted code (lines 316-318) removed. Its line cov: 0/3 (0%)
+  		if (BC_ERR(r < 0))
+  		{
+  			// Unexecuted code (line 321) removed. Its line cov: 0/1 (0%)
+  		}
+  		// Unexecuted code (lines 323-324) removed. Its line cov: 0/2 (0%)
+  	}
+  	while (to_read);
+
+  	// Unexecuted code (lines 328-329) removed. Its line cov: 0/2 (0%)
+
+  	if (BC_ERR(bc_read_binary(buf, size)))
+  	{
+  		// Unexecuted code (lines 333-334) removed. Its line cov: 0/2 (0%)
+  	}
+
+  	// Unexecuted code (lines 337-339) removed. Its line cov: 0/2 (0%)
+
+  read_err:
+  	// Unexecuted code (line 342) removed. Its line cov: 0/1 (0%)
+  malloc_err:
+  	// Unexecuted code (lines 344-346) removed. Its line cov: 0/3 (0%)
+  }
+  ```
+
+src_exec_code: |-
+  import subprocess
+  import signal
+
+  def execute_program(timeout: int) -> tuple[str, int]:
+      exe = "./temp_executable"
+
+      try:
+          result = subprocess.run(
+              [str(exe)],              # no -e
+              input="1+1\n",           # pass expression via stdin
+              text=True,
+              capture_output=True,
+              timeout=timeout,
+          )
+          return result.stderr, result.returncode
+
+      except subprocess.TimeoutExpired as e:
+          return e.stderr, -signal.SIGKILL
+
+      except Exception:
+          raise
+src_execution_trace: |
+  [read.c] enter bc_read_line 1
+  [read.c] enter bc_read_line 3
+  [read.c] enter bc_read_chars 1
+  [read.c] enter bc_read_buf 1
+  [read.c] enter bc_read_buf 2
+  [read.c] enter bc_read_chars 4
+  [read.c] enter bc_read_chars 7
+  [read.c] enter bc_read_chars 9
+  [read.c] enter bc_read_buf 1
+  [read.c] enter bc_read_buf 3
+  [read.c] enter bc_read_buf 4
+  [read.c] enter bc_read_chars 10
+  [read.c] enter bc_read_binary 1
+  [read.c] enter bc_read_binary 3
+  [read.c] enter bc_read_line 6
+  [read.c] enter bc_read_line 1
+  [read.c] enter bc_read_line 3
+  [read.c] enter bc_read_chars 1
+  [read.c] enter bc_read_buf 1
+  [read.c] enter bc_read_buf 2
+  [read.c] enter bc_read_chars 4
+  [read.c] enter bc_read_chars 7
+  [read.c] enter bc_read_chars 8
+  [read.c] enter bc_read_binary 1
+  [read.c] enter bc_read_binary 3
+  [read.c] enter bc_read_line 6
